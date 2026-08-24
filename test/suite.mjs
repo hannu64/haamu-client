@@ -45,9 +45,44 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
  * anything else fails below.
  */
 const readIf = (p) => { try { return read(p); } catch { return null; } };
-const e2eRunner = readIf("../../e2e.sh");
-const hasServer = existsSync(new URL("../../server", import.meta.url));
-const PUBLISHED = !hasServer && e2eRunner === null;
+
+/* ⛔⛔ AND THE QUESTION IS ASKED FROM INSIDE THE TREE FIRST, BECAUSE `../../` IS NOT PART OF
+ * THE PUBLISHED REPOSITORY AT ALL. In the monorepo `../../` is the project root and reading
+ * it is reading ourselves. In `hannu64/haamu-client` the client IS the root, so `../../` is
+ * whatever directory the reader happened to clone into. A stranger who runs
+ *
+ *     ~/src/server/            ← an unrelated project they already had
+ *     ~/src/haamu-client/      ← git clone …
+ *
+ * was told *"monorepo: server present, so e2e.sh must be too"* and watched the test suite of
+ * a security product fail on first run for a reason that has nothing to do with its code —
+ * on a repository whose entire offer is *verify this yourself* (D-161). ➡️ **A TEST THAT
+ * READS ABOVE ITS OWN ROOT IS READING SOMEBODY ELSE'S DISK**, and in the tree that most
+ * needs it to be right it cannot tell the difference.
+ *
+ * So the published tree is recognised by something the publish step deliberately puts INSIDE
+ * it: `DECISIONS.md` at the client root, which `scripts/publish-client.sh` copies in from
+ * system-docs and which the monorepo's own `client/` therefore never has. ⭐ It is matched by
+ * what it SAYS and not merely by its name — the same discipline `gen-vectors.mjs`'s exemption
+ * uses, where a file that stops being the document it claimed stops being the marker.
+ */
+const isMarker = (text) => text !== null && /^# DECISIONS\.md\s/.test(text);
+const PUBLISHED_BY_MARKER = isMarker(readIf("../DECISIONS.md"));
+
+/* ⚠️⚠️ THE OLD INFERENCE IS KEPT AS A SECOND ROUTE RATHER THAN REPLACED. If the marker is
+ * absent the tree must still be one of the two shapes, so D-160 holds exactly as it did: an
+ * `e2e.sh` that goes missing FROM THE MONOREPO still fails loudly below instead of silently
+ * exempting every e2e suite. The marker only ever ADDS a way to be recognised, so no tree
+ * that passed before can start failing.
+ *
+ * ⚠️ And once the marker has spoken, NOTHING above the root is read — not even to report it.
+ * A stray `e2e.sh` in the reader's own directory would otherwise be concatenated into
+ * `runners` below, where it could mark a genuinely orphaned test as invoked: the failure
+ * mode this guard exists to prevent, arriving through the guard itself.
+ */
+const e2eRunner = PUBLISHED_BY_MARKER ? null : readIf("../../e2e.sh");
+const hasServer = PUBLISHED_BY_MARKER ? false : existsSync(new URL("../../server", import.meta.url));
+const PUBLISHED = PUBLISHED_BY_MARKER || (!hasServer && e2eRunner === null);
 const runners = read("../test.sh") + (e2eRunner ?? "");
 
 /**
@@ -80,10 +115,25 @@ check(
 
 check(
   "⚠️⚠️ the tree is one of the two shapes it is allowed to be (D-160)",
-  (hasServer && e2eRunner !== null) || (!hasServer && e2eRunner === null),
-  hasServer
-    ? "monorepo: server present, so e2e.sh must be too"
-    : "published client: no server, so no e2e.sh — every e2e suite is driven from the monorepo"
+  PUBLISHED || (hasServer && e2eRunner !== null),
+  PUBLISHED_BY_MARKER
+    ? "published client: recognised from INSIDE, and nothing above the root was read (D-161)"
+    : hasServer
+      ? "monorepo: server present, so e2e.sh must be too"
+      : "published client: no server, so no e2e.sh — every e2e suite is driven from the monorepo"
+);
+
+/* ⭐ THE GUARD ON THE MARKER, AND IT IS ASKED BOTH HALVES OF THE QUESTION. A discriminator
+ * that quietly stopped discriminating would hand EVERY tree the published tree's exemption,
+ * which is the one outcome worse than the bug it was written to fix. The current tree only
+ * ever exercises one half of it, so the other half is put to it here on strings this file
+ * owns — the same reason `test/copy.mjs` carries a canary beside each of its exclusions.
+ */
+check(
+  "⚠️⚠️ the marker is matched by what the document SAYS, not by its name (D-161)",
+  isMarker("# DECISIONS.md\n\n**Decision log** — link-paired") &&
+    !isMarker("# Decisions\n") && !isMarker("## DECISIONS.md\n") && !isMarker("") && !isMarker(null),
+  "recognises the real opening; refuses a look-alike, a demoted heading, an empty file and an absent one"
 );
 check(
   "⚠️ the e2e exemption is taken only where it is earned, and covers only e2e files",

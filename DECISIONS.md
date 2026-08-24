@@ -5546,6 +5546,66 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-161. ⭐⭐⭐⭐ The guard met its first stranger the same day — and read his disk
+
+**2026-08-24, hours after D-160 and the visibility flip.** D-160 closed with *"a guard meets its
+first stranger in the repository it was not written in."* It met one that afternoon.
+
+**Found by accident, which is the only reason it was found at all.** The first clone of the
+now-public `hannu64/haamu-client` landed in a working scratchpad that happens to hold a stray
+`e2e.sh`, and `./test.sh` **failed**. The scratchpad was the anomaly and not the repository — but
+the defect underneath was real, and it was D-160's own guard.
+
+`test/suite.mjs` decided which of the two trees it was in by reading `../../e2e.sh` and
+`../../server`. In the monorepo `../../` is the project root, and reading it is reading ourselves.
+**In the published client the client IS the root, so `../../` is whatever directory the reader
+happened to clone into.**
+
+```
+~/src/server/          ← an unrelated project they already had
+~/src/haamu-client/    ← git clone …
+```
+
+`./test.sh` → **exit 1**, two failures, reporting *"monorepo: server present, so e2e.sh must be
+too"*. A developer with a `server/` directory beside their checkout — hardly exotic — watches the
+test suite of a security product fail on first run for a reason that has nothing to do with its
+code, **on the repository whose entire offer is that they can check it themselves**. Nothing was
+broken. The guard was reading somebody else's disk.
+
+⚠️⚠️ **AND IT WAS IN TWO PLACES, NOT ONE.** `test.sh` made the same decision the same way
+(`if [ ! -d ../server ]`), so the same reader also reached the *"no Go toolchain here"* branch and
+its `exit 1`. **The first fix repaired `suite.mjs` and `./test.sh` still exited 1** — the second
+site surfaced only because the fix was checked by running the reader's whole command instead of the
+one file that had been changed. ➡️ *A fix verified on the unit that was edited is verified on the
+unit that was edited.*
+
+**Decided: the published tree is recognised by something the publish step deliberately puts INSIDE
+it** — `DECISIONS.md` at the client root, which `scripts/publish-client.sh` copies in from
+system-docs and which the monorepo's own `client/` therefore never has. ⭐ It is matched by its
+opening line and not by its name alone, the discipline `gen-vectors.mjs`'s exemption already uses:
+a file that stops being the document it claimed stops being the marker. Once the marker has spoken,
+**nothing above the root is read at all** — not even to report it. A stray `e2e.sh` would otherwise
+be concatenated into `runners`, where it could mark a genuinely orphaned test as invoked: this
+guard's own failure mode, arriving through the guard itself.
+
+⚠️ **The old inference is kept as a second route rather than replaced**, so D-160 holds exactly as
+written — an `e2e.sh` that goes missing FROM THE MONOREPO still fails loudly instead of silently
+exempting every e2e suite. The marker only ever ADDS a way to be recognised, so no tree that passed
+before can begin to fail.
+
+**Three mutations, each watched failing.** Disabling the marker reproduced the original two
+failures verbatim; an `isMarker` widened to accept any file was caught by its own canary; reverting
+`test.sh`'s branch brought back the exact `go: go.mod file not found` and its exit 1. Four reader
+environments now pass, including a parent holding **both** `server/` and `e2e.sh` — a directory
+indistinguishable from a monorepo from the outside. Both broken monorepo shapes still fail.
+
+⭐ **No served file changed**, so this needed no deploy: the stamp stayed `5ea53d9b1d1ead29`. The
+repair is entirely in the two files a stranger runs.
+
+➡️ **A TEST THAT READS ABOVE ITS OWN ROOT IS READING SOMEBODY ELSE'S DISK** — and in the tree that
+most needs it to be right, it cannot tell the difference.
+
+
 ### D-160. ⭐⭐⭐ The client is published — and a guard written to catch an un-run test nearly exempted itself in the repository nobody could check it in
 
 **2026-08-24.** `hannu64/haamu-client` exists: `client/` plus `DECISIONS.md`, **AGPL-3.0-only**,

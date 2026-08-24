@@ -196,7 +196,8 @@ echo "=== the server, on the same frozen vectors ==="
 # it out.
 # ⚠️⚠️ TWO REASONS THIS CAN BE ABSENT, AND THEY ARE NOT THE SAME REASON.
 #
-#   · No `../server` — you are in the PUBLIC client repository (haamu-client).
+#   · `DECISIONS.md` at the root, or no `../server` — you are in the PUBLIC client
+#     repository (haamu-client).
 #     The server is not published, so this check cannot be run here and its
 #     absence is expected. Everything above it did run: this is a complete pass
 #     of the client. Reported and exit 0, because a reviewer who pastes
@@ -206,7 +207,23 @@ echo "=== the server, on the same frozen vectors ==="
 #     cannot run the one check a second implementation can fail. That IS a
 #     failure: §5.2's whole point is that client and server can agree with
 #     themselves and disagree with each other. Exit 1, as before.
-if [ ! -d ../server ]; then
+# ⛔⛔ AND WHICH OF THE TWO THIS IS, IS ASKED FROM INSIDE THE TREE FIRST (D-161). `../server`
+# is the project root in the monorepo and SOMEBODY ELSE'S DIRECTORY in the published client,
+# where this script sits at the root. A reader who cloned next to an unrelated `server/` was
+# sent down the second branch and told the suite had failed — on the repository whose whole
+# offer is that they can check it themselves. The published tree is therefore recognised by
+# what `scripts/publish-client.sh` deliberately puts IN it, matched by its opening line and
+# not merely by its name; `../server` stays as the second route, so nothing that passed
+# before can start failing. `test/suite.mjs` makes the same distinction, for the same reason.
+if [ -f DECISIONS.md ] && head -n 1 DECISIONS.md | grep -q '^# DECISIONS\.md[[:space:]]*$'; then
+    published=yes
+elif [ ! -d ../server ]; then
+    published=yes
+else
+    published=no
+fi
+
+if [ "$published" = yes ]; then
     echo "  NOT AVAILABLE HERE: the server is not part of this repository."
     echo "  §5.2's cross-implementation check runs in the private monorepo, where"
     echo "  the Go server reads the same frozen file: client/test/vectors/lpm.json."
