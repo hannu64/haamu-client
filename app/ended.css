@@ -1,0 +1,56 @@
+/* PROTOCOL.md §7.8 step 4's landing page, styled.
+ *
+ * ⚠️ THIS WAS AN INLINE `<style>` BLOCK, AND THE COMMENT ABOVE IT ARGUED FOR
+ * KEEPING IT THERE: "the fewer subresources it needs the fewer chances there are
+ * for one of them to be the thing that fails to load on the page whose whole job
+ * is to say what happened." That reasoning is sound and it is why this file is
+ * only the styles.
+ *
+ * ⭐ It does not survive examination for the STYLES specifically, which is the
+ * half that moved. Rank this page's subresources by what their absence costs:
+ * if `ui/copy.js` fails, the page has NO SENTENCE — it is two empty panels, and
+ * the ending is unexplained. If this stylesheet fails, the page is the same
+ * words in the browser's default type. **The stylesheet is the least critical
+ * subresource on the page**, so it is the one that can afford to be external,
+ * and `ARCHITECTURE.md` §6's `style-src 'self'` requires that it be.
+ *
+ * It still matches `index.html`'s palette by hand — a duplication worth naming
+ * rather than hiding, for the same reason as before: this page must not depend
+ * on the application's stylesheet either.
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbf9;
+  --fg: #1a1a19;
+  --muted: #6b6b66;
+  --line: #dedcd5;
+  --panel: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171a;
+    --fg: #ecece8;
+    --muted: #9a9a94;
+    --line: #2e3035;
+    --panel: #1d1f23;
+  }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 34rem; margin: 0 auto; padding: 2rem 1.1rem 4rem; }
+h1 { font-size: 1.1rem; letter-spacing: 0.06em; text-transform: lowercase; color: var(--muted); font-weight: 600; }
+/* D-083's masthead, matched to `app.css` by hand for the same reason as the
+   palette above: this page must not depend on the application's stylesheet. */
+.masthead { margin: 0 0 1.5rem; }
+h1.wordmark { font-size: 1.9rem; letter-spacing: 0.01em; text-transform: none; color: var(--fg); margin: 0; line-height: 1.1; }
+.gloss { color: var(--muted); font-size: 0.82rem; margin: 0.25rem 0 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; }
+.note { color: var(--muted); font-size: 0.92rem; }
+a { color: inherit; }
+p { margin: 0 0 0.6rem; }
+p:last-child { margin-bottom: 0; }

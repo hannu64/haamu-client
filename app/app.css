@@ -1,0 +1,1523 @@
+/* The application's styles (ROADMAP step 8's interface, restyled at step 33).
+ *
+ * ⚠️ THIS WAS AN INLINE `<style>` BLOCK IN `index.html` UNTIL 2026-08-12, and it
+ * moved for one reason: `ARCHITECTURE.md` §6's `style-src 'self'` forbids inline
+ * style, and §6's header block had never been applied to a single response, so
+ * nothing could tell us. The dev path in the Go binary deliberately set no
+ * headers and there was no production path at all — the client grew for ten
+ * steps into a shape its own specification forbids. Measured, not guessed: 27
+ * CSP violations across the two pages.
+ *
+ * ⭐ The same shape as D-076, one layer up. There, four correct checks sat below
+ * the branch that skipped them; here, a correct header set sat on a code path
+ * that did not exist. **Which callers reach this line? — none, ever.** A rule
+ * with no execution path cannot drift *detectably*, which is not the same as not
+ * drifting.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * D-139, 2026-08-20 — THE DESIGN PASS, AND WHY IT LOOKS LIKE WHATSAPP
+ *
+ * Hannu: *"the more it resembles WA the better the users feel"*, and — on his own
+ * taste — *"I just look if the contrast is fine and not jumping in the users face
+ * too much"*. So the surface here is WhatsApp's, at WhatsApp's own values, on the
+ * argument that its palette has had more testing than this project can fund.
+ *
+ * ⚠️⚠️ AND THIS REVERSES ROUND 5 ITEM 5 (D-104), DELIBERATELY, ON EVIDENCE THAT
+ * ONLY ARRIVED TODAY. That item took the accent FILL off the outgoing bubble, and
+ * the reason recorded here was *"a filled green bubble on every single thing the
+ * user had ever said was the loudest element on the screen"* — stated as a fact
+ * about filled bubbles. It was not. Hannu was on **desktop, light theme, white
+ * page**, and the fill was `#1d5c4f` — a deep, saturated green. The complaint was
+ * about *that green on that ground*, and the comment generalised it to every green
+ * on every ground.
+ *
+ * ➡️ **A REASON RECORDED MORE BROADLY THAN THE OBSERVATION THAT PRODUCED IT.**
+ * Nothing was wrong when it was written; the sentence simply claimed more than the
+ * evidence, and the extra claim is what governed the design for a week. WhatsApp's
+ * light outgoing bubble is `#d9fdd3` — a pale mint with near-black text — which is
+ * *quieter* than what D-104 replaced it with, and its dark bubble is `#005c4b`,
+ * which is only strong because the ground it sits on is darker still.
+ *
+ * ⚠️ ONE CONSEQUENCE, RECORDED RATHER THAN DISCOVERED LATER. D-104 built a two-hue
+ * axis: `--accent` (green) = *this device, you*; `--second` (violet) = *not you*.
+ * WhatsApp's incoming bubble is neutral, so taking its design retires violet from
+ * the conversation and leaves `--second` with one caller (`.choice.other`). The
+ * axis is narrower than it was. That is a real cost of this decision and it is
+ * accepted, not overlooked.
+ *
+ * ⚠️ AND THE STRENGTH RULE HAD TO MOVE WITH IT. D-104's rule was *"a filled accent
+ * is the one action on a screen"*. A filled bubble on every outgoing message breaks
+ * that rule by arithmetic. WhatsApp resolves it by SHAPE rather than by colour: the
+ * send control is a circular icon button, which competes with nothing rectangular.
+ * `.send` below is that resolution — the rule survives, its mechanism changed.
+ * ════════════════════════════════════════════════════════════════════════════*/
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * The palette, at WhatsApp's own values.
+ *
+ * ⚠️⚠️ FOUR BLOCKS, NOT TWO, AND THE ORDER OF THE LAST THREE IS THE WHOLE POINT.
+ * Until today the theme was chosen by `prefers-color-scheme` alone and a person
+ * had no say in it. D-139 adds an explicit switch, which means the root element
+ * may now carry `data-theme="light"` or `data-theme="dark"`, and that choice has
+ * to beat the media query **in both directions** — a phone set to dark whose owner
+ * asked for light is exactly as real as the reverse.
+ *
+ *   :root                                  the light palette, always defined
+ *   @media (prefers-color-scheme: dark)    …guarded, so an explicit light wins
+ *   :root[data-theme="dark"]               …an explicit dark, on a light phone
+ *   :root[data-theme="light"]              …belt and braces; see the note there
+ *
+ * ⚠️ NO COLOUR MAY HAVE ITS ONLY DEFINITION INSIDE THE MEDIA BLOCK. Every token
+ * is declared here first; the blocks below only ever *re*declare. A token that
+ * exists in one block and not another is a theme that renders half-painted, and
+ * on the theme nobody on this project uses day to day.
+ * ────────────────────────────────────────────────────────────────────────────*/
+:root {
+  color-scheme: light dark;
+
+  /* Grounds. `--bg` is the app itself; `--page` is what shows AROUND it on a wide
+     screen, where the app is a column rather than the whole window. */
+  --page: #d9dbd5;
+  --bg: #ffffff;
+  --bar: #f0f2f5;
+  --panel: #ffffff;
+  /* The conversation's ground. WhatsApp's beige is the single most recognisable
+     thing about the product and it costs nothing to be faithful to. */
+  --paper: #efeae2;
+
+  /* Ink. */
+  --fg: #111b21;
+  --muted: #667781;
+  --line: #e9edef;
+  --line-strong: #d1d7db;
+
+  /* ⚠️ TWO GREENS, AND THE SPLIT IS A CONTRAST REQUIREMENT RATHER THAN A TASTE.
+     WhatsApp's brand green `#00a884` on white is about 2.6:1 — fine for a filled
+     shape with a white glyph on it, far below the 4.5:1 that TEXT needs. WhatsApp
+     itself uses the darker `#008069` wherever green has to be read as words, and
+     so does this file: `--accent` is the readable one, `--accent-bright` is for
+     fills and marks. Using one token for both is how a link becomes unreadable. */
+  --accent: #008069;
+  --accent-bright: #00a884;
+  --on-accent: #ffffff;
+  --accent-soft: #e7f8f3;
+
+  /* The bubbles. */
+  --mine: #d9fdd3;
+  --mine-ink: #111b21;
+  --theirs: #ffffff;
+  --theirs-ink: #111b21;
+
+  /* D-104's second hue. Retired from the conversation by D-139 and still meaning
+     "not you" everywhere else — see the note at the top of this file. */
+  --second: #4c3f7d;
+  --second-soft: #f0eef8;
+
+  /* ⚠️ NOT WHATSAPP'S `#ea0038`. That is a notification dot, and this token is
+     used for BORDERS AND WORDS — "this is not the person I sent the invite link
+     to" is a sentence, and a red at 4.4:1 on white is a sentence people misread. */
+  --alarm: #b3261e;
+  --alarm-soft: #fdeceb;
+  /* ⚠️⚠️ D-145. A SECOND MUTED INK, AND IT EXISTS BECAUSE TINTING A PANEL MOVED THE
+     GROUND OUT FROM UNDER THE TEXT ON IT. `--muted` is 4.65:1 on white and 4.06:1
+     on `--alarm-soft` — the tint costs about half a point, which puts §7.3.1a's
+     three explanatory notes, on the screen that wipes every conversation the person
+     has, under the 4.5:1 line. Measured from `getComputedStyle`, not from these hex
+     values, by `probe-phase2-contrast.mjs`; it was passing until the tint landed and
+     the tint is the whole point of that probe existing. This reads 4.99:1 there and
+     5.71:1 on white, so it is a darker grey rather than a different hue. */
+  --muted-on-alarm: #586972;
+
+  /* ⚠️ ROUND 6'S THIRD HUE, AND IT IS ON A DIFFERENT AXIS FROM THE OTHER TWO.
+     `--accent` and `--second` say WHOSE a thing is. Amber says how much CARE an
+     answer needs, and it exists for exactly one control: §3.6.2's three answers,
+     where "not yet" is neither the good outcome nor the bad one. Adding it to the
+     identity axis would break D-104's rule; it is a separate axis, used in one
+     place, and that is the whole licence it has. */
+  --caution: #8a6410;
+  --caution-soft: #fdf4e0;
+
+  /* One radius scale, so nothing has to guess. WhatsApp's bubbles are 7.5px and
+     its cards are 8px; the difference is not perceptible and one number is. */
+  --r: 8px;
+  --r-lg: 12px;
+  --shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  --bar-h: 3.5rem;
+}
+
+/* The phone said dark and nobody has overridden it. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0b141a;
+    --bg: #111b21;
+    --bar: #202c33;
+    --panel: #111b21;
+    --paper: #0b141a;
+
+    --fg: #e9edef;
+    --muted: #8696a0;
+    --line: #222d34;
+    --line-strong: #2f3b43;
+
+    /* ⚠️ INVERTED FROM THE LIGHT BLOCK, AND NOT BY ACCIDENT. On this ground the
+       BRIGHT green is the readable one (about 6.4:1 on `--bg`) and the dark green
+       is the one that disappears. The two names keep their JOBS — readable, and
+       for fills — while swapping values, which is why they are named for their job
+       rather than for their lightness. */
+    --accent: #00a884;
+    --accent-bright: #00a884;
+    /* A white glyph on `#00a884` is 2.8:1. The dark ink is 6.4:1 and is what
+       WhatsApp puts on its own dark-theme green controls. */
+    --on-accent: #0b141a;
+    --accent-soft: #14312c;
+
+    --mine: #005c4b;
+    --mine-ink: #e9edef;
+    --theirs: #202c33;
+    --theirs-ink: #e9edef;
+
+    --second: #a99ae2;
+    --second-soft: #22212f;
+
+    --alarm: #f15c6d;
+    --alarm-soft: #2b1a1d;
+    /* 5.43:1 on the tint already — redeclared rather than left to the light block. */
+    --muted-on-alarm: #8696a0;
+
+    /* Same rule as the greens: the dark theme's "soft fill" is a ground that is
+       TINTED, not the light tint inverted. A pale amber here would be the
+       brightest thing on the screen and would read as an alarm, which is the one
+       thing this hue exists NOT to say. */
+    --caution: #e0b355;
+    --caution-soft: #2a2416;
+
+    --shadow: 0 1px 0.5px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* The switch said dark, whatever the phone says. Same values as the block above.
+ *
+ * ⚠️ IT IS A COPY AND THAT IS THE CORRECT ENGINEERING HERE. The alternative is a
+ * selector list `@media … , :root[data-theme="dark"]`, which CSS does not permit
+ * across an at-rule boundary, or a preprocessor, which this project does not have
+ * and will not acquire for one stylesheet. Two blocks that must agree is a real
+ * cost; `test/theme.mjs` pays it by asserting they declare the identical token set
+ * with identical values, so they cannot drift silently. */
+:root[data-theme="dark"] {
+  --page: #0b141a;
+  --bg: #111b21;
+  --bar: #202c33;
+  --panel: #111b21;
+  --paper: #0b141a;
+
+  --fg: #e9edef;
+  --muted: #8696a0;
+  --line: #222d34;
+  --line-strong: #2f3b43;
+
+  --accent: #00a884;
+  --accent-bright: #00a884;
+  --on-accent: #0b141a;
+  --accent-soft: #14312c;
+
+  --mine: #005c4b;
+  --mine-ink: #e9edef;
+  --theirs: #202c33;
+  --theirs-ink: #e9edef;
+
+  --second: #a99ae2;
+  --second-soft: #22212f;
+
+  --alarm: #f15c6d;
+  --alarm-soft: #2b1a1d;
+  /* 5.43:1 on the tint already — redeclared rather than left to the light block. */
+  --muted-on-alarm: #8696a0;
+
+  --caution: #e0b355;
+  --caution-soft: #2a2416;
+
+  --shadow: 0 1px 0.5px rgba(0, 0, 0, 0.3);
+}
+
+/* ⚠️ THIS BLOCK LOOKS REDUNDANT AND IS NOT. `:root` above carries the light
+   palette, and the media query is already guarded by `:not([data-theme="light"])`,
+   so an explicit light choice does win without this. It is here for `color-scheme`
+   alone: without it the browser still paints dark form controls, dark scrollbars
+   and a dark default canvas on a phone set to dark, and the page renders as light
+   panels floating on the operating system's dark furniture. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * THE SHELL — a phone app, not a document.
+ *
+ * ⚠️⚠️ THE OLD LAYOUT WAS A SCROLLING PAGE AND THIS ONE IS A FIXED FRAME, and the
+ * difference is not cosmetic: it removes a documented fault. `only()` in `app.js`
+ * carries a note that *"two scrolls are involved and they are different — `line()`
+ * scrolls the log box, this scrolls the page the box sits in"*, and that the
+ * conversation therefore has to scroll BOTH to the end so that the newest message
+ * and the composer are on screen together. In this layout the app is exactly the
+ * height of the window, the log is the only thing that scrolls, and the composer
+ * cannot leave the bottom of the screen because it is not in the scroller.
+ *
+ * ⚠️ `100dvh` WITH A `100vh` FALLBACK, IN THAT ORDER. On a phone, `vh` is sized to
+ * the viewport with the browser's toolbars HIDDEN, so a `100vh` app is taller than
+ * the window whenever the toolbar is showing — which puts the composer under it,
+ * on the one screen where the composer is the point. `dvh` follows the toolbar.
+ * The `vh` line stays for anything too old to know `dvh`, where being slightly
+ * tall beats not being laid out at all.
+ * ────────────────────────────────────────────────────────────────────────────*/
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--fg);
+  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", sans-serif;
+  display: flex;
+  justify-content: center;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ⚠️ `46rem`, AND IT IS A DESKTOP DECISION RATHER THAN A PHONE ONE. Hannu uses
+   haamu mainly on a desktop browser, where a full-bleed single column would put a
+   chat bubble a metre wide. WhatsApp Web solves the same problem the same way: the
+   app is a bounded column, the window shows a plain ground around it. Below this
+   width the frame gives up its border and goes edge to edge, which is the phone. */
+main {
+  width: 100%;
+  max-width: 46rem;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* ⚠️ THE FLOATING BUTTON AND THE OVERFLOW MENU BOTH POSITION AGAINST THIS, and
+     that is the reason for the declaration rather than any painting. `position:
+     fixed` would attach them to the WINDOW, which on a wide screen is not where
+     the app is — the button would sit in the corner of the monitor with 20rem of
+     bare page between it and the list it belongs to. */
+  position: relative;
+}
+@media (min-width: 46rem) {
+  main {
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * The app bar.
+ *
+ * ⚠️ THE WORDMARK BLOCK IS STATIC MARKUP AND MUST STAY STATIC. D-083 put it there
+ * so that the product name is on screen even if the module fails to load, and
+ * `test/copy.mjs` asserts the exact strings `<h1 class="wordmark">…` and
+ * `<p class="gloss">…` are present in the FILE. Filling this bar from JavaScript
+ * would satisfy neither. So the bar holds two blocks — this one and `.barchat` —
+ * and screens swap which is shown rather than rewriting either.
+ * ────────────────────────────────────────────────────────────────────────────*/
+.appbar {
+  flex: 0 0 auto;
+  min-height: var(--bar-h);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  z-index: 2;
+}
+.masthead { display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1; }
+h1.wordmark {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0;
+  line-height: 1.2;
+}
+.gloss {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* D-154/D-159. ⚠️⚠️ THE ONE SENTENCE THAT IS NOT TRANSLATED BUT REMOVED, and Hannu
+   ruled it so: *haamu is Finnish for ghost* exists to explain the name to somebody
+   who does not speak the language. To a Finn it is a tautology printed under the
+   wordmark on every screen the product has.
+
+   ⚠️ IT IS DROPPED IN CSS RATHER THAN BY `paintCopy()`, and that is not a style
+   preference. The masthead is STATIC MARKUP — D-083 put it there deliberately, so
+   that the product still says its own name if `app/app.js` fails to load — so there
+   is no `text()` call to give a Finnish string to, and giving it one would move the
+   wordmark into the copy file and lose the property it is there for.
+
+   ⚠️⚠️ AND THIS IS WHY `app/lang-boot.js` IS RENDER-BLOCKING. `<html lang>` has to
+   carry `fi` BEFORE the first paint or this rule has nothing to match, and the
+   English gloss paints and then vanishes — a flash of precisely the sentence that
+   was ruled not to appear. See that file's header. */
+html[lang="fi"] .gloss {
+  display: none;
+}
+
+/* The chat's half of the bar: back, name, and the stream indicator as a subtitle —
+   which is where WhatsApp puts "online" and is what a person looks for. */
+.barchat { display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 0; }
+.barchat .who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.barchat h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ⚠️ A ROUND TAP TARGET AT 2.75rem, WHICH IS 44px AND IS THE FLOOR, not a style.
+   Below it a thumb misses, and the two controls that live here are "go back" and
+   "the menu" — the two a person reaches for without looking. */
+.iconbtn {
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+.iconbtn:hover { background: rgba(128, 128, 128, 0.16); }
+.iconbtn:active { background: rgba(128, 128, 128, 0.26); }
+
+/* ⚠️⚠️ ROUND 19: *"the 3 dots in the top right corner could be stronger, they were
+   easy to miss."* Reported by the one person who KNEW the menu was there — so it is a
+   contrast problem and not a familiarity one, and no amount of use would fix it.
+
+   ⚠️ THE WELL IS A NEUTRAL AND THAT IS DELIBERATE. D-104's rule is that a filled
+   accent is the one action on a screen; an accent circle here would compete with the
+   send button two centimetres below it. Grey at 14% is legible against both `--bar`
+   values without being a second call to action — and it is written as
+   `rgba(128,128,128,…)` rather than a token precisely so that it needs no entry in
+   either palette, which `test/theme.mjs` would then require in both. */
+#bar-menu {
+  font-size: 1.7rem;
+  background: rgba(128, 128, 128, 0.14);
+}
+#bar-menu:hover { background: rgba(128, 128, 128, 0.28); }
+#bar-menu[aria-expanded="true"] { background: rgba(128, 128, 128, 0.32); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * The scroller. Everything that is not the bar lives in here, and it is the ONLY
+ * thing on the page that scrolls — see the note on `main` above.
+ * ────────────────────────────────────────────────────────────────────────────*/
+.screens {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Notices sit above whatever screen is showing and must not scroll away with it. */
+#notices { flex: 0 0 auto; }
+#notices:not(:empty) { padding: 0.75rem 1rem 0; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * D-145, PHASE 2 — THE SEVENTEEN SCREENS THAT ARE NOT THE LIST OR THE CONVERSATION.
+ *
+ * ⚠️⚠️ AND THE FIRST THING THIS PHASE DOES IS CORRECT THE COMMENT THAT STOOD HERE.
+ * Phase 1 left a note saying *"WhatsApp has no analogue for any of them, so 'look
+ * like WhatsApp' will not be the whole answer"*. That is wrong, and being wrong
+ * about it is why these screens went a week without a direction. WhatsApp has an
+ * exact analogue and it is its REGISTRATION FLOW — enter your number, type the
+ * code we sent, choose a name. Every one of those screens is: a title, one
+ * instruction, one control, and the alternatives set quietly underneath. Phase 1
+ * took WhatsApp's conversation; Phase 2 takes WhatsApp's onboarding. Hannu's
+ * licence to improvise is still there and is spent on much less than expected.
+ *
+ * ➡️ **I HAD READ THE PRODUCT'S SCREENS AND NOT THE PRODUCT'S FLOW.** The comparison
+ * that was missing is not a screen-to-screen one at all: nothing in WhatsApp looks
+ * like "write down eight words", and the *shape* of the screen that asks you to is
+ * the same shape as the one asking for an SMS code.
+ *
+ * What was actually wrong, measured off `probe-phase2-screens.mjs` at 411×751 —
+ * which is the phone in Hannu's own diagnostics, not a round number:
+ *
+ *   1. FOUR SCREENS ARE TALLER THAN THE PHONE and nothing says so. The gate is
+ *      849px on a 751px screen, and the three doors below its two buttons —
+ *      Ghost mode, paste a link, and §7.3.1a's panic action — are all under the
+ *      fold. ⚠️ The panic action is REQUIRED by §7.3.1a to be reachable from a
+ *      device the user has never used before; it is reachable and invisible.
+ *   2. `.note` DID FOUR JOBS IN ONE LOOK, at 0.82rem — the smallest text on the
+ *      screen — and one of those jobs is INSTRUCTIONS. The spoken-code screen puts
+ *      "say the words rather than the letters" in it.
+ *   3. THE PANEL WAS A CARD THAT COULD NOT BE SEEN: `--panel` is `#ffffff` and so
+ *      is `--bg`. It was padding calling itself a surface.
+ *   4. THE PROSE RAN THE FULL 46rem ON DESKTOP — about 95 characters a line, where
+ *      65 is the readable measure. Hannu's own screen is 2317px wide.
+ *   5. `.steps` — the one element that says what the app is DOING — was the
+ *      quietest thing on its screen.
+ *
+ * ⚠️ WHAT THIS PHASE DELIBERATELY DOES NOT TOUCH: one word of copy. Every string
+ * is where it was; what changes is which of them is set as a heading, which as an
+ * instruction, and which as an aside. A design pass that rewrites the words is not
+ * a design pass, and the words here have been through nineteen rounds of testing.
+ * ────────────────────────────────────────────────────────────────────────────*/
+
+/* ⚠️ `max-width` AND `margin: 0 auto`, AND IT IS THE DESKTOP THIS IS FOR. `main` is
+   46rem because a chat bubble a metre wide is absurd; 46rem of PROSE is a different
+   problem with the same cause. 32rem holds about 62 characters at this body size,
+   which is the measure running text is read at. On his phone 32rem never binds —
+   411px is narrower — so this rule is invisible on the device that finds the bugs
+   and fixes the one he actually looks at all day. */
+.panel {
+  background: var(--panel);
+  border-radius: var(--r);
+  padding: 1.25rem 1rem 2rem;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 32rem;
+}
+
+/* ⚠️ SCOPED TO `.panel` AND NOT WRITTEN ON THE BARE `h2`. The list's own heading is
+   an `h2` too (`.listlabel`, deliberately tiny and uppercase), and a global change
+   here would silently resize the one screen Phase 1 already settled. */
+.panel h2 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+  font-weight: 600;
+  margin: 0 0 0.9rem;
+  text-wrap: balance;
+}
+
+/*
+  THE LEAD — the one instruction the screen exists to give.
+
+  ⚠️⚠️ IT ADDS NO COPY. Every screen in this wizard already opens with its
+  instruction, and on the ones that carry it that sentence was rendered at body
+  size, in body weight, indistinguishable from the explanation under it.
+  "Read these six digits to your friend" and "Pick one. They are all equally good"
+  are not paragraphs, they are the screen's purpose, and they were dressed as
+  paragraphs. This class promotes what is already written rather than writing more.
+
+  ⚠️ 1.1rem AND NOT LARGER. It has to out-rank body text without competing with the
+  `h2` above it on the screens that have one — a lead that beats its own heading is
+  two headings.
+
+  ⚠️⚠️ **A LEAD IS WHAT THE SCREEN ASKS, AND SEVEN OF THE FIRST THIRTEEN I MARKED
+  WERE NOT ASKING ANYTHING.** The first pass put this class on whatever paragraph
+  came first, and §7.3.1a's panic screen then opened with 282 characters at 1.1rem —
+  seven lines of explanation, set as though it were an instruction. Measured rather
+  than eyeballed: the ones that survived are 14 to 91 characters and the ones
+  removed are 121 to 282. About 110 is two lines on a 411px phone, and past two
+  lines this is not emphasis, it is the same paragraph in a bigger font.
+
+  ➡️ So the split fell out of the measurement rather than being imposed on it. The
+  seven screens that ASK — pick one, write it down, type it back, type your KEY,
+  read these digits, wait a moment, type your KEY to confirm — carry a lead. The
+  seven that REPORT — Ghost mode's terms, a dormant tab, a duplicate, a tripwire, a
+  failure, a pasted link, a covered screen — have an `h2` and prose, and want no
+  lead at all. A screen that is telling you something already has a heading.
+*/
+.lead {
+  font-size: 1.1rem;
+  line-height: 1.45;
+  color: var(--fg);
+  margin: 0 0 1rem;
+  text-wrap: pretty;
+}
+.lead strong { font-weight: 600; }
+
+/*
+  THE GATE'S OPENING PARAGRAPH, WHICH IS THE ONE SCREEN WHERE THE LEAD CANNOT BE A
+  CLASS IN THE MARKUP.
+
+  `#gate-what` is filled by `prose()` from `copy.product.what` — five paragraphs,
+  built at runtime — so there is no element in `index.html` to mark.
+  The first of them is the product's whole claim: *"haamu is a secure messenger.
+  There are no accounts, no user names and no passwords."* It was rendered
+  identically to the four paragraphs of detail beneath it, which is how a first-time
+  visitor meets a wall rather than a sentence.
+
+  ⚠️ WRITTEN AS A CHILD SELECTOR ON THE ID so that it cannot reach any other
+  `prose()` host — `emphasis.js` marks terms inside these paragraphs and every one
+  of them lives in a `<p>` exactly like this.
+*/
+#gate-what > p:first-child {
+  font-size: 1.1rem;
+  line-height: 1.45;
+  margin-bottom: 1rem;
+  text-wrap: pretty;
+}
+
+h1 { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.02em; margin: 0 0 1.5rem; }
+h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.6rem; }
+p { margin: 0 0 0.75rem; }
+p:last-child { margin-bottom: 0; }
+
+/* Round 4's three bold fragments in the opening explanation (`ui/emphasis.js`).
+   600 rather than the browser's default 700: the body face is a system sans at
+   16px, where 700 reads as a second typeface rather than as emphasis — and the
+   headings here are 600, so this is the weight this interface already means by
+   "important". */
+strong { font-weight: 600; }
+
+button {
+  font: inherit;
+  font-weight: 500;
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--r);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+button.secondary { background: transparent; color: var(--fg); border-color: var(--line-strong); }
+button.danger { background: transparent; color: var(--alarm); border-color: var(--alarm); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+/* A secondary action that still has to be FOUND — item 2's "almost as important
+   as the previous" and item 4's copy button. The border carries the accent and
+   nothing else changes, so it sits one step below the filled button beside it
+   and one step above the grey ones. */
+button.edged { border-color: var(--accent); color: var(--accent); }
+.row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+
+/*
+  D-145. THE WIZARD'S CONTROLS — WhatsApp's onboarding split, which is two shapes
+  and not one.
+
+  ⚠️ WHATSAPP USES A PILL FOR AN ACTION AND A ROUNDED RECTANGLE FOR A CHOICE, and
+  that is a rule rather than an inconsistency. "Agree and continue" is a pill;
+  a row you pick out of a list is a rectangle. This wizard has both — `Use this one`
+  is an action, the six candidate phrases and §3.6.2's three answers are choices —
+  so both shapes are here, each doing its own job.
+
+  ⚠️ `min-height: 2.75rem` IS 44px AND IS THE FLOOR, not a style. The same number
+  the chat's back button carries, for the same reason.
+
+  ⚠️⚠️ THE TWO `:not()`s ARE THE WHOLE REASON THIS RULE IS SAFE, AND THIS FILE HAS
+  BEEN BITTEN THREE TIMES BY WHAT THEY PREVENT. `button.term` is an inline control
+  INSIDE A SENTENCE — a dotted word a reader can press — and `button.linkish` is a
+  text alternative under a control. A container rule that painted every button
+  inside it would give both of them a 44px box and a pill outline, which turns a
+  marked word in a paragraph into a green lozenge mid-line. `button.term` is
+  (0,1,1) and defends itself with `border-radius: 0`; a bare `.panel button` is
+  (0,1,1) too and sits LATER in this file, so it would win. Excluding them by name
+  means the question of source order never arises. ⭐ The rule this file learned
+  from `.rows` twice — a layout container that also paints is a trap — applies to a
+  SCREEN container exactly as it did to a stack.
+*/
+.panel button:not(.term):not(.linkish) {
+  min-height: 2.75rem;
+  padding: 0.6rem 1.35rem;
+  border-radius: 999px;
+}
+/* ⚠️ (0,4,1), WHICH BEATS THE (0,3,1) ABOVE — deliberately, and asserted with
+   `getComputedStyle` in the probe rather than trusted. A choice is a rectangle. */
+.panel .choices button:not(.term):not(.linkish),
+.panel .answers button:not(.term):not(.linkish) {
+  border-radius: var(--r);
+  padding: 0.7rem 0.9rem;
+  /* ⚠️ 2.9rem AND NOT 3.25rem, AND THE 6px BACK IS NOT A ROUNDING PREFERENCE. The
+     gate stacks two of these and §3.6.2 stacks three, on screens that were already
+     taller than his phone before this pass touched them — see the measurements in
+     this section's header. 2.9rem still clears the 44px floor. */
+  min-height: 2.9rem;
+}
+
+code, .link {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+.link {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  background: var(--bar);
+  margin: 0.75rem 0;
+}
+.sas {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 2.6rem;
+  letter-spacing: 0.24em;
+  text-align: center;
+  padding: 1rem 0 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  §2.2's spoken code and §2.2b's spelling.
+
+  ⚠️ IT IS SIZED TO BE READ ALOUD FROM A PHONE HELD AT ARM'S LENGTH while the reader
+  is also listening to somebody repeat it back — bigger than `.link`, smaller than
+  `.sas`, which is six digits and this is nineteen characters. `clamp` rather than a
+  fixed size because the failure at the small end is a line break in the middle of a
+  group, and a group broken across two lines is a group read out twice.
+
+  ⚠️ `letter-spacing` is deliberate and modest: the characters have to be separable
+  by eye, and too much of it makes the four-character groups stop reading as groups.
+  The grouping is what a person keeps their place with.
+*/
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(1.1rem, 6.2vw, 1.6rem);
+  letter-spacing: 0.08em;
+  text-align: center;
+  white-space: nowrap;
+  overflow-x: auto;
+  padding: 0.8rem 0.5rem 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  One line per group of four, so the eye can hold its place between the code and the
+  words. ⚠️ NOT one line of sixteen words: that is a wall, and the person reading it
+  is doing three things at once.
+*/
+.spelling {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-bottom: 0.75rem;
+}
+/*
+  D-145. §3.4's progress, as a progress indicator rather than as a footnote.
+
+  ⚠️ THIS WAS THE QUIETEST ELEMENT ON ITS OWN SCREEN. Three lines of 0.9rem muted
+  grey, marked `▸` and `·`, above the code or the link — on the one screen whose
+  whole content is "what is happening now, and what is still to come". A person
+  waiting for a friend to open an invite link is reading exactly this and it was
+  set as an aside.
+
+  ⚠️⚠️ DONE IS THE DEFAULT AND PENDING IS THE OVERRIDE, AND THAT IS FORCED BY CSS
+  RATHER THAN CHOSEN. `app.js` marks only the CURRENT step, with `.on`. CSS can say
+  "the siblings AFTER the current one" (`.on ~ li`) and has no way at all to say
+  "the ones before it" — so the three states are reached by painting every step as
+  finished and then letting `.on` and `.on ~ li` take theirs back. Adding a second
+  class in `app.js` would be the obvious fix and would put the same fact in two
+  places; this keeps it in one.
+
+  ⚠️ NO GLYPHS. The marks are drawn with `border-radius` and `box-shadow`, not with
+  characters. The floating button's `＋` needed a device check before it could be
+  trusted (round 20) and it is one symbol on one screen; a checkmark here would be
+  three, and a font without it renders tofu in the middle of a progress list.
+*/
+/*
+  D-145. §7.2's wait, given something that moves.
+
+  ⚠️⚠️ `transform` AND NOTHING ELSE, AND IT IS THE ONLY THING THAT WORKS HERE. This
+  screen is shown immediately before Argon2id at 128 MiB, which D-034 measured at
+  1.17 s on a decade-old Android and §7.5 says runs on every unlock. The main
+  thread is blocked for that whole time on purpose — `withIdentity` even yields for
+  20 ms first so the panel can paint before the block. A script-driven indicator, or
+  a CSS animation of `width` or `left`, is main-thread work and would freeze on the
+  first frame of the wait it exists to cover. A `transform` animation is handed to
+  the compositor and keeps moving while the thread is gone.
+
+  ⚠️ THE REDUCED-MOTION BLOCK IS NOT OPTIONAL AND IT IS NOT THE GLOBAL ONE. The rule
+  at the bottom of this file sets `animation-duration: 0.01ms`, which leaves this
+  bar as a 40% stub sitting at the left — a progress indicator frozen at 40%, which
+  says something false. Here it becomes a full quiet bar that claims nothing.
+*/
+.working-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  overflow: hidden;
+  margin: 0 0 1.1rem;
+}
+.working-bar > span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--accent-bright);
+  animation: working-sweep 1.5s ease-in-out infinite;
+}
+@keyframes working-sweep {
+  from { transform: translateX(-105%); }
+  to { transform: translateX(255%); }
+}
+/* ⚠️ AFTER the rule above, deliberately: both are (0,1,1) and source order is the
+   only thing that decides this one. */
+@media (prefers-reduced-motion: reduce) {
+  .working-bar > span { width: 100%; transform: none; animation: none; }
+}
+
+.steps { list-style: none; margin: 0 0 1.25rem; padding: 0; font-size: 0.95rem; }
+.steps li {
+  position: relative;
+  padding: 0.35rem 0 0.35rem 1.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+/* finished: a small filled accent dot. */
+.steps li::before {
+  content: "";
+  position: absolute;
+  left: 0.3rem;
+  top: 0.75rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-bright);
+}
+/* now: full ink, and a ring so the eye lands on it without any colour being added
+   to the screen that was not already on it. */
+.steps li.on { color: var(--fg); font-weight: 500; }
+.steps li.on::before {
+  left: 0.15rem;
+  top: 0.6rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+/* still to come. */
+.steps li.on ~ li { color: var(--muted); }
+.steps li.on ~ li::before {
+  background: transparent;
+  border: 2px solid var(--line-strong);
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * THE CONVERSATION LIST — WhatsApp's row, translated.
+ *
+ * ⚠️⚠️ THIS REPLACES `.rows`, AND RETIRING THAT NAME IS PART OF THE FIX. D-104
+ * recorded the same trap twice — *"a layout class that also paints is a trap the
+ * second caller falls into"* — because `.rows` was a stack-of-buttons layout that
+ * also painted, and both the gate and §3.6.2's three answers borrowed it for the
+ * `flex-direction: column` and silently inherited the paint. `.chats` is named for
+ * the ONE thing it may ever be, it has exactly one caller, and there is no longer
+ * a generic vertical-stack class in this file for a second caller to reach for.
+ *
+ * ⚠️ WHAT WHATSAPP HAS HERE AND THIS PRODUCT DOES NOT: a photograph, and a preview
+ * of the last message. There are no profile photographs in haamu — that is a
+ * privacy property, not an omission — so the avatar is a monogram, which is what
+ * WhatsApp itself shows before a photograph is set. The preview line is spent on
+ * §3's role instead, because a client that rendered the last message into the list
+ * would put plaintext on a screen that is on show whenever the app is open.
+ * ────────────────────────────────────────────────────────────────────────────*/
+/* The list screen is not a card: the rows reach both edges and everything that is
+   not a conversation lives under them, where it keeps its padding. */
+.listpane { display: flex; flex-direction: column; padding: 0; }
+/* ⚠️ THE BOTTOM PADDING IS THE FLOATING BUTTON'S DIAMETER PLUS ITS MARGIN, and it
+   is a fix rather than a rhythm. The button floats over this screen, and the first
+   screenshot of it had the circle sitting squarely on top of "Forget my KEY, and
+   clear this site's data" — a destructive control, half-covered, on the screen
+   somebody reaches when they want to be careful. WhatsApp's own list has nothing
+   underneath it to collide with; this one does, so it has to make room. */
+.listrest { padding: 0.5rem 1rem 5.5rem; }
+
+/* ⚠️ QUIET ON PURPOSE — see the comment on `#home-title` in `index.html`. WhatsApp
+   has no heading here at all; this is small enough not to compete with the bar
+   above it and present enough to head the empty state and name the list aloud. */
+.listlabel {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0;
+  padding: 0.85rem 1rem 0.35rem;
+}
+
+.chats { display: flex; flex-direction: column; }
+.chats > .note { padding: 2rem 1rem; text-align: center; }
+
+.chats button {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.chats button:hover { background: rgba(128, 128, 128, 0.1); }
+/* ⚠️ THE DIVIDER IS ON THE ROW, INSET PAST THE AVATAR, AND IT IS THE LAST ROW THAT
+   MUST NOT HAVE ONE. WhatsApp insets it so the eye reads the column of avatars as a
+   column; a full-width rule turns the list into a table. */
+.chats button + button { box-shadow: inset 0 1px 0 var(--line); }
+
+.avatar {
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  user-select: none;
+}
+.chatmeta { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 0.1rem; }
+.chatmeta .name {
+  font-size: 1rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* WhatsApp's second line is the last message. Here it is who invited whom — see the
+   note above for why it is not a preview. */
+.chatmeta .who {
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ⚠️ THE NEW-CONVERSATION CONTROL IS A FLOATING BUTTON AND THAT IS NOT DECORATION.
+   The list is now full-bleed and scrolls; a button under the last row is a button
+   that leaves the screen as soon as there are eight conversations. WhatsApp's FAB
+   is the answer to exactly that and it is where a phone user's thumb already goes.
+   ⚠️ It is `position: absolute` against `main`, NOT `fixed` against the window: on a
+   wide screen the app is a 46rem column and a fixed button would sit in the corner
+   of the monitor, unattached to anything. */
+.fab {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-bright);
+  color: var(--on-accent);
+  font-size: 1.6rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(11, 20, 26, 0.25);
+  z-index: 3;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * THE CONVERSATION.
+ *
+ * ⚠️ `#chat` IS THE ONE SCREEN THAT IS NOT A CARD, so it opts out of `.panel`'s
+ * padding entirely and manages its own three bands: the banners, the log, and the
+ * composer. The log is the scroller; the composer is pinned below it and is not in
+ * the scroller, which is what stops it leaving the screen.
+ * ────────────────────────────────────────────────────────────────────────────*/
+.chatpane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  padding: 0;
+}
+.chatpane > .banner { flex: 0 0 auto; margin: 0.5rem 0.75rem 0; }
+
+.log {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem;
+}
+
+/* ⚠️ `max-width: 75%` AND NOT THE OLD 85%. On a phone the two are nearly the same;
+   in the 46rem desktop frame, 85% is a line long enough that the eye loses the
+   start of it, and the ragged right edge that tells you where a bubble ends stops
+   being visible at all. WhatsApp Web uses 65% of a wider pane. */
+.msg {
+  align-self: flex-start;
+  max-width: 75%;
+  padding: 0.4rem 0.6rem 0.35rem;
+  border-radius: var(--r);
+  background: var(--theirs);
+  color: var(--theirs-ink);
+  box-shadow: var(--shadow);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  position: relative;
+}
+
+/* ⚠️ ALL THREE OF `renderLog`'s CLASSES ARE WRITTEN OUT, INCLUDING THE ONE THAT
+   MATCHES `.msg`'s OWN DEFAULT. `theirs` could be left to inherit, and then the
+   ternary in `app.js` would map onto two rules and a silence — so a reader checking
+   whether the three states are distinct would have to know that the absent one is
+   the default rather than an omission. Three states, three rules. */
+.msg.theirs { background: var(--theirs); color: var(--theirs-ink); }
+
+/* D-139. The filled bubble, back — see the header of this file for why, and for
+   why the reason recorded against its removal was broader than the evidence. */
+.msg.mine { align-self: flex-end; background: var(--mine); color: var(--mine-ink); }
+
+/* ⚠️ THE TAIL IS ON THE FIRST BUBBLE OF A RUN AND NOWHERE ELSE, which is what makes
+   a run of messages read as one turn instead of as five separate arrivals. It is
+   drawn with a border triangle rather than an SVG because `img-src` and `style-src`
+   are both `'self'` and a triangle is four lines of CSS. */
+/* ⚠️ THE GAP BETWEEN RUNS IS ON THE TAIL, NOT ON EVERY BUBBLE. `.log`'s own `gap`
+   is 0.15rem, which is WhatsApp's spacing WITHIN a run; a run is separated from the
+   one before it by this margin. Putting the larger gap on every bubble instead
+   would erase the grouping the tail exists to show. */
+.msg.tail { border-top-left-radius: 0; margin-top: 0.45rem; }
+.msg.tail:first-child { margin-top: 0; }
+.msg.tail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -0.5rem;
+  border: 0.5rem solid transparent;
+  border-top-color: var(--theirs);
+  border-right: 0;
+  border-bottom: 0;
+}
+.msg.mine.tail { border-top-left-radius: var(--r); border-top-right-radius: 0; }
+.msg.mine.tail::before {
+  left: auto;
+  right: -0.5rem;
+  border-top-color: var(--mine);
+  border-right: 0.5rem solid transparent;
+  border-left: 0;
+}
+
+/* ⚠️ AFTER `.mine`, DELIBERATELY. A failed message is rendered with `bad` INSTEAD of
+   the incoming class (`app.js`'s `renderLog`), so these do not collide today — but
+   the two are one keystroke apart in that ternary, and an alarm bubble painted like
+   an ordinary one is the kind of thing nobody notices until it happens. */
+.msg.bad {
+  background: var(--alarm-soft);
+  color: var(--alarm);
+  border: 1px solid var(--alarm);
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+.msg.bad.tail::before { border-top-color: var(--alarm); }
+
+/* WhatsApp puts the time INSIDE the bubble, bottom right, in the bubble's own ink at
+   low opacity — so it never competes with the words.
+ *
+ * ⚠️ `float`, AND IT IS THE FLOAT THAT MAKES IT WHATSAPP RATHER THAN THE POSITION.
+ * As a block it took a line of its own on every bubble, which made a three-word
+ * message two lines tall and the whole conversation about a third longer than the
+ * app it is imitating. Floated, it sits at the end of the last line when there is
+ * room and drops below only when there is not — which is exactly WhatsApp's rule,
+ * and the reason its short messages are one line high.
+ *
+ * ⚠️ THE SPAN IS APPENDED AFTER THE TEXT IN `line()` AND MUST STAY THERE. A float
+ * placed before the text would push the first line rather than the last, and the
+ * bubble would open with a gap in its top-right corner. */
+.msg .when {
+  float: right;
+  margin: 0.35rem 0 0 0.75rem;
+  font-size: 0.68rem;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* ⚠️ "checking" is not an error state and must never be coloured like one:
+   §5.3's stream is a notification and §5.4.1's drain is the delivery, so a
+   client that cannot stream is late, not broken. */
+.live { font-size: 0.78rem; color: var(--muted); line-height: 1.3; white-space: nowrap; }
+.live.live { color: var(--accent); }
+
+/* The composer. WhatsApp's is a rounded field with a circular send button beside
+   it, both sitting on the bar ground rather than on the wallpaper. */
+.composer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  /* ⚠️ `flex-end` AND NOT `center`, SINCE ROUND 19. The field grows upward as
+     paragraphs are typed; centred, the send button would drift up the side of a tall
+     box and leave the floor of the screen — the exact reach problem D-139 fixed. */
+  align-items: flex-end;
+  padding: 0.5rem 0.75rem;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+}
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  line-height: 1.35;
+  padding: 0.6rem 0.9rem;
+  /* A radius large enough to read as a pill on one line and as a rounded box on
+     several — 999px on a four-line field draws a lozenge, which WhatsApp does not. */
+  border-radius: 1.25rem;
+  border: 1px solid transparent;
+  background: var(--panel);
+  color: var(--fg);
+  resize: none;
+  /* ⚠️ THE CAP IS WHAT KEEPS THE CONVERSATION ON SCREEN. Without it a long paste
+     grows the field until the log is gone; app.js measures against this same ceiling. */
+  max-height: 7.5rem;
+  overflow-y: auto;
+}
+.composer textarea:focus { outline: none; border-color: var(--accent); }
+
+/* ⚠️⚠️ THIS IS WHERE D-104'S STRENGTH RULE SURVIVES THE FILLED BUBBLE.
+   The rule was "a filled accent is the one action on a screen", and a filled bubble
+   on every outgoing message breaks it as arithmetic. WhatsApp's answer is SHAPE:
+   the send control is a circle and the bubbles are rectangles, so the eye separates
+   them without the colour having to. Take the roundness off this and the rule fails
+   again, silently, on the one screen it was written for. */
+.send {
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-bright);
+  color: var(--on-accent);
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+.send:disabled { opacity: 0.5; cursor: default; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * WhatsApp's "system message" — a centred chip on the wallpaper.
+ *
+ * ⚠️⚠️ THESE FOUR SENTENCES USED TO BE SCATTERED AND MOVING THEM TOGETHER WAS A
+ * MEASUREMENT, NOT A PREFERENCE. Three of them sat under the composer alongside the
+ * conversation's three controls, and the composer's bottom edge measured **627px of
+ * an 880px window** — a quarter of the conversation screen, with the one control a
+ * person touches every few seconds pushed up out of a thumb's reach. The controls
+ * went into the bar's menu, where WhatsApp keeps them; these came here, because a
+ * statement the APP is making about the conversation is a different kind of thing
+ * from either person's words and a messenger already has a shape for it.
+ *
+ * ⚠️ `:empty` IS WHAT KEEPS THE BAND OUT OF THE WAY. All four elements exist on
+ * every conversation and most are blank most of the time — `app.js` fills them with
+ * `text()` rather than toggling `.hidden` — so an empty one has to take no space at
+ * all, or an ordinary conversation opens with three invisible chips holding the log
+ * down and nothing on screen to explain the gap.
+ * ────────────────────────────────────────────────────────────────────────────*/
+.sysmsgs {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.5rem 0;
+}
+/* ⚠️ AND THE CONTAINER'S OWN PADDING HAS TO GO WHEN EVERY CHIP IN IT IS EMPTY,
+   which `:empty` on the children cannot do — a parent of four empty children is not
+   itself empty. Without this the band is invisible and still 0.6rem tall. */
+.sysmsgs:not(:has(.sysmsg:not(:empty))) { display: none; }
+.sysmsg {
+  margin: 0;
+  max-width: 90%;
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted);
+  background: var(--panel);
+  border-radius: var(--r-lg);
+  padding: 0.35rem 0.7rem;
+  box-shadow: var(--shadow);
+}
+.sysmsg:empty { display: none; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * The overflow menu, and the theme switch that lives in it (D-139).
+ * ────────────────────────────────────────────────────────────────────────────*/
+.menu {
+  position: absolute;
+  top: calc(var(--bar-h) + 0.25rem);
+  right: 0.5rem;
+  min-width: 12rem;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  box-shadow: 0 4px 14px rgba(11, 20, 26, 0.22);
+  padding: 0.35rem;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.menu-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.4rem 0.6rem 0.2rem;
+  margin: 0;
+}
+.menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--fg);
+  font-weight: 400;
+  padding: 0.5rem 0.6rem;
+}
+.menu button:hover { background: rgba(128, 128, 128, 0.14); }
+
+/* ⚠️⚠️⚠️ THE THIRD INSTANCE OF THE TRAP THIS FILE HAS ALREADY BEEN BITTEN BY TWICE,
+   caught this time before it shipped rather than after.
+   `.menu button` is (0,1,1). `button.danger` is (0,1,1). They are EQUAL, and
+   `.menu button` is written above — so without this line "Delete this conversation"
+   would render in the menu as an ordinary grey row, exactly as §3.6.2's red answer
+   did inside `.rows` and exactly as the gate's accent fill did. The bug is silent
+   in all three cases: the control works, it just stops looking like what it does.
+   ➡️ **A LAYOUT CLASS THAT ALSO PAINTS IS A TRAP THE SECOND CALLER FALLS INTO** —
+   `.menu` is the second caller, and this is the toll it pays. */
+.menu button.danger { color: var(--alarm); }
+.menu button.edged { color: var(--accent); }
+
+/* The conversation's own controls, which live in this menu only while one is open. */
+.menu-group { display: flex; flex-direction: column; gap: 0.1rem; }
+.menu-group + .menu-label { border-top: 1px solid var(--line); margin-top: 0.35rem; }
+/* ⚠️ `aria-checked` RATHER THAN A CLASS, so the mark and the accessible state are
+   the same fact. A class here would be a second copy of one decision, which is the
+   exact shape D-138 was made of. */
+.menu button[aria-checked="true"] { color: var(--accent); font-weight: 600; }
+.menu button[aria-checked="true"]::after { content: " ✓"; }
+
+/* D-159's language group. ⚠️⚠️ IT TAKES `.menu-group`'S LAYOUT AND DELIBERATELY NOT ITS
+   NAME, which is the same distinction `.rows` cost this file three times over. That
+   class carries a BEHAVIOUR as well as a stacking direction — `$("menu")`'s listener
+   closes the menu when anything inside a `.menu-group` is pressed — and closing is
+   wrong here for the theme buttons' reason and one better one: the menu is itself one
+   of the surfaces that changes language, so a person who presses Suomi should watch
+   the words around their finger change rather than have them taken away.
+
+   ⚠️ `.hidden` is `display: none !important`, so `only()` still hides all three rows as
+   one thing despite the `display: flex` here. That is why this may be an id selector at
+   all — the group is shown per screen, not per mode, and `RERENDER` decides which. */
+#menu-lang { display: flex; flex-direction: column; gap: 0.1rem; }
+/* The divider `.menu-group + .menu-label` draws before "Appearance". This is the same
+   rule for a label one level down, so the two settings read as two settings. */
+#menu-lang .menu-label { border-top: 1px solid var(--line); margin-top: 0.35rem; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Forms and the remaining components, on the new palette.
+ * ────────────────────────────────────────────────────────────────────────────*/
+/*
+  D-145. THE KEY, WHICH IS THE MOST IMPORTANT OBJECT IN THE PRODUCT, RENDERED AS ONE.
+
+  It was a grey box with a hairline — the same treatment as `.link`, which is a
+  thing you send and then forget. This is the thing that IS the account, that the
+  product says it cannot help you recover, and the screen it appears on exists for
+  one purpose: to get it written down on paper. The accent ground says *this is
+  yours*, which is the meaning `--accent` has carried since D-104.
+
+  ⚠️ THIS IS NOT A BREACH OF D-104's RULE. That rule is *"a filled accent is the one
+  ACTION on a screen"*, and this is not an action — the action on `#write` is the
+  button that says it has been written down, and that button is still the only
+  filled control here. A tinted surface and a filled control are different claims.
+*/
+.phrase {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.05rem;
+  line-height: 2.05;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent-soft);
+  word-spacing: 0.4em;
+  user-select: all;
+}
+.candidates { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.9rem 0; }
+.candidates label {
+  display: flex; gap: 0.6rem; align-items: baseline;
+  padding: 0.5rem 0.6rem; border: 1px solid var(--line-strong); border-radius: var(--r);
+  cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem; word-spacing: 0.3em;
+}
+.candidates label:has(input:checked) { border-color: var(--accent); }
+/* ⚠️ THE SAME 44px FLOOR AS THE BUTTONS. Three of these take a passphrase typed on
+   a phone — Phase 0.5 measured 24.4 s to type eight words at 90% accuracy — and a
+   field shorter than the button beside it reads as the smaller of the two. */
+.field {
+  width: 100%; font: inherit; padding: 0.7rem 0.85rem; border-radius: var(--r);
+  min-height: 2.75rem;
+  border: 1px solid var(--line-strong); background: var(--panel); color: var(--fg);
+}
+/* ⚠️ THE BORDER THICKENS RATHER THAN THE COLOUR ALONE CHANGING, and the inset
+   shadow keeps the box the same size so nothing shifts under a thumb. A 1px accent
+   border was the whole focus signal on a control being typed into. */
+.field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* ⚠️⚠️ THE GATE'S TWO BUTTONS USED `.rows`, AND THAT IS *WHY* ITEM 1 EXISTS.
+ * `.rows` was the CONVERSATION LIST — a stack of quiet grey outlines, which is
+ * right for a list and wrong for a fork. It was reused at the gate for its
+ * `flex-direction: column` alone, and `.rows button` (0,1,1) then beat plain
+ * `button` (0,0,1): the accent fill that `#go-setup` was written to have had
+ * never once rendered. The first screen of the product showed two identical grey
+ * rectangles, and no amount of colour added to `button` could have shown up.
+ *
+ * ➡️ **A LAYOUT CLASS THAT ALSO PAINTS IS A TRAP THE SECOND CALLER FALLS INTO.**
+ * The gate has its own container, so the two rules cannot reach each other — and
+ * as of D-139 `.rows` no longer exists at all, so there is nothing left to borrow.
+ */
+.choices { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.6rem 0 0.9rem; }
+.choices button { text-align: left; color: var(--fg); }
+/* Make one here (green: this device) … */
+.choice { background: var(--accent-soft); border-color: var(--accent); }
+/* … or bring back the one you already have (violet: not made here, not now).
+   ⚠️ SINCE D-139 THIS IS THE ONLY VIOLET LEFT IN THE PRODUCT — see the header. */
+.choice.other { background: var(--second-soft); border-color: var(--second); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * §3.6.2's three answers — and this container exists for D-104's reason, caught a
+ * second time.
+ *
+ * ⚠️⚠️ THESE THREE WERE IN `.rows` AND THE RED ONE HAD NEVER BEEN RED. `.rows button`
+ * (0,1,1) and `button.danger` (0,1,1) are EQUAL specificity, and `.rows button` was
+ * further down the file, so it won on source order alone: "this is not the person I
+ * sent the invite link to" rendered as the same quiet grey outline as the other two.
+ * Three identical rectangles, on the one screen whose whole job is a deliberate
+ * choice.
+ *
+ * Hannu's own colour spec, and it is right for a reason worth writing down: the
+ * FILLED one is "not yet". That is the answer most people honestly owe, and making
+ * it the easiest to land on is what stops "we compared them" from being the reflex
+ * click on a screen nobody wants to be stopped by.
+ * ────────────────────────────────────────────────────────────────────────────*/
+.answers { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.6rem 0 0; }
+.answers button { text-align: left; }
+/* We compared them — a green edge, and no fill: it reports, it does not urge. */
+.answer.same { background: transparent; color: var(--fg); border-color: var(--accent); }
+/* Not yet — the amber ground, the one thing on this screen that is filled. */
+.answer.later { background: var(--caution-soft); color: var(--fg); border-color: var(--caution); }
+/* Not my friend — the alarm edge, which is a deletion and must look like one. */
+.answer.wrong { background: transparent; color: var(--alarm); border-color: var(--alarm); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * D-110's disclosures: a marked word in running prose, and the panel it opens.
+ *
+ * ⚠️ WRITTEN AS `button.term` (0,1,1) RATHER THAN `.term` (0,1,0), DELIBERATELY.
+ * These buttons sit inside paragraphs that live in several different containers,
+ * and this stylesheet still contains container rules that paint their buttons at
+ * (0,1,1) — `.choices button`, `.chats button`, `.menu button`. A bare `.term`
+ * would LOSE to any of them, silently, and the word would render as a filled green
+ * rectangle in the middle of a sentence. Equal specificity plus a later position
+ * wins in both directions, and the browser check asserts the resolved value rather
+ * than the class.
+ * ────────────────────────────────────────────────────────────────────────────*/
+/* ⚠️ 2px, AND THE UNDERLINE IS THE WHOLE MARKING. At 1px the dots were legible on a
+   desktop screenshot and easy to miss on a phone — which would be the layer failing
+   at the only job it has: half the testers asked for this information, and an
+   affordance they cannot see is information they cannot reach. The text keeps the
+   prose colour and weight, so the marking costs the paragraph nothing else. */
+button.term {
+  font: inherit;
+  font-weight: inherit;
+  background: none;
+  border: none;
+  border-bottom: 2px dotted var(--accent);
+  border-radius: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+button.term.strong { font-weight: 600; }
+button.term:hover { color: var(--accent); }
+button.term[aria-expanded="true"] { color: var(--accent); border-bottom-style: solid; }
+
+.term-panel {
+  margin: 0.5rem 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--bar);
+  color: var(--fg);
+  font-size: 0.85rem;
+}
+.term-panel h4 { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.4rem; }
+.term-panel p { margin: 0 0 0.5rem; }
+.term-panel p:last-child { margin-bottom: 0; }
+
+.tag {
+  font-size: 0.7rem; letter-spacing: 0.03em; border: 1px solid var(--line-strong);
+  border-radius: 999px; padding: 0.05rem 0.45rem; margin-left: 0.4rem; color: var(--muted);
+}
+/* An alternative to the control above it, not a footnote about it.
+ *
+ * ⚠️ THE SIZE IS SET AND NOT INHERITED, AND THAT IS THE WHOLE FIX. These sit inside
+ * `<p class="note">`, so `font: inherit` alone takes the note's 0.82rem — the smallest
+ * text on the screen — for the two controls that answer "my friend cannot use the
+ * button above". On a phone they read as annotations and were missed. 1rem is the body
+ * size, which is what `#copy` beside them inherits.
+ *
+ * They stay underlined rather than becoming buttons: alternatives of equal SIZE, not of
+ * equal standing. D-117's ordering — one obvious control, these beneath it, the
+ * destructive one last — is a tester finding and is not what was reported wrong. */
+/* ⚠️ THE UNDERLINE IS OFFSET AND THINNED, AND THE SIZE IS UNCHANGED. The comment
+   above says why 1rem is set rather than inherited and that is a tester finding, so
+   it stays. What was wrong is only that three of these stacked on the gate read as
+   three shouts: a tight, heavy underline under a full green sentence is a lot of
+   ink. The offset lets the descenders through and the thinner rule gives the words
+   back. `.sep` above the first of them (in `index.html`) does the rest. */
+.linkish { background: none; border: none; color: var(--accent); text-decoration: underline;
+           text-decoration-thickness: 1px; text-underline-offset: 0.22em;
+           padding: 0.15rem 0; font: inherit; font-size: 1rem; cursor: pointer;
+           text-align: left; }
+.alarm { border: 1px solid var(--alarm); border-radius: var(--r); }
+.alarm h2 { color: var(--alarm); }
+/* ⚠️ `.panel.alarm` AND NOT `.alarm`, SO THE CONVERSATION'S BANNER IS NOT TOUCHED.
+   `.banner.alarm` is §7.3.1a's quarantine notice sitting on top of a chat that is
+   working, and the note above it — *"an alarm on every conversation is an alarm
+   nobody reads on the day it matters"* — is about restraint there specifically.
+   These four are whole screens whose entire subject is the bad thing: a wipe, a
+   duplicated tab, a tripwire, a pairing that failed. A tint is what tells a person
+   at a glance which kind of screen they have landed on, before they read a word. */
+.panel.alarm { background: var(--alarm-soft); }
+/* ⚠️ AND THE ASIDES ON IT NEED THEIR OWN INK — see `--muted-on-alarm` in the palette. */
+.panel.alarm .note { color: var(--muted-on-alarm); }
+/* ⚠️ 0.875rem AND NOT 0.82rem, AND THE SIX EXTRA PIXELS AN HOUR ARE THE POINT.
+   `.note` is used for four different jobs — an aside, a warning, an alternative
+   action, and INSTRUCTIONS — and 0.82rem made it the smallest text on every screen
+   it appears on. The spoken-code screen puts *"say the words rather than the
+   letters — a B and a P sound the same down a telephone"* in it, which is not an
+   aside, it is the procedure. ⚠️ This costs height on screens that already overflow
+   his phone; that is paid for below rather than here, because unreadable text that
+   fits is not a smaller problem than readable text that scrolls. */
+/* ⚠️ 1.45 RATHER THAN THE INHERITED 1.5, AND IT IS PAYING FOR THE LINE ABOVE. The
+   size went up 7% and these screens are note-heavy — §7.6's Ghost gate is forty
+   lines of this — so the leading comes back down by three. Measured on the Ghost
+   screen: the size alone cost 179px, and this returns about 20 of them without
+   taking a pixel off the letterforms, which is the half a 62-year-old reader on a
+   411px phone actually needs. */
+.note { color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
+
+/* ⚠️⚠️ `!important`, AND IT IS NEW AT D-139. Until today this was a plain
+   `display: none` that won on specificity and source order alone, and the file
+   carried two separate comments explaining which rules had to be written weakly so
+   that it would keep winning — `.term-panel` sets no `display` for exactly that
+   reason. The new shell paints screens with flex, and the moment any screen rule is
+   written as an id or as two classes, `.hidden` (0,1,0) loses and that screen is
+   permanently on show. This utility's entire job is to win; saying so once here is
+   sounder than requiring every future rule in the file to be weakened. */
+.hidden { display: none !important; }
+
+/* §7.3.1a's quarantine and §7.3.2's freshness, and §6.7.1's closing notice.
+ *
+ * ⚠️ A BANNER IS NOT AN ALARM UNLESS IT SAYS IT IS. The unverified one sits on
+ * every ordinary conversation until somebody compares six digits, so it is a quiet
+ * inset panel: an alarm on every conversation is an alarm nobody reads on the day
+ * it matters. `.banner.alarm` is the one that has actually happened. */
+.banner {
+  border: 1px solid var(--line-strong);
+  border-left-width: 3px;
+  border-radius: var(--r);
+  padding: 0.7rem 0.85rem;
+  margin: 0 0 0.75rem;
+  background: var(--panel);
+}
+.banner.alarm { border-color: var(--alarm); }
+.banner p + p { margin-top: 0.35rem; }
+
+/* D-085's timings, at the very bottom and folded away by default. */
+.diag { margin-top: 2rem; }
+.diagbox {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-x: auto;
+  margin: 0.5rem 0 0;
+}
+
+/*
+  §2.1.2's QR symbol.
+
+  ⚠️⚠️ THERE IS NO COLOUR IN THIS RULE AND THERE MUST NOT BE. The symbol paints its own
+  white ground and its own black modules from `ui/qr.js`, because a camera does not read
+  this product's palette: a token here would invert the symbol on a dark page, which is
+  outside ISO/IEC 18004 and works on some scanners and not others. ⚠️ And the dark page is
+  not hypothetical — this stylesheet has answered `prefers-color-scheme: dark` since
+  before the symbol existed, and since D-139 it also answers an explicit switch, which
+  means a dark conversation on a phone whose owner set the phone itself to light.
+
+  `pixelated` is the second half of rule 7. `draw()` already sizes the backing store to an
+  exact multiple of the module count, so there is normally nothing to interpolate; this
+  covers the narrow screen where `max-width` shrinks it anyway, because a blurred module
+  edge is the one rendering fault that looks right to a person and fails for a camera.
+*/
+.qr {
+  display: block;
+  margin: 0.9rem auto 0;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+/* Spacing, as classes rather than `style="…"` attributes.
+ *
+ * These replace 24 inline attributes that §6's `style-src 'self'` blocked. They are
+ * deliberately plain: each one is exactly the declaration it replaced. `.sep` is the
+ * one with a job rather than a size — it is the rule above a section that belongs to
+ * the panel but reads apart from it. */
+.mt { margin-top: 0.9rem; }
+.mt-s { margin-top: 0.75rem; }
+.mb-s { margin-bottom: 0.75rem; }
+.mb0 { margin-bottom: 0; }
+.m0 { margin: 0; }
+.sep { margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: 1.1rem; }
+
+/* ⚠️ A VISIBLE FOCUS RING, ON EVERYTHING, AND IT IS NOT OPTIONAL. The old sheet had
+   none: it inherited the browser's, and then several rules set `outline: none` on
+   fields to get a coloured border instead, which left those controls with no keyboard
+   affordance at all. `:focus-visible` shows it for the keyboard and not for the mouse. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

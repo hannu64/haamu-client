@@ -1,0 +1,275 @@
+{
+  "_warning": "Frozen test vectors for PROTOCOL.md. DO NOT REGENERATE TO MAKE A FAILING TEST PASS — a regenerated vector agrees with the new code by construction and tests nothing. Produced by two independent implementations that agreed (client/test/gen-vectors.mjs). THE ONE LEGITIMATE REASON TO RE-FREEZE IS A DELIBERATE CHANGE TO PROTOCOL.md ITSELF, recorded in its §13 and dated here. That happened once: 0.8.4 → 0.8.5, when §3 became commit-then-reveal (§3.6.1). Every other value in this file was unaffected and is unchanged. A SECOND, PURELY ADDITIVE re-freeze on 2026-08-16 appended the `code` section for §2.2c, which did not exist before it was built; every pre-existing value came back byte-identical and that was checked by diff rather than assumed.",
+  "frozen": "2026-08-11",
+  "protocol": "0.9.6",
+  "inputs": {
+    "link_secret": "bHBtLWxpbmstc2VjcmV0IQ",
+    "initiator_private": "bHBtLXZlY3Rvci1pbml0aWF0b3ItcHJpdmF0ZS0zMiE",
+    "joiner_private": "bHBtLXZlY3Rvci1qb2luZXItcHJpdmF0ZS1rZXktMzI",
+    "k_master": "bHBtLXZlY3Rvci1tYXN0ZXIta2V5LTMyLWJ5dGVzISE",
+    "request_nonce": "bHBtLXJlcS1ub25jZS0xNg",
+    "request_timestamp": 1786000000
+  },
+  "pairing": {
+    "section": "§2.3, §3.1-3.4, §3.6",
+    "link": "https://example.invalid/c#bHBtLWxpbmstc2VjcmV0IQ",
+    "pairing_id": "mPuqoihF2q9xXanrtkEmaQ",
+    "pairing_mac_key": "23jlj5uSwpSiBaac1BtPJng9piKfHWIsEuMPMU7h8uk",
+    "initiator_public": "fw1POj3g1bCgM4inYabAyo2A2Ga8V7dL91ZmoKnuPmA",
+    "joiner_public": "BySSkTZP9AWTJ1lQNTQ8unPpiaqLlubin6fJrTvtN2M",
+    "commit_i": "Zs6ZV6gIqcJKKgL83R0yBB926S1SuG09z1caZH-zFfI",
+    "mac_offer": "AQt_K4oOfYR1tbFhbylTy4AiIWDjtEPQe6Z1Mxkr2SI",
+    "mac_claim": "1ZuU5_V1lJMOHFMjhb1h3-_iyfZI8Geq9_Lqmv4OrXY",
+    "channel_root": "-1noksoYh4ZBijEIbIwdnkl8qcdTHLfFXvtU22IVdWU",
+    "short_auth_string": "688342"
+  },
+  "code": {
+    "section": "§2.2, §2.2b, §2.2c",
+    "frozen": "2026-08-16",
+    "alphabet": "ABCDEFGHJKMNOPQRSTUVWXYZ23456789",
+    "characters": 16,
+    "bits": 80,
+    "code": "KOMP-3XQR-BHTW-9FDN",
+    "renderings": [
+      "KOMP-3XQR-BHTW-9FDN",
+      "komp-3xqr-bhtw-9fdn",
+      "KOMP 3XQR BHTW 9FDN",
+      "K0MP3XQRBHTW9FDN"
+    ],
+    "normalised": "KOMP3XQRBHTW9FDN",
+    "link_secret": "S09NUDNYUVJCSFRXOUZETg",
+    "pairing_id": "hxSIoTGyiPcz8EYxczqW4Q",
+    "pairing_mac_key": "yGmarZ-S191eMglMySOU6YKm2B7ti5X0kf1D_Z6ggSE",
+    "spelling": [
+      [
+        "Kilo",
+        "Oscar",
+        "Mike",
+        "Papa"
+      ],
+      [
+        "Three",
+        "X-ray",
+        "Quebec",
+        "Romeo"
+      ],
+      [
+        "Bravo",
+        "Hotel",
+        "Tango",
+        "Whiskey"
+      ],
+      [
+        "Nine",
+        "Foxtrot",
+        "Delta",
+        "November"
+      ]
+    ]
+  },
+  "epoch": {
+    "section": "§4.1",
+    "epoch_seconds": 604800,
+    "offset": 357100,
+    "samples": [
+      {
+        "unix_seconds": 0,
+        "epoch": -1
+      },
+      {
+        "unix_seconds": 1786000000,
+        "epoch": 2952
+      },
+      {
+        "unix_seconds": 1754277100,
+        "epoch": 2900
+      }
+    ]
+  },
+  "mailboxes": {
+    "section": "§4.2",
+    "entries": [
+      {
+        "epoch": 0,
+        "direction": "i2j",
+        "auth_seed": "yiJo_2S-vqEJpaDLVxklNMRPwEE8ql4z7p2dDlXqFnM",
+        "public_key": "oLhE7neIpZ7xMOiCGXnc5XYZTuScHnUBGomjZF04Fi0",
+        "mailbox_id": "8j-VKO-EWiqN_NPfA7TJfQ"
+      },
+      {
+        "epoch": 0,
+        "direction": "j2i",
+        "auth_seed": "apJnFOmlqzazN-PRSjLZ67IslHijGELwyVPab_oRW6A",
+        "public_key": "sIzq39UD4gj30fp0cXl8sO19F9CIAG_KcsUu3GrjYRk",
+        "mailbox_id": "V532aHz2gPEEgTVfh9dz2g"
+      },
+      {
+        "epoch": 2900,
+        "direction": "i2j",
+        "auth_seed": "RrP5q_QBH4EE1I71lGHsVHltbS6L0ShMzSGzMdiV2zE",
+        "public_key": "WFsi2qZ1ZW-gxeR9z0yupQcwOgpusj6ChlGta747ezM",
+        "mailbox_id": "IdO_VRG7-SkVk9ZNtFtVVw"
+      },
+      {
+        "epoch": 2900,
+        "direction": "j2i",
+        "auth_seed": "Zv3F6kyEmmoern9CD1wjRT81teOCbnghgxGh44JOvsE",
+        "public_key": "0GuynYN72CXUmYG52_hLCgH_LhcUfWP_vIhHhwPuOAg",
+        "mailbox_id": "PDRJ7o1IMis3vJ7dUWIorQ"
+      },
+      {
+        "epoch": 2944,
+        "direction": "i2j",
+        "auth_seed": "EfAyS9bYrLUCE2YC22iF1TbNQiMWdtsb_Kg0kK4ocQs",
+        "public_key": "kH-J3QqZFSjmbEnVN0orKCIL_9pFiWhEZWWsVGTr7zo",
+        "mailbox_id": "_pKJ3KuIVyl_XK7B8PW_rA"
+      },
+      {
+        "epoch": 2944,
+        "direction": "j2i",
+        "auth_seed": "jtN5A3FoVnpNm0xKr0lNSFqPZN3vVboEOBYUwuXv-OA",
+        "public_key": "WDxuRE5TnQwJ7CjNrkyCcl3XeznOJ2KebZtbqPC6-fI",
+        "mailbox_id": "qmhrdzBwE8uS-kewrJ2_TQ"
+      },
+      {
+        "epoch": 1000000,
+        "direction": "i2j",
+        "auth_seed": "y7l5_-tNnyU86er-ydawD6HtS432JUpT0gvSMrCmVfo",
+        "public_key": "1ExwyWl_n7sDnqWWpvp5GQbXi-U9nLEZk4d2-M_n6OM",
+        "mailbox_id": "9sOPxSZ62Hi5WDdrv4vRBA"
+      },
+      {
+        "epoch": 1000000,
+        "direction": "j2i",
+        "auth_seed": "c3Va85Ki7UHA9FSSmo-g9Byl_PPDdOoropv0W9f-19w",
+        "public_key": "NvqTJCnsDjTRO5MlyEJ-A1IqESmo3YmzdouM-Hr20x0",
+        "mailbox_id": "Ma0nENDvM7ghwTK68v60Fw"
+      }
+    ]
+  },
+  "signing": {
+    "section": "§5.2",
+    "requests": [
+      {
+        "tag": "lpm-req-mailbox-v1",
+        "method": "GET",
+        "path": "/api/mailbox/IdO_VRG7-SkVk9ZNtFtVVw/messages",
+        "id": "IdO_VRG7-SkVk9ZNtFtVVw",
+        "public_key": "WFsi2qZ1ZW-gxeR9z0yupQcwOgpusj6ChlGta747ezM",
+        "body": "",
+        "canonical": "lpm-req-mailbox-v1\nGET\n/api/mailbox/IdO_VRG7-SkVk9ZNtFtVVw/messages\nIdO_VRG7-SkVk9ZNtFtVVw\n1786000000\nbHBtLXJlcS1ub25jZS0xNg\n47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU",
+        "authorization": "LPM-Ed25519 ts=1786000000,nonce=bHBtLXJlcS1ub25jZS0xNg,sig=89pgRzZ9uYM8RwhARKI5g16oaOUTqa2Kk2sAIPr3SuFv5zN-4gldt94A6PNs8feKufeedwbjyHnx6kcB1vOZBQ,key=WFsi2qZ1ZW-gxeR9z0yupQcwOgpusj6ChlGta747ezM"
+      },
+      {
+        "tag": "lpm-req-mailbox-v1",
+        "method": "POST",
+        "path": "/api/mailbox/IdO_VRG7-SkVk9ZNtFtVVw/ack",
+        "id": "IdO_VRG7-SkVk9ZNtFtVVw",
+        "public_key": "WFsi2qZ1ZW-gxeR9z0yupQcwOgpusj6ChlGta747ezM",
+        "body": "eyJpZHMiOlsiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQSJdfQ",
+        "canonical": "lpm-req-mailbox-v1\nPOST\n/api/mailbox/IdO_VRG7-SkVk9ZNtFtVVw/ack\nIdO_VRG7-SkVk9ZNtFtVVw\n1786000000\nbHBtLXJlcS1ub25jZS0xNg\nzWPncLmgZNpefTz94AXLlhQ3F1NdMPIXu8cTa21f1Qc",
+        "authorization": "LPM-Ed25519 ts=1786000000,nonce=bHBtLXJlcS1ub25jZS0xNg,sig=uuSOUd8UQ0XfyyLg7hZLxxS4AQG_16eLaRteypsoTilwC4apwfzulPApEUEv-VCRLjt7mxWVLN8MR5tNdqjSDg,key=WFsi2qZ1ZW-gxeR9z0yupQcwOgpusj6ChlGta747ezM"
+      },
+      {
+        "tag": "lpm-req-roster-v1",
+        "method": "PUT",
+        "path": "/api/roster/ORqjOtROQRI2SXDmYXtLFg",
+        "id": "ORqjOtROQRI2SXDmYXtLFg",
+        "public_key": "WR0lbgk5wjyjV5EN7BMHjfV9dERA4Cjx7OW4FVW1BdU",
+        "body": "eyJpZHMiOlsiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQSJdfQ",
+        "canonical": "lpm-req-roster-v1\nPUT\n/api/roster/ORqjOtROQRI2SXDmYXtLFg\nORqjOtROQRI2SXDmYXtLFg\n1786000000\nbHBtLXJlcS1ub25jZS0xNg\nzWPncLmgZNpefTz94AXLlhQ3F1NdMPIXu8cTa21f1Qc",
+        "authorization": "LPM-Ed25519 ts=1786000000,nonce=bHBtLXJlcS1ub25jZS0xNg,sig=37N9t9k0LlQzY9YHbYEVTPlYUqvLuPKErl6DpjJ0rUBTO3PC0CmY1fHWxtj1IF3zpNGUMY-ImHwtaTjYkrtZAg,key=WR0lbgk5wjyjV5EN7BMHjfV9dERA4Cjx7OW4FVW1BdU"
+      }
+    ]
+  },
+  "padding": {
+    "section": "§6.5",
+    "buckets": [
+      256,
+      1024,
+      4096,
+      16384,
+      65536
+    ],
+    "max_plaintext": 65532,
+    "cases": [
+      {
+        "plaintext_length": 0,
+        "padded_length": 256
+      },
+      {
+        "plaintext_length": 1,
+        "padded_length": 256
+      },
+      {
+        "plaintext_length": 251,
+        "padded_length": 256
+      },
+      {
+        "plaintext_length": 252,
+        "padded_length": 256
+      },
+      {
+        "plaintext_length": 253,
+        "padded_length": 1024
+      },
+      {
+        "plaintext_length": 1020,
+        "padded_length": 1024
+      },
+      {
+        "plaintext_length": 1021,
+        "padded_length": 4096
+      },
+      {
+        "plaintext_length": 65532,
+        "padded_length": 65536
+      }
+    ]
+  },
+  "envelope": {
+    "section": "§6.4",
+    "example": {
+      "v": 1,
+      "session_id": "bHBtLXNlc3Npb24tMTZieQ",
+      "generation": 3,
+      "type": "prekey",
+      "body": "bm90IGEgcmVhbCBPbG0gY2lwaGVydGV4dA"
+    }
+  },
+  "passphrase": {
+    "section": "§7.2, §7.4",
+    "phrase": "acid acorn acre acts afar affix aged agent",
+    "equivalent_spellings": [
+      "acid acorn acre acts afar affix aged agent",
+      "  ACID ACORN ACRE ACTS AFAR AFFIX AGED AGENT  ",
+      "acid acorn acre acts afar affix aged agent",
+      "acid\t\tacorn acre acts afar affix aged agent\n"
+    ],
+    "canonical_utf8": "YWNpZCBhY29ybiBhY3JlIGFjdHMgYWZhciBhZmZpeCBhZ2VkIGFnZW50",
+    "roster_salt": "9B5eKH3gzoUmKeJaA179MC3fzLlgJZ14FRc-1pVpTmc",
+    "argon2": {
+      "m": 131072,
+      "t": 3,
+      "p": 1,
+      "outLen": 32
+    },
+    "k_master": "bHBtLXZlY3Rvci1tYXN0ZXIta2V5LTMyLWJ5dGVzISE",
+    "roster_id": "ORqjOtROQRI2SXDmYXtLFg",
+    "roster_key": "k5BVbAOu6P7MDOrfVVXG_YEX4C11lopOjHkUlz3syCw",
+    "roster_auth_public": "WR0lbgk5wjyjV5EN7BMHjfV9dERA4Cjx7OW4FVW1BdU"
+  },
+  "roster": {
+    "section": "§7.3",
+    "blob_size": 16384,
+    "blob_size_large": 65536,
+    "root_hash": "pwtq4Qrg1azX3c1tkGFtfA",
+    "tombstone_at_utc_day": 1785974400
+  },
+  "pow": {
+    "section": "§9.1",
+    "bits": 12,
+    "challenge": "bHBtLXBvdy1jaGFsbGVuZ2UtYnl0ZXMtZml4ZWQtZm9yLXRoZS12ZWN0b3JzISEhIQ",
+    "solution": "bHBtLXBvdy1jaGFsbGVuZ2UtYnl0ZXMtZml4ZWQtZm9yLXRoZS12ZWN0b3JzISEhIQ.AAAAAAAAGZ0"
+  }
+}

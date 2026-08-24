@@ -1,0 +1,57 @@
+# The LPM ↔ vodozemac WASM wrapper.
+#
+# `PROTOCOL.md` §6.1 says "use vodozemac compiled to WASM". No such binding is
+# published (measured 2026-08-08), so this crate is the binding. `DECISIONS.md`
+# D-031 accepts owning it; the compensating argument is that six operations can
+# be read, where a large SDK could only be trusted.
+#
+# ⚠️ THIS IS ITS OWN WORKSPACE ROOT, ON PURPOSE. In the spike this crate was a
+# member of `spike/Cargo.toml`, and Cargo silently ignores `[profile.*]` in a
+# non-root member — so the size profile below had never once taken effect and
+# the spike's own numbers were a default release build. A standalone root is
+# also what a third party clones to reproduce the artefact, which is the point.
+[workspace]
+
+[package]
+name = "lpm-olm-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# ⚠️ EXACT pin, not a caret range. §6.1 says normatively "pin an exact version",
+# and `version = "0.10.0"` means `^0.10.0` in Cargo — it admits any 0.10.x. The
+# coupling this protects is the **pickle shape** (D-032), which is not covered by
+# semver, so a patch release is exactly the case that could break it silently.
+#
+# `js` routes getrandom at wasm32-unknown-unknown to crypto.getRandomValues.
+vodozemac = { version = "=0.10.0", features = ["js"] }
+
+# ⚠️ EXACT pin for a different reason: the generated glue must be produced by a
+# `wasm-bindgen` CLI of the *same* version. `build.sh` asserts that rather than
+# trusting it, because a version skew here changes the shipped bytes.
+wasm-bindgen = "=0.2.127"
+
+# Pinned by `Cargo.lock` and enforced by `--locked`, not by exact requirements
+# here: these are ordinary well-versioned crates, and pinning them exactly would
+# only make a security update a manual edit in two places instead of one.
+hkdf = "0.12"
+sha2 = "0.10"
+serde_json = "1"
+# §7.7's "zeroization is not achievable" is about JavaScript and does not reach
+# this crate. Derived secrets, `R` itself and the pickle keys are erased.
+zeroize = { version = "1", features = ["derive"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+# A panic in this crate cannot be recovered from in any useful way — the WASM
+# instance holds session state that a half-unwound panic leaves undefined. Every
+# reachable failure returns `Err` instead; see the rule in `src/lib.rs`.
+panic = "abort"
+strip = true

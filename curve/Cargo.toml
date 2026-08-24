@@ -1,0 +1,91 @@
+# X25519 and Ed25519 for §0.2's fallback path, and nothing else.
+#
+# §0.2: "WebCrypto support for X25519/Ed25519 is now broad but not universal. The
+# client MUST feature-detect at startup and fall back to a WASM implementation.
+# This fallback is not optional — it is the difference between working and not
+# working on a meaningful share of devices."
+#
+# ⚠️⚠️ §0.2 SAYS "libsodium-WASM" AND THIS IS NOT THAT. D-075 records the change
+# and the argument, which is the same one §6.1 made about vodozemac read from the
+# other end: libsodium.js EXISTS, and that is the problem. It is a prebuilt
+# emscripten artefact from npm, several times this crate's size, exposing a few
+# hundred functions where five are wanted — and `ARCHITECTURE.md` §7.1 makes a
+# build that is not reproducible a release blocker. Vendoring bytes whose
+# provenance is a package manager would put the least verifiable artefact in the
+# product on the path a reviewer has already called out ("the fallback path voids
+# the whole table", review D). The two dalek crates below are what WebCrypto's own
+# implementations are checked against, they are already in this repo's dependency
+# graph through vodozemac, and they build under the same five pinned inputs as the
+# other two artefacts.
+#
+# ⚠️⚠️ IT IS A SEPARATE ARTEFACT FROM THE OLM WRAPPER FOR THE REASON `argon2/`
+# ALREADY WRITES DOWN, AND HERE IT IS SHARPER. A WASM instance that traps is
+# poisoned: every later call into it fails. The Olm instance holds every channel's
+# ratchet state for a whole unlocked session, and Ed25519 signs EVERY request
+# (§5.2) — so sharing one instance would make "one signature failed" and "every
+# conversation on this device is now unusable" the same event. Separate modules
+# make the first a return code.
+#
+# ⚠️ THIS CRATE HAS NO IMPORTS AND MUST KEEP NONE, exactly as `argon2/` has none.
+# A module that imports nothing cannot call out, cannot reach the network, and
+# cannot read `crypto.getRandomValues` — it is a pure function of the bytes handed
+# to it, and `test/curve.mjs` asserts the import list is empty rather than
+# trusting this comment. It is also why there is no key GENERATION here: §3.1's
+# ephemeral keypair is a random 32-byte seed, and the seed is drawn on the
+# JavaScript side by the same `randomBytes` the WebCrypto path uses. Randomness is
+# the one thing a module with no imports cannot have, and moving it out is what
+# keeps the two paths drawing from one source instead of two.
+[workspace]
+
+[package]
+name = "lpm-curve-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# ⚠️ EXACT pins, for the reason the other two crates give and one of their own:
+# these implementations must agree with WebCrypto's to the byte, on every device
+# where only one of the two runs. A patch bump is not a case where "the tests
+# still pass" is reassuring, because the tests run here and the divergence would
+# appear on somebody's phone.
+#
+# `default-features = false` on both drops what this crate must not have:
+#   • x25519-dalek's `getrandom` (not in `default`, but `alloc`/`zeroize` pull
+#     `curve25519-dalek` features that are simply unused here — see below)
+#   • ed25519-dalek's `std` and `rand_core`, either of which would put an import
+#     in a module whose emptiness is a stated property
+#
+# `precomputed-tables` is deliberately OFF on both — it is the whole content of
+# ed25519-dalek's `fast` feature. Both builds were measured rather than reasoned
+# about, and they produce identical signatures:
+#
+#                     brotli     sign      dh
+#   no tables         15,607 B   0.276 ms  0.136 ms
+#   with `fast`       49,717 B   0.108 ms  0.137 ms
+#
+# 34 KiB of extra download to save 0.17 ms per signature, on the one artefact
+# that is only ever fetched by devices without WebCrypto X25519 — which is to say
+# the old and slow ones, over the networks that are also slow. A signature is a
+# rounding error next to the request it authenticates either way. `README.md`
+# keeps these numbers where a future reader can re-run them.
+x25519-dalek = { version = "=2.0.1", default-features = false }
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["zeroize"] }
+
+# §7.7's "zeroization is not achievable" is about JavaScript and does not reach
+# this crate. The seed buffer is erased on the way out of every operation.
+zeroize = { version = "1", default-features = false }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+# A panic here is unrecoverable in the same way it is in the other two crates: the
+# instance is poisoned and the caller gets a trap rather than an answer. Every
+# reachable failure returns an error code instead — see `src/lib.rs`.
+panic = "abort"
+strip = true

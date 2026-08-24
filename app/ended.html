@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>haamu — ended</title>
+    <!-- Same reason as index.html: suppress the favicon request rather than
+         serve a 404. Added 2026-08-12 — the §6 header run found this page was
+         the one still making it. -->
+    <link rel="icon" href="data:," />
+    <!--
+      Its OWN stylesheet rather than the application's: this page must be servable
+      with `Clear-Site-Data: "cache", "cookies", "storage"` on it, and it must not
+      depend on the application's assets to explain what just happened. It matches
+      `index.html`'s palette by hand, which is a duplication worth naming rather
+      than hiding.
+
+      ⚠️ It was an inline `<style>` block until 2026-08-12, on the argument that
+      the fewest possible subresources is the safest shape for this page. §6's
+      `style-src 'self'` forbids inline style, so the argument had to be examined
+      rather than repeated — and it does not hold for the styles. Rank the
+      subresources by what their absence costs: without `ui/copy.js` this page has
+      NO SENTENCE, two empty panels, an unexplained ending. Without the stylesheet
+      it is the same words in the browser's default type. See `ended.css`.
+    -->
+    <link rel="stylesheet" href="/app/ended.css" />
+  </head>
+  <!--
+    PROTOCOL.md §7.8 step 4's landing page.
+
+    ⚠️⚠️ IT IS DELIBERATELY INERT. It opens no database, derives no key, holds no
+    session and makes no request. The whole purpose of step 4 is to replace a
+    document that held keys with one that cannot, so anything this page did beyond
+    reading a fragment and printing a sentence would be working against it.
+
+    ⚠️ The one thing it imports is `ui/copy.js`, and that is not an exception to the
+    rule above — it is D-064. Every sentence the product says lives in that module
+    and is checked against the specification by `test/copy.mjs`; a sentence
+    hardcoded here would be the one nothing checks, on the one page whose wording
+    §7.8 constrains most tightly.
+
+    ⭐ THE OUTCOME ARRIVES IN THE FRAGMENT, which never reaches the server (§2.1's
+    property, used for a second purpose). It cannot come from storage — step 3 has
+    just cleared all of it, and step 5 may have cleared the origin — and it must not
+    come from a query parameter, because that would tell the server how many
+    endings succeeded and how many did not, which is a statistic about the users of
+    this instance that it has no reason to hold.
+  -->
+  <body>
+    <main>
+      <!-- D-083. `lpm` is the protocol token and never the product; this page
+           said it in the largest type on the screen, on the way out. -->
+      <header class="masthead">
+        <h1 class="wordmark">haamu</h1>
+        <p class="gloss">haamu is Finnish for ghost</p>
+      </header>
+      <section class="panel">
+        <p id="what"></p>
+        <p class="note" id="more"></p>
+      </section>
+      <section class="panel">
+        <p><a href="/" id="again"></a></p>
+      </section>
+    </main>
+    <script type="module" src="/app/ended.js"></script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+# The same compiler as the other two artefacts, for the same reason: a hash in
+# `SHA256SUMS` produced by an unknown toolchain records nothing
+# (`ARCHITECTURE.md` §7.1). `build.sh` asserts this rather than trusting rustup to
+# be the thing invoking cargo.
+[toolchain]
+channel = "1.97.1"
+targets = ["wasm32-unknown-unknown"]

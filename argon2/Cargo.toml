@@ -1,0 +1,61 @@
+# Argon2id for §7.2, as a module of its own.
+#
+# ⚠️⚠️ IT IS A SEPARATE ARTEFACT FROM THE OLM WRAPPER SO THAT A TRAP HERE CANNOT
+# TAKE THE LIVE SESSIONS WITH IT. §7.2 runs Argon2id at m=128 MiB on devices that
+# may not have it, and a WASM instance that traps is poisoned: every later call
+# into it fails. The Olm instance holds every channel's ratchet state for the whole
+# unlocked session, so a shared module would make "this phone could not allocate
+# 128 MiB" and "this conversation is now unusable" the same event. The devpanel
+# reached the same conclusion when it measured open item 2 and gave every rung its
+# own worker.
+#
+# ⚠️ THE MEMORY ARGUMENT FOR SEPARATING THEM IS NOT SUPPORTED BY MEASUREMENT, and
+# it is written down here because it is the obvious reason to reach for and it is
+# wrong. WASM linear memory grows and never shrinks, so the expectation was that a
+# dropped instance returns ~130 MB and a shared one does not. It does not: V8 keeps
+# the pages either way (measured in `README.md`). What dropping DOES buy is reuse
+# -- ten derivations in ten dropped instances cost what one costs, while two live
+# instances cost twice -- and that is true of the shared module as well.
+
+
+#
+# ⚠️ THIS CRATE HAS NO IMPORTS AND MUST KEEP NONE. `wasm-bindgen` is deliberately
+# absent: its glue is an ES module that the module registry caches forever, which
+# is exactly the reference that would make the instance undroppable. A raw C ABI
+# over exported memory is a few lines here and is also the stronger statement --
+# a module that imports nothing cannot call out, cannot reach the network, and
+# cannot read `crypto.getRandomValues`. `test/argon2.mjs` asserts the import list
+# is empty rather than trusting this comment.
+[workspace]
+
+[package]
+name = "lpm-argon2-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# ⚠️ EXACT pin. §7.2's parameters and this implementation together define
+# `K_master`, and `K_master` is not a value that may drift: a different output for
+# the same phrase is a lost roster and every channel with it. `Cargo.lock` plus
+# `--locked` would pin the build; an exact requirement pins the intent as well,
+# and this is the one dependency where a silent patch bump is unacceptable.
+#
+# `default-features = false` drops `password-hash`, which brings a PHC string
+# parser and `rand_core` -- neither of which this crate wants, and the second of
+# which would put an import in a module whose emptiness is a stated property.
+argon2 = { version = "=0.5.3", default-features = false, features = ["alloc"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+# A panic here is unrecoverable in the same way it is in the Olm wrapper: the
+# instance is poisoned and the caller gets a trap rather than an answer. Every
+# reachable failure returns an error code instead -- see `src/lib.rs`.
+panic = "abort"
+strip = true

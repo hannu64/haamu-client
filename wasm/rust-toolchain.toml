@@ -1,0 +1,10 @@
+# §6.1 requires an exact vodozemac pin, and a pin that leaves the compiler free
+# is not a reproducible build (`ARCHITECTURE.md` §7.1). Recorded so that the
+# hashes in `SHA256SUMS` mean something a year from now.
+#
+# `rustup` reads this file automatically, so `cargo build` in this directory
+# uses this toolchain whatever the default is. `build.sh` asserts it anyway, for
+# the case where rustup is not the thing invoking cargo.
+[toolchain]
+channel = "1.97.1"
+targets = ["wasm32-unknown-unknown"]

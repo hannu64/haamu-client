@@ -1,0 +1,6 @@
+{
+  "name": "lpm-client",
+  "private": true,
+  "type": "module",
+  "description": "This file exists to tell Node that the .js files under src/ are ES modules. There are no dependencies and there is no build step for src/ — see README.md."
+}

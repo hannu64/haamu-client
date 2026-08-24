@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>haamu</title>
+    <!-- Suppresses the favicon request outright. A 404 in the console of a
+         security product is noise that hides the errors that matter. -->
+    <link rel="icon" href="data:," />
+    <!--
+      ROADMAP step 8 — the interface. This replaced `client/demo/`, which was a
+      harness, and the replacement is deliberate rather than tidying: the browser
+      tests drove the harness, so every one of them proved something about a page
+      nobody would ever ship. `feedback_verify_before_claiming` is the same lesson
+      from another project — the artefact you test must be the artefact that runs.
+
+      ⭐ THIS IS NOW EXACTLY HOW IT IS SERVED, and that sentence is the point of
+      the change made on 2026-08-12. This comment used to say the opposite — that
+      §6's headers came from Caddy in production while the Go path set none of
+      them — and BOTH HALVES WERE WRONG. Caddy sets no security headers for
+      anything on that box (privsend sets its own, in Go, which is what the
+      sentence cited as precedent), and a production path that sets them did not
+      exist. So §6's header block had never been applied to a single response in
+      the life of this project, and this page quietly grew into a shape it
+      forbids: an inline `<style>` block and 24 `style="…"` attributes, all of
+      them blocked by `style-src 'self'`.
+
+      ⚠️ The fix is not "remember to set the headers". `lpmd` now serves this page
+      with §6's headers IN DEVELOPMENT TOO, so there is one path instead of two
+      and the next drift of this kind fails in front of whoever caused it. The
+      reason this went unnoticed for ten build steps is precisely that the
+      development path was exempt.
+
+      ⚠️⚠️ AND NOW THE SECOND RULE ABOUT THIS FILE, WHICH IS 2026-08-13's (D-083,
+      and `test/copy.mjs`'s new section). **NO SENTENCE THE PRODUCT SAYS TO A
+      PERSON MAY BE WRITTEN HERE.** Eighteen of them were, from step 8 onwards,
+      and when the first user outside this project spent an evening with the live
+      site, **every single "this reads badly / I do not understand this / that is
+      the wrong word" complaint pointed at one of those eighteen.** The strings
+      inside `ui/copy.js` drew a different and milder complaint — *true, but it
+      does not tell me enough.*
+
+      ➡️ A central copy file is not a filing convention, it is a review gate, and
+      nothing failed when eighteen sentences walked past it. So the gate is now
+      **enforced**: `test/copy.mjs` reads this file, extracts every text node and
+      every `placeholder`, and fails on anything that `ui/copy.js` did not
+      produce. The one exception is the masthead below, which the same suite
+      checks against `copy.product` rather than allowing.
+    -->
+    <link rel="stylesheet" href="/app/app.css" />
+    <!--
+      D-139. ⚠️⚠️ IN `<head>`, BEFORE THE STYLESHEET HAS ANYTHING TO PAINT, AND
+      DELIBERATELY NOT A MODULE. It stamps the stored theme choice on the root
+      element; if that ran from `app/app.js` — deferred, at the end of `<body>` —
+      the browser would have already painted in the theme the PHONE asked for, and
+      somebody who chose dark on a light phone would watch a white flash on every
+      load. `type="module"` is deferred by definition, so it cannot be one, and an
+      inline script is forbidden by §6's `script-src 'self'` and by
+      `TestShippedHTMLSatisfiesItsOwnCSP`. An external classic script is what is
+      left, and it is four lines long for a reason — this one blocks rendering.
+    -->
+    <script src="/app/theme-boot.js"></script>
+    <!--
+      D-154/D-159, and it is here for `theme-boot.js`'s reason with one difference
+      worth stating rather than leaving to be inferred. That one prevents a flash of
+      the wrong COLOURS. This one prevents a flash of one SENTENCE: `app.css` drops
+      the masthead gloss — *haamu is Finnish for ghost* — on `html[lang="fi"]`, and
+      an attribute stamped after the first paint would show it and then take it away.
+
+      ⚠️ It also sets what a screen reader picks its voice from and what a browser
+      reads before offering to translate the page, and both are consulted early.
+
+      ⚠️⚠️ NOT `type="module"`, for the same reason as the line above: a module is
+      deferred by definition, and deferred is the whole fault. `test/lang.mjs` asserts
+      both this tag's shape and that it is inside `<head>`.
+    -->
+    <script src="/app/lang-boot.js"></script>
+  </head>
+  <body>
+    <main>
+      <!--
+        D-001 and D-083. `lpm` is the PROTOCOL namespace token: it is in every
+        HKDF `info` string on every device, it is permanent, and it names the
+        construction. It stood here as an `<h1>` for five build steps — the
+        placeholder becoming the name by accident, which is the drift D-012
+        predicted in those words. The product is `haamu`.
+
+        ⚠️ It is static text rather than filled at boot, because it is the one
+        thing that should still be on screen if the module fails to load. The
+        suite checks it equals `copy.product.name` / `copy.product.gloss`.
+      -->
+      <!--
+        D-139's app bar. TWO BLOCKS, ONE OF WHICH IS ON SHOW AT A TIME.
+
+        ⚠️⚠️ THE WORDMARK BLOCK IS STATIC AND MUST STAY STATIC — the comment above
+        is the reason, and `test/copy.mjs` asserts these two exact elements exist
+        IN THIS FILE. A bar whose title were filled from `copy.js` at boot would
+        satisfy neither, so the conversation gets a SECOND block beside this one
+        and `barMode()` swaps which is shown. It never rewrites either.
+
+        ⚠️ The three controls carry no letters, which is what keeps them out of the
+        copy gate's way: `visibleText()` in `test/copy.mjs` filters on `/[A-Za-z]/`,
+        so a glyph is not a sentence to it. Their accessible names ARE sentences and
+        do come from `copy.js`, set as `aria-label` at boot.
+      -->
+      <div class="appbar">
+        <button id="bar-back" class="iconbtn hidden">←</button>
+        <div id="bar-chat" class="barchat hidden">
+          <div class="who">
+            <h2 id="chat-name" class="m0"></h2>
+            <span id="live" class="live connecting"></span>
+          </div>
+        </div>
+        <header class="masthead" id="bar-brand">
+          <h1 class="wordmark">haamu</h1>
+          <p class="gloss">haamu is Finnish for ghost</p>
+        </header>
+        <button id="bar-menu" class="iconbtn" aria-haspopup="true" aria-expanded="false">⋮</button>
+        <!--
+          §7.6's Ghost mode leaves nothing behind, so it never WRITES a theme
+          preference — see `ui/theme.js`. The menu still opens there: reading a
+          choice somebody already made costs nothing, and hiding the control would
+          be a second, unexplained difference between the two modes.
+        -->
+        <div id="menu" class="menu hidden" role="menu">
+          <!--
+            ⚠️⚠️ THESE FOUR MOVED HERE FROM UNDER THE COMPOSER, AND THE MEASUREMENT
+            IS WHY. With them below it, the composer's bottom edge sat at 627px of an
+            880px window: a quarter of the conversation screen spent on three
+            controls and a paragraph, and the one control a person uses constantly
+            pushed up out of the thumb's reach. WhatsApp puts exactly these in the
+            bar's overflow menu and leaves the composer on the floor of the screen.
+
+            ⚠️ `#back-home` STAYS EVEN THOUGH THE BAR HAS AN ARROW. It is hidden in
+            Ghost mode by `show("back-home", !isGhost())` — §7.6 has no list to go
+            back to — and that is a rule about a mode, not about a widget. Deleting
+            the button would move the rule onto the arrow, silently, in a design pass.
+          -->
+          <!--
+            ⚠️⚠️ ROUND 19. The ＋ button is WhatsApp's own control and it is staying,
+            but Hannu — who has used every build of this app — *"searched for it a long
+            time"*. A floating button is discoverable to somebody who already expects
+            floating buttons; the person who has learned this product's own list of
+            links is not that person, and the round before had one there.
+
+            ⚠️ SO THIS IS A SECOND DOOR, NOT A REPLACEMENT. WhatsApp itself puts New
+            group and New broadcast in exactly this menu — the ＋ is the fast path and
+            the menu is the findable one, and the two naming the SAME act is the point
+            rather than a duplication to tidy up later.
+          -->
+          <div id="menu-home" class="menu-group hidden">
+            <button id="menu-create" class="secondary edged"></button>
+          </div>
+          <div id="menu-chat" class="menu-group hidden">
+            <button id="back-home" class="secondary edged"></button>
+            <button id="rename" class="secondary"></button>
+            <button id="delete" class="danger"></button>
+            <!-- Ghost mode has no list to delete from, so deleting this conversation
+                 and ending the session are one act and there is one button. -->
+            <button id="ghost-end" class="danger hidden"></button>
+          </div>
+          <p class="menu-label" id="menu-theme-label"></p>
+          <button id="theme-system" role="menuitemradio" aria-checked="false"></button>
+          <button id="theme-light" role="menuitemradio" aria-checked="false"></button>
+          <button id="theme-dark" role="menuitemradio" aria-checked="false"></button>
+          <!--
+            D-159's language control, beside the colours because it is the same kind
+            of thing: a preference about the interface, not a step in anything.
+
+            ⚠️⚠️ IT IS A GROUP THAT COMES AND GOES, AND THAT IS NOT A TIDINESS CHOICE.
+            Changing language means REDRAWING WHATEVER IS ON SCREEN, and `RERENDER` in
+            `app.js` says for each screen how that is done — or that it cannot be done
+            safely there, which is true of every screen with something in flight: a
+            pairing halfway through, a phrase being confirmed, a link being typed. On
+            those, `only()` hides this group rather than offering a control that would
+            leave half the page in the old language. The table is exhaustive over
+            `SCREENS` and `test/lang.mjs` fails if a screen is ever added without an
+            answer, so this cannot rot into a silent blank spot.
+
+            ⚠️ The two options are NOT translated — each language is named in itself.
+            See `copy.menu.english`. They are also the reason this group is `hidden`
+            in the markup: `only()` decides, and a group that started visible would
+            flash on the gate before the first `only()` call reached it.
+
+            ⚠️ DELIBERATELY NOT `class="menu-group"`. That class carries a behaviour —
+            `$("menu")`'s listener closes the menu when anything inside one is pressed
+            — and it is right for items that navigate and wrong here for the theme
+            buttons' reason: the menu has to stay open so the tick can be seen to move,
+            and here so that the person watches the menu itself change language.
+          -->
+          <div id="menu-lang" class="hidden">
+            <p class="menu-label" id="menu-lang-label"></p>
+            <button id="lang-en" role="menuitemradio" aria-checked="false"></button>
+            <button id="lang-fi" role="menuitemradio" aria-checked="false"></button>
+          </div>
+        </div>
+      </div>
+
+      <!--
+        ⚠️ EVERYTHING BELOW SCROLLS AND THE BAR ABOVE DOES NOT, which is the whole
+        reason this wrapper exists. `only()`'s note about two scrolls — the log box,
+        and the page the log box sits in — described the OLD layout, where the
+        composer was part of the document and left the screen as the conversation
+        grew. Here the app is exactly the height of the window and this is the only
+        scroller, so there is one scroll to get right instead of two.
+      -->
+      <div class="screens" id="screens">
+
+      <!-- Notices sit above whatever screen is showing: §7.3.1a's quarantine and
+           §7.3.2's freshness are things that happened to this device, not steps in
+           a flow, and a person must not have to navigate to find them. -->
+      <div id="notices"></div>
+
+      <!--
+        ⚠️ §7.2 REQUIRES THESE TO BE TWO DIFFERENT INTENTIONS, and it is the whole
+        reason this is a gate rather than one phrase box. A mistyped phrase yields a
+        different K_master, a different roster_id and a 404 — the SAME response as
+        genuine first use. A client that resolved that ambiguity by creating leaves
+        the user with an empty app, two identities, no error, and no way to tell
+        which happened.
+      -->
+      <section id="gate" class="panel hidden">
+        <p id="gate-arrived" class="hidden"></p>
+        <!--
+          D-083, feedback 1. What a person can repeat to a friend, before anything
+          is asked of them. It used to open with a sentence about how many words
+          the phrase has, which answers a question nobody had yet.
+        -->
+        <div id="gate-what"></div>
+        <!--
+          Round 5 item 1: `<p id="gate-intro">` stood here and is gone. It restated
+          the second paragraph of `product.what` immediately below it — three facts,
+          same order, shorter words — because it was written before that paragraph
+          existed and nothing retired it when the better one arrived.
+        -->
+        <!--
+          Round 5 item 1. These two were `class="rows"` — the CONVERSATION LIST's
+          class, borrowed for its vertical stacking — and `.rows button` painted
+          them both the same quiet grey, overriding the accent `#go-setup` was
+          meant to have. `.choices` is layout only; the colour is on the buttons.
+        -->
+        <div class="choices">
+          <button id="go-setup" class="choice"></button>
+          <button id="go-enter" class="choice other"></button>
+        </div>
+        <!--
+          Round 6 (D-110): `<p class="note" id="gate-no-reset">` stood here and is
+          gone. It said "There is no account, no email address and no way to reset
+          the passphrase" — §7.2's consequence, and it earned its place on the gate
+          because it is the one thing about this product that surprises people
+          afterwards. The second paragraph above now ends "We do not have it, and we
+          cannot help you if you lose it", which is the same fact where the same
+          reader meets it, in words they feel rather than parse. ⚠️ A fact absorbed
+          into a better sentence has not been dropped; a fact absorbed into nothing
+          has, and the checks were pointed at the surviving paragraph rather than
+          deleted with the string (D-107).
+        -->
+        <!--
+          §7.6's Ghost mode, in §7.6's own register — the one §7.4 cites for the
+          longer-phrase link: present it, do not explain it, do not default to it.
+          ⚠️ D-016b is why it is a plain link below the two real choices rather than
+          a third equal button: Ghost is the paranoid user's deliberate act, and for
+          a first-timer it is not a privacy feature at all — it is the state in
+          which they lose everything.
+        -->
+        <!--
+          Feedback 6 and 3. The mode had no NAME — the gate said "talk without
+          setting up a phrase", the screen behind it was headed "one conversation,
+          in this tab", and a person who used it had no word for what they used.
+          It is called Ghost mode, which is the one piece of branding a user can
+          derive for themselves from the product's own name.
+
+          ⚠️ The note under it is not decoration. Feedback 3 is that arriving with
+          somebody's link showed two choices and no third — because the third
+          described a way to START a conversation, not a way to open one.
+        -->
+        <p class="note mt mb0 sep">
+          <button id="go-ghost" class="linkish"></button>
+        </p>
+        <p class="note m0" id="go-ghost-what"></p>
+        <!--
+          Feedback 7 and 11: a place to paste a link, which is also the only route
+          that keeps the secret out of the browser's address history.
+        -->
+        <p class="note mt">
+          <button id="go-paste" class="linkish"></button>
+        </p>
+        <!--
+          ⭐⭐ §7.3.1a REQUIRES THE PANIC ACTION TO BE REACHABLE FROM A DEVICE THE
+          USER HAS NEVER USED BEFORE, WITH THE PHRASE ALONE — which is why it is
+          HERE, on the gate, and not only inside an open session. "The scenario the
+          action exists for is a device that is gone", so an app that offers the
+          wipe only from an already-set-up device offers it exactly where it cannot
+          be used. A plain secondary link, not a red button: somebody reaching for
+          this is not in a state to be shouted at.
+        -->
+        <p class="note mt">
+          <button id="go-panic" class="linkish"></button>
+        </p>
+      </section>
+
+      <section id="setup" class="panel hidden">
+        <p id="setup-choose" class="lead"></p>
+        <div class="candidates" id="candidates"></div>
+        <div class="row">
+          <button id="chosen"></button>
+          <button id="regen" class="secondary"></button>
+        </div>
+        <p class="note mt">
+          <button id="longer" class="linkish"></button>
+          <span id="sets"></span>
+        </p>
+      </section>
+
+      <!--
+        ⚠️⚠️ THIS PANEL IS NEW AND IT IS D-084 — A SECURITY DEFECT THE FIRST USER
+        FOUND FROM A BUTTON LABEL. Until 2026-08-13 the chosen phrase was rendered
+        on the SAME panel as the retype field, immediately above the sentence
+        "typing it back is the only evidence that a copy of it exists outside this
+        browser tab." It is not: it could be read off the screen a word at a time,
+        or selected and copied in one click, because `.phrase` sets
+        `user-select: all`. §7.4's whole purpose for the step was defeated by the
+        layout while every line of code implementing it was correct.
+
+        ➡️ **A test of knowledge must not be conducted with the answer visible.**
+        Writing it down is one screen; typing it back is another; and both routes
+        back here clear the field, so looking again costs the test again.
+      -->
+      <section id="write" class="panel hidden">
+        <p id="write-down" class="lead"></p>
+        <div class="phrase" id="chosen-phrase"></div>
+        <div class="row mt-s">
+          <button id="written"></button>
+          <button id="write-back" class="secondary"></button>
+        </div>
+      </section>
+
+      <section id="confirm" class="panel hidden">
+        <!--
+          Round 6 (D-110). `<p class="note" id="confirm-hidden">` stood under this
+          and is gone: three sentences explaining why the KEY is off the screen, on
+          a screen with one field waiting for an answer. The explanation moved to
+          `terms.retype`, reachable from the marked words in `confirm-ask` itself —
+          which is a <div> rather than a <p> because it can now grow a panel.
+        -->
+        <div id="confirm-ask" class="lead"></div>
+        <input id="retype" class="field" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" />
+        <p class="note" id="retype-note"></p>
+        <div class="row mt-s">
+          <button id="confirmed"></button>
+          <button id="show-phrase" class="secondary"></button>
+          <button id="back-setup" class="secondary"></button>
+        </div>
+      </section>
+
+      <section id="pasted" class="panel hidden">
+        <h2 id="pasted-title"></h2>
+        <p id="pasted-body"></p>
+        <p class="mt"><button id="pasted-ok"></button></p>
+      </section>
+
+      <!--
+        §2.1's link, pasted instead of navigated to — feedback 7 and 11.
+
+        ⚠️⚠️ THE BUG UNDERNEATH FEEDBACK 7 IS NOT THIS PANEL, it is that `app.js`
+        read `location.hash` once at boot. Pasting a link into the address bar of a
+        tab already on `/c` changes only the fragment, so the browser fires
+        `hashchange` and does not reload, and nothing looked. A new tab worked,
+        which is what made it read as a mystery. The listener in `app.js` is the fix.
+
+        ⭐ This panel is feedback 11 — *"no place to click to get to a neutral page"*
+        — and it turns out to be the better of the two routes for a reason nobody
+        asked about: **typing a link into the address bar puts the secret into the
+        browser's history and its omnibox suggestions**, which §2.1's
+        `history.replaceState` cannot reach. A field on the page does not.
+
+        ⚠️ It checks the origin before it parses. `parseLink` accepts any string
+        with a fragment, so a link for a different deployment would be turned into a
+        `pairing_id` and claimed against THIS server. Navigation cannot do that.
+      -->
+      <!--
+        ⚠️ ONE FIELD TAKES BOTH §2.1's LINK AND §2.2's SPOKEN CODE, and the id stays
+        `paste-link` on purpose: renaming it would touch the harness, the browser
+        checks and three call sites to describe something the user never sees. What
+        the user sees is the label, and that says both.
+
+        ⚠️ `autocapitalize="off"` matters more here than it did: a code is uppercase
+        and a phone keyboard that helpfully capitalises would be harmless (normalise
+        uppercases anyway) — but one that autocorrects a four-letter group into an
+        English word is not, which is what `spellcheck="false"` is for.
+      -->
+      <section id="paste" class="panel hidden">
+        <h2 id="paste-title"></h2>
+        <p class="note" id="paste-what"></p>
+        <p class="note" id="paste-or-code"></p>
+        <input id="paste-link" class="field" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" />
+        <p class="note" id="paste-note"></p>
+        <div class="row mt">
+          <button id="paste-go"></button>
+          <button id="paste-back" class="secondary"></button>
+        </div>
+      </section>
+
+      <section id="enter" class="panel hidden">
+        <p id="enter-ask" class="lead"></p>
+        <input id="phrase-in" class="field" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" />
+        <p class="note" id="enter-note"></p>
+        <div class="row mt">
+          <button id="unlock"></button>
+          <button id="back-gate" class="secondary"></button>
+        </div>
+      </section>
+
+      <!--
+        D-145. ⚠️⚠️ THE BAR IS NOT DECORATION AND IT IS NOT A SPINNER. `copy.unlock`
+        carries the reason in its own comment — *"a screen that looks frozen for a
+        second is a screen people press again"* — and D-034 measured Argon2id at
+        1.17 s on a decade-old Android, on EVERY unlock while §7.5's PRF is absent.
+        This screen said "Opening — this takes a moment on purpose" and then did not
+        move. ⭐ It is animated with `transform` alone, which is the whole point:
+        this is the one screen in the product whose main thread is DELIBERATELY
+        blocked, and a transform runs on the compositor. Anything driven by script,
+        or by `width`, would stop dead at exactly the moment it is needed.
+      -->
+      <section id="working" class="panel hidden">
+        <p id="working-note" class="lead"></p>
+        <div class="working-bar" aria-hidden="true"><span></span></div>
+        <p class="note" id="working-why"></p>
+      </section>
+
+      <!--
+        D-139. The list is full-bleed and is the whole screen; everything that is
+        not a conversation sits under it in `.listrest`, which keeps its padding.
+
+        ⚠️ `#home-title` IS A QUIET LABEL RATHER THAN A PAGE HEADING, and this is
+        one of the places Hannu's *"if WA does not have something similar we can
+        improvise"* applies. WhatsApp's list screen has no heading — the bar says
+        WhatsApp and the list begins. Deleting this element would mean deleting a
+        `copy.list.title` that other things still name, so it stays as the list's
+        label: small enough not to compete with the bar, present enough to head the
+        empty state, and it is what a screen reader announces the list by.
+      -->
+      <section id="home" class="listpane hidden">
+        <h2 id="home-title" class="listlabel"></h2>
+        <div class="chats" id="channels"></div>
+
+        <!--
+          ⚠️ THE FLOATING BUTTON IS `#create` AND ITS LABEL IS AN `aria-label`, NOT
+          ITS TEXT. `openHome()` used to write `copy.list.start` into it; a circular
+          button 3.5rem across cannot hold "Start a new conversation", and a glyph
+          with no accessible name is a button a screen reader calls "button". Both
+          halves are needed and they are different attributes.
+        -->
+        <button id="create" class="fab">＋</button>
+
+        <div class="listrest">
+          <div class="row">
+            <!-- Feedback 11. The list offered a way to make a link and no way to open
+                 one, so a person holding somebody else's link had nowhere to go.
+                 Round 5 item 2: `.edged`, because it is the OTHER half of the same
+                 act as the filled button beside it — one of you sends the link and
+                 the other opens it — and it was reading as an also-ran. -->
+            <button id="home-paste" class="secondary edged"></button>
+            <button id="check" class="secondary"></button>
+          </div>
+
+        <!-- D-151: every reply §7.3.3 case 5 can give — the two outcomes and the
+             once-an-hour refusal — lands here, under the button that asked. A check
+             that FAILED used to write into `#home-note` instead, on top of §7.3.2's
+             weak-freshness notice, which is a rollback warning on this same screen. -->
+        <p class="note mt" id="check-note"></p>
+
+        <!-- D-130, on the screen a person lands on after unlocking somewhere new.
+             Hidden whenever the count is zero, which is every ordinary session. -->
+        <p class="note mt" id="home-reconnect"></p>
+        <p class="note mt" id="home-note"></p>
+
+        <!--
+          Feedback 3, 4, 5 and 7 — one hole found from four directions. The Ghost
+          gate described the BROWSER in forensic detail and the server not at all,
+          and the server is what a person asks about: what reaches it, can it read
+          it, when does it go. Every sentence needed to answer that already existed
+          in PROTOCOL.md and none of it had ever been said to a user.
+
+          ⚠️ `metadata` is not an afterthought. Three reassuring sentences with
+          nothing after them would be overclaiming by omission.
+        -->
+        <!--
+          Round 6 (D-110): the two that carry a disclosure are <div class="note">
+          rather than <p>, because a term panel is a block and a <p> may not hold
+          one. The two without a marked term stay as they were.
+        -->
+        <div class="sep">
+          <div class="note" id="server-read"></div>
+          <p class="note" id="server-gone"></p>
+          <p class="note" id="server-list"></p>
+          <div class="note" id="server-meta"></div>
+        </div>
+
+        <!--
+          §7.8's ending, and §7.8 step 5's separate control beside it.
+
+          ⚠️⚠️ THEY ARE TWO CONTROLS AND MUST STAY TWO. The ordinary ending leaves
+          §7.3.2's high-water mark; the thorough one takes it, along with the whole
+          origin, and §7.8 requires it to WARN that it is resetting the check that
+          would notice an out-of-date conversation list. One control that quietly
+          did the stronger thing would manufacture the precondition for the roster
+          rollback every time somebody pressed "end".
+        -->
+        <div class="row sep">
+          <button id="end-here" class="secondary"></button>
+          <button id="end-clear" class="secondary"></button>
+        </div>
+        <p class="note mt">
+          <button id="go-panic-home" class="linkish"></button>
+        </p>
+        </div><!-- /.listrest -->
+      </section>
+
+      <!--
+        §7.3.1a's panic action. Its own screen, because it is the one control in
+        the product that reaches every device the user has.
+      -->
+      <section id="panic" class="panel alarm hidden">
+        <h2 id="panic-title"></h2>
+        <p id="panic-reach"></p>
+        <p class="note" id="panic-other"></p>
+        <p class="note" id="panic-keeps"></p>
+        <!--
+          ⚠️ ROUND 3, FEEDBACK 4: he pressed this, his passphrase still worked
+          afterwards, and he reported it as the action not having done what it
+          said. It had — §7.3.1a deletes every CONVERSATION and cannot delete the
+          identity, because the tombstones and `purged_at` inside the list are the
+          only thing that can carry the deletion to the other devices. What was
+          wrong was the label that brought him here, and a sentence that was never
+          written.
+        -->
+        <p class="note" id="panic-survives"></p>
+        <p id="panic-ask" class="lead mt"></p>
+        <input id="panic-phrase" class="field" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" />
+        <p class="note" id="panic-note"></p>
+        <div class="row mt">
+          <button id="panic-go" class="danger"></button>
+          <button id="panic-back" class="secondary"></button>
+        </div>
+      </section>
+
+      <!--
+        §7.6 Ghost mode, before anything is created.
+
+        ⚠️⚠️ THE COST IS STATED BEFORE THE CHOICE AND THE CLAIM IS STATED EXACTLY.
+        §7.6: this is "the feature the highest-risk user is most likely to reach
+        for, so the claim has to be exact" — the guarantee is that nothing is
+        written to the roster and nothing is recoverable on another device, NOT that
+        nothing is written to disk and NOT that it dies with the tab. And Phase
+        0.5's finding (D-016) is that losing the tab is the failure people actually
+        hit, which in this mode has no recovery at all.
+
+        ⚠️ The three server sentences below were feedback 3, 4, 5 and 7 — one hole
+        found from four directions. This gate described the BROWSER in forensic
+        detail and the server not at all, and the server is what a person asks
+        about.
+      -->
+      <section id="ghost" class="panel hidden">
+        <h2 id="ghost-title"></h2>
+        <p id="ghost-what"></p>
+        <p id="ghost-cost"></p>
+        <p class="note" id="ghost-not-erased"></p>
+        <div class="note sep" id="ghost-server-read"></div>
+        <p class="note" id="ghost-server-gone"></p>
+        <p class="note" id="ghost-server-adds"></p>
+        <div class="note" id="ghost-server-meta"></div>
+        <div class="row mt">
+          <button id="ghost-start"></button>
+          <button id="ghost-back" class="secondary"></button>
+        </div>
+      </section>
+
+      <!--
+        §7.6's duplicated tab. A duplicate is handed a COPY of `sessionStorage`, and
+        a copy is not a conflict — so this document must not write to the session at
+        all. It is inert on purpose: not a follower, which is what a Kept-mode tab
+        without the leader lock is, because a follower shares the store it reads and
+        this one does not.
+      -->
+      <section id="duplicate" class="panel alarm hidden">
+        <h2 id="dup-title"></h2>
+        <p id="dup-body"></p>
+        <p class="note mt" id="dup-end-note"></p>
+        <p><button id="dup-end" class="secondary"></button></p>
+      </section>
+
+      <!--
+        ARCHITECTURE §4.2.2. This identity was already open and delivering in another
+        tab when this document unlocked, so this one declines to be a second client.
+
+        ⚠️ NOT `alarm`, UNLIKE THE PANEL ABOVE. Nothing has gone wrong and nothing is at
+        risk: the conversations are all present, in a tab that is working. An alarm here
+        would tell a person to worry about the ordinary consequence of scanning a QR code.
+
+        ⚠️⚠️ THE BUTTON IS A LINK NOW (D-148). It used to be an unqualified button —
+        deliberately not `secondary`, on the argument that it is the only thing to do here
+        and must not be a dead end. Two readers read it the other way: the loudest thing on
+        the screen was the shortcut past the advice the screen had just given, so it invited
+        the press instead of the search. `.linkish` keeps it findable and stops it competing
+        with the paragraph above it, which is the same treatment every other "or do this
+        instead" in this file gets.
+      -->
+      <section id="dormant" class="panel hidden">
+        <h2 id="dormant-title"></h2>
+        <div id="dormant-body"></div>
+        <p><button id="use-here" class="linkish"></button></p>
+        <p class="note" id="dormant-why"></p>
+      </section>
+
+      <!--
+        §4.3 in Ghost mode. NOT the lock screen: there is no phrase to ask for, so
+        this hides and does not lock, and it says which of the two it is.
+      -->
+      <section id="covered" class="panel hidden">
+        <h2 id="covered-why"></h2>
+        <p class="note" id="covered-what"></p>
+        <div class="row mt">
+          <button id="uncover"></button>
+          <button id="covered-end" class="secondary"></button>
+        </div>
+      </section>
+
+      <section id="progress" class="panel hidden">
+        <ul class="steps" id="steps"></ul>
+        <div id="linkbox" class="hidden">
+          <p class="note mt-s mb0" id="link-once"></p>
+          <div class="link" id="link"></div>
+          <div class="row">
+            <!-- Round 5 item 4. On this screen there is exactly one thing to do
+                 next and it is this; `cancel` beside it stays grey. -->
+            <button id="copy" class="secondary edged"></button>
+            <button id="cancel" class="secondary"></button>
+          </div>
+          <p class="note mt-s" id="link-fragment"></p>
+          <!-- Feedback 12 asked what happens if you close the page while a link
+               you made is out there. The answer was "no, nothing", and the warning
+               was the fix. ⚠️ THAT ANSWER IS NOW "YES" IN KEPT MODE (§3.4.1b,
+               D-134): the record survives the tab and the next unlock offers to
+               carry on. The claim that it "cannot be stored durably" was wrong
+               about §3.3 — that section requires the key discarded when pairing
+               COMPLETES, which a durable record deleted at the same moment
+               satisfies exactly. The text here is now chosen per mode in
+               `runInitiate`; Ghost still gets the original warning, because Ghost
+               still cannot resume. -->
+          <p class="note mt-s" id="link-keep"></p>
+          <!--
+            §2.1.2's QR symbol (D-114), and it sits ABOVE the switch to a spoken code on
+            purpose: this one is free, because the symbol draws the link that already
+            exists and nothing restarts — where the control below throws the pairing away
+            and mints a new secret. The destructive option goes last.
+
+            ⚠️⚠️ NO CAMERA IS INVOLVED AND NONE MAY BE (§2.1.2 rule 2). The scanning side
+            is the friend's own camera application, so this page asks for no permission
+            and `Permissions-Policy: camera=()` stays exactly as ARCHITECTURE §6 has it.
+            `test/qr.mjs` reads these files to check that nothing here reaches for one.
+
+            The canvas is `aria-hidden`: it carries nothing that is not already on the
+            screen as text one element above, and the alternative — an `aria-label`
+            describing it — would be an attribute holding the secret.
+          -->
+          <p class="note mt-s mb0"><button id="to-qr" class="linkish"></button></p>
+          <div id="qrbox" class="hidden">
+            <canvas id="qr" class="qr" aria-hidden="true"></canvas>
+            <p class="note mt-s mb0" id="qr-what"></p>
+            <p class="note mt-s mb0" id="qr-room"></p>
+          </div>
+          <!--
+            §2.2, reached from BENEATH the link rather than instead of it (D-117).
+            The tester finding is that a person discovers their friend cannot receive
+            a link only AFTER they have made one — so the common path keeps its single
+            control and this is the second layer, exactly as D-110 handled the front
+            page. ⚠️ It restarts the pairing: one pairing has one secret, and §2.1's
+            128 bits and §2.2's 80 are not two renderings of one thing.
+          -->
+          <p class="note mt-s"><button id="to-code" class="linkish"></button></p>
+        </div>
+
+        <!--
+          §2.2's code, and §2.2b's spelling under it — which is a MUST in the
+          specification, not a nicety: the alphabet was chosen for an eye and this
+          section's channel is an ear (D-113). Ten of the characters it kept are the
+          English E-set, which a telephone line turns into each other.
+
+          ⚠️ NO LINK IS SHOWN HERE AND NONE MAY BE. `buildLink` would make a perfectly
+          valid URL from these sixteen bytes and it would be an 80-bit link that looks
+          exactly like §2.1's 128-bit one — offered to the one person who chose this
+          route because no link can reach their friend.
+        -->
+        <div id="codebox" class="hidden">
+          <p class="note mt-s mb0" id="code-was-link"></p>
+          <p class="note mt-s mb0" id="code-once"></p>
+          <div class="code" id="code-text"></div>
+          <div class="spelling" id="code-spell"></div>
+          <div class="row">
+            <button id="copy-code" class="secondary edged"></button>
+            <button id="cancel-code" class="secondary"></button>
+          </div>
+          <p class="note mt-s" id="code-spelling"></p>
+          <p class="note mt-s" id="code-keep"></p>
+        </div>
+      </section>
+
+      <!--
+        §3.6.2, rewritten 2026-08-13 (D-081). It used to be one sentence and one
+        button that said "They match", which describes a comparison between two
+        SCREENS — and the digits are equal at both ends of every completed
+        handshake, including one with an attacker. The comparison is between one
+        screen and one PERSON, and there are three honest answers to it.
+      -->
+      <!--
+        ⚠️⚠️ ROUND 6 (D-104's DEFECT, STILL LIVE IN THE SCREEN NEXT DOOR). These three
+        were `<div class="rows">` — the CONVERSATION LIST's class again, borrowed
+        again for its `flex-direction: column`. `.rows button` (0,1,1) and
+        `button.danger` (0,1,1) are EQUAL specificity, and `.rows button` is 118
+        lines further down the stylesheet, so it won on source order: **the "this is
+        not the person I sent the invite link to" button has never rendered red.**
+        Three near-identical grey rectangles, on the one screen in this product whose
+        entire job is to make a person stop and choose deliberately.
+
+        ➡️ Exactly the trap D-104 named — a layout class that also paints — caught a
+        second time because Hannu asked for colour here and the fix had to be looked
+        at. `.answers` is layout only, like `.choices`, so the two rules can no longer
+        reach each other. ⚠️ Verified with `getComputedStyle` at both themes, never
+        with a class list: a cascade collision is invisible to `classList.contains`.
+      -->
+      <section id="verify" class="panel hidden">
+        <p id="sas-ask" class="lead"></p>
+        <div class="sas" id="sas"></div>
+        <div class="note" id="sas-what"></div>
+        <div class="answers mt">
+          <button id="sas-ok" class="answer same"></button>
+          <button id="sas-later" class="answer later"></button>
+          <button id="sas-wrong" class="answer wrong"></button>
+        </div>
+      </section>
+
+      <!--
+        D-139. ⚠️ `#chat-name` AND `#live` HAVE MOVED INTO THE APP BAR and are no
+        longer inside this section — WhatsApp puts the name and "online" there, and
+        keeping them here would mean the name scrolls away with the conversation.
+        `app.js` still reaches both by id, so the renderers did not change; what
+        changed is which box the browser paints them in.
+      -->
+      <section id="chat" class="chatpane hidden">
+        <!-- §3.6.2's state, on the conversation, for as long as it is unverified.
+             It must not shout: the channel is encrypted either way and the one
+             unchecked thing is who is at the far end. An alarm on every ordinary
+             conversation is an alarm nobody reads on the day it matters. -->
+        <div id="chat-unverified" class="banner hidden">
+          <!--
+            Round 6 (D-112): `<p class="note" id="unverified-more">` stood under this
+            and is deleted on the tester round's explicit instruction — *"do not use
+            this, confused everyone."* It read "Nothing says anything is wrong, and it
+            is encrypted either way", which is true and reads as a confession. What it
+            was for now lives in `terms["six-digits"]`, one tap from the line below.
+
+            ⚠️ The ELEMENT outlived the string by one round of my own carelessness: I
+            removed the `text()` call in `app.js` and left an empty `<p>` sitting here,
+            which the browser check found by listing the ids that were supposed to be
+            gone. A renderer with no element fails loudly; an element with no renderer
+            is invisible, and it is the direction that survives review.
+          -->
+          <div class="m0" id="unverified-what"></div>
+          <p class="m0 mt-s"><button id="verify-now" class="secondary"></button></p>
+        </div>
+        <!--
+          ⚠️ WHATSAPP'S "SYSTEM MESSAGE" — a centred chip on the wallpaper, which is
+          where a messenger puts a statement the app is making about the conversation
+          rather than something either person said. These four were scattered: one
+          note above the log and three below the composer. They are the same KIND of
+          sentence and they now look like it.
+
+          ⚠️ ABOVE THE LOG RATHER THAN INSIDE IT, and that is a compromise worth
+          naming. WhatsApp's system messages sit in the timeline and scroll away with
+          it; `renderLog` calls `replaceChildren()` on `#log`, so anything placed
+          inside would be erased on the next render. Putting them in the timeline
+          properly is a change to the renderer, not to the layout — Phase 2.
+        -->
+        <div class="sysmsgs">
+          <p class="sysmsg" id="chat-verified"></p>
+          <p class="sysmsg" id="chat-local"></p>
+          <p class="sysmsg" id="chat-ghost"></p>
+          <p class="sysmsg" id="chat-ttl"></p>
+        </div>
+
+        <!-- D-130. This browser holds the conversation and has never held its keys —
+             §6.3's "cleared storage, or device migration", which is what opening the
+             app in a different browser IS. It sits ABOVE the log because in exactly
+             this case the log is empty, and a note under an empty box is a note
+             nobody reads. A `banner`, not an `alarm`: nothing is broken and nothing
+             was attacked, there is one thing to do. -->
+        <div id="chat-reconnect" class="banner hidden">
+          <!-- ⚠️ ORDER IS THE INSTRUCTION, NOT THE EXPLANATION. What to do, then what it costs
+               not to, then why. `why` sat in the MIDDLE until 2026-08-18, which put background
+               between an instruction and its consequence — and Hannu's rewrite of these two
+               sentences reads as one thought, so they have to be adjacent. -->
+          <p class="m0" id="reconnect-what"></p>
+          <p class="note" id="reconnect-cost"></p>
+          <p class="note" id="reconnect-why"></p>
+        </div>
+
+        <!-- §6.7.1's closing notice, at the receiving end. -->
+        <div id="chat-closed" class="banner alarm hidden">
+          <p class="m0" id="closed-what"></p>
+          <p class="note" id="closed-more"></p>
+          <p class="note" id="closed-yours"></p>
+          <p class="note" id="closed-next"></p>
+        </div>
+
+        <div id="log" class="log"></div>
+
+        <!--
+          ⚠️ THE SEND BUTTON IS A CIRCLE AND ITS LABEL IS AN `aria-label`. That is
+          not styling for its own sake: D-104's rule was *"a filled accent is the
+          one action on a screen"*, and D-139 puts a filled accent on every outgoing
+          bubble, which breaks the rule as arithmetic. WhatsApp separates the two by
+          SHAPE instead of colour. See `.send` in `app.css` — take the roundness off
+          and the rule fails again, silently, on the screen it was written for.
+        -->
+        <!--
+          ⚠️⚠️ A `<textarea>` AND NOT AN `<input>`, SINCE ROUND 19. An `<input>` cannot
+          hold a newline at all — not a styling limitation but a value one, so no key
+          binding could have made paragraphs work while this was an input.
+
+          ⚠️ IT SHIPS WITH NO CONTENT AND NO `placeholder` ATTRIBUTE. `test/copy.mjs`
+          reads text nodes and placeholders straight out of this file and fails on any
+          the copy module did not produce; the placeholder is set at boot from
+          `copy.chat.placeholder`, exactly as it was on the input.
+
+          ⚠️ `rows="1"` IS THE FLOOR, NOT THE SIZE. app.js grows it to fit what is typed
+          and `app.css` caps it, so the composer starts as one line and the conversation
+          keeps the rest of the screen.
+        -->
+        <form id="composer" class="composer">
+          <textarea id="text" rows="1" autocomplete="off"></textarea>
+          <button id="send" class="send" type="submit">➤</button>
+        </form>
+
+      </section>
+
+      <section id="tripwire" class="panel alarm hidden">
+        <h2 id="tripwire-title"></h2>
+        <p id="tripwire-body"></p>
+      </section>
+
+      <section id="failure" class="panel alarm hidden">
+        <h2 id="failure-title"></h2>
+        <p id="failmsg"></p>
+        <p class="note" id="failcode"></p>
+        <p class="mt"><button id="fail-back" class="secondary"></button></p>
+      </section>
+
+      <!--
+        D-085. Feedback 13: Opera opened the page in about a second, Chrome took
+        nearly ten, and that is NOT DIAGNOSED. `crypto/argon2.js` has recorded the
+        cost of every derivation since it was written and nothing ever showed it.
+
+        ⚠️ It goes nowhere. A product whose claim is that the server learns nothing
+        does not acquire a telemetry channel to answer a performance question — the
+        person holding the device reads the numbers out.
+      -->
+      <!--
+        ⚠️ HIDDEN WHILE A CONVERSATION IS OPEN, AND THE REASON IS A MEASUREMENT.
+        This footer is the last child of the scroller, so it takes its height from
+        every screen including the conversation — which is a full-height pane whose
+        composer is supposed to sit on the floor of the window. It measured 819px of
+        an 880px window with this footer under it: sixty-one pixels of "Show timings"
+        between the thing you type into and the bottom of the phone.
+
+        D-085's timings are reachable from every other screen, which is where a
+        person goes looking for them. WhatsApp has nothing here at all.
+      -->
+      <footer class="diag" id="diagfoot">
+        <button id="diag-toggle" class="linkish"></button>
+        <div id="diag" class="hidden">
+          <p class="note m0" id="diag-note"></p>
+          <pre class="diagbox" id="diag-body"></pre>
+        </div>
+      </footer>
+      </div><!-- /.screens -->
+    </main>
+    <script type="module" src="/app/app.js"></script>
+  </body>
+</html>
