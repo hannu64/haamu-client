@@ -72,6 +72,10 @@ export const FI = {
   "chat.storeHeld": "odotetaan toista välilehteä",
   "chat.storeBusy": "tallennustila on varattu",
   "chat.busyElsewhere": "Ei lähetetty: tämän selaimen toinen välilehti käyttää tätä keskustelua. Yritä uudelleen.",
+  // ⚠️ "Lähetys ei onnistunut" — the SENDING did not succeed, which is what the
+  // English says. Not "ei lähetetty" ("was not sent"), which would claim the thing
+  // the English deliberately does not.
+  "chat.notSent": "Lähetys ei onnistunut. Yritä uudelleen.",
 
   // ── closing
   "closing.willTell": "Toiselle henkilölle kerrotaan, että tämä keskustelu on loppunut.",
@@ -95,6 +99,7 @@ export const FI = {
   "diagnostics.note": "Mitään tästä ei lähetetä minnekään. Se on ruudulla, jotta voit lukea sen ääneen.",
   "diagnostics.show": "Näytä ajat",
   "diagnostics.hide": "Piilota ajat",
+  "diagnostics.notDerived": "ei vielä johdettu",
 
   // ── ending
   "ending.control": "Unohda AVAIMENI tästä selaimesta",
@@ -440,6 +445,22 @@ const offset = (seconds) => {
  * English rendering of the same branch. See the note at the head of this file.
  */
 export const FI_BUILT = {
+  // ⚠️⚠️ THESE FOUR ARE FUNCTIONS AND THEREFORE BELONG HERE, NOT IN `FI` ABOVE.
+  // `finnishByKey()` reads plain strings from `FI` and built sentences from this
+  // object; a function left in `FI` is not read at all, so the Finnish silently does
+  // not exist and the English shows through. The suite caught it — `no Finnish is
+  // left for a sentence that is gone` and D-153's number check both named all four.
+  //
+  // ⚠️ CHECKED AGAINST THE ENGLISH, WHICH HAS ALREADY PASSED THE RULE, rather than
+  // against a Finnish reading of what the build line ought to say. "kysytään
+  // palvelimelta" is *is being asked from the server*; "ei saatu yhteyttä" is
+  // *contact was not obtained*, which is what "could not reach" claims and no more.
+  "diagnostics.proofAt": (ms, bits) => `${ms} ms, ${bits} bittiä`,
+  "diagnostics.build.asking": (id) => `${id}, kysytään palvelimelta`,
+  "diagnostics.build.failed": (id) => `${id}, palvelimeen ei saatu yhteyttä vertailua varten`,
+  "diagnostics.build.current": (id) => `${id}, nykyinen versio`,
+  "diagnostics.build.stale": (id, served) =>
+    `${id} — VANHA. Palvelimella on ${served}. Lataa tämä sivu uudelleen.`,
   // ── chat
   "chat.unreadable": (reason) => `Saapui viesti, jota ei voitu lukea (${reason}).`,
 

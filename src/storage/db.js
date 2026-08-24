@@ -303,12 +303,21 @@ function handle(db, name, guard = (work) => work) {
       await guard(finished(os.transaction));
     },
 
+    /**
+     * §7.8's ending, as ONE transaction across every store it names.
+     *
+     * ⚠️⚠️ IT WAS A LOOP, ONE TRANSACTION EACH, AWAITED IN TURN — so a browser killed
+     * between `conversation` and `messages` left a HALF-ENDED identity: the roster can
+     * be fetched again at the next unlock, and the still-sealed message rows become
+     * readable under the re-derived `local_key`, on a device whose owner was told the
+     * ending had removed them. IndexedDB gives atomicity across stores for free as
+     * long as every request is issued synchronously inside one transaction, which is
+     * what the loop below does. Found by the 2026-08-24 outside review.
+     */
     async clear(stores) {
-      for (const store of stores) {
-        const os = readwrite(store);
-        os.clear();
-        await guard(finished(os.transaction));
-      }
+      const tx = db.transaction(stores, "readwrite");
+      for (const store of stores) tx.objectStore(store).clear();
+      await guard(finished(tx));
     },
 
     close() {

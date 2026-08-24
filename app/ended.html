@@ -50,9 +50,17 @@
     <main>
       <!-- D-083. `lpm` is the protocol token and never the product; this page
            said it in the largest type on the screen, on the way out. -->
+      <!-- ⚠️ NO GLOSS HERE, AND THAT IS THE FIX RATHER THAN THE OMISSION IT USED
+           TO BE. `index.html` explains the name to a first-time reader and hides
+           that sentence on `html[lang="fi"]`, because it is a tautology to a Finn.
+           This page carried the same sentence with no such rule, and the only way
+           to reach it is to end a session and mean it — so nobody ever saw it. It
+           explains nothing to a person who has just finished using the product,
+           and `ended.js` already documented this page as having no gloss. Adding
+           the CSS rule instead would have needed a render-blocking language boot
+           on the one page that must stay servable under `Clear-Site-Data`. -->
       <header class="masthead">
         <h1 class="wordmark">haamu</h1>
-        <p class="gloss">haamu is Finnish for ghost</p>
       </header>
       <section class="panel">
         <p id="what"></p>

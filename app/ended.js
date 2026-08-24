@@ -43,6 +43,14 @@ const speaking = langs.resolve();
 setLanguage(speaking);
 langs.apply(speaking);
 
+// ⚠️⚠️ THE TAB'S TITLE IS COPY TOO, AND IT WAS THE HALF NOBODY CHECKED. D-159
+// translated both panels on this page and left `<title>haamu — ended</title>`
+// standing in the HTML, so a Finn who ended a session read the page in Finnish
+// under an English tab. `copy.product.endedTitle` had existed in both languages
+// the whole time — DEFINED, and read by nothing. The copy suites passed because
+// being defined was all they asked. Found by the 2026-08-24 outside review.
+document.title = copy.product.endedTitle;
+
 // ⚠️ TWO THINGS ARRIVE IN THE FRAGMENT, NOT ONE. The census outcome decides the
 // first sentence (§7.8.1's two endings) and the MODE decides the second — which
 // until 0.8.14 was always the Kept one, *"you will need your eight words"*, on

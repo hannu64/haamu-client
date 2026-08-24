@@ -96,7 +96,7 @@ const all = everySentence();
  *
  * Returns `[line, digit, text]` for every run of digits that survived.
  */
-function typedDigits(fileUrl) {
+function typedStrings(fileUrl) {
   const src = readFileSync(fileURLToPath(fileUrl), "utf8");
   const strings = [];
   let i = 0;
@@ -163,6 +163,18 @@ function typedDigits(fileUrl) {
     }
   }
 
+  return strings;
+}
+
+/**
+ * Every run of digits a person TYPED, as `[line, digit, text]`.
+ *
+ * ⭐ It reads `typedStrings` rather than scanning again, and that sharing is the
+ * point: this project has now been bitten twice by two scanners that were supposed
+ * to read the same source and did not agree about what a string is.
+ */
+function typedDigits(fileUrl) {
+  const strings = typedStrings(fileUrl);
   typedDigits.lastCount = strings.length;
   // ⚠️ `\b` ON BOTH SIDES. Without it the scan reports the 2 in "Argon2id", which is
   // part of a proper noun — the same reason the old rendered-value scan used them.
@@ -1009,9 +1021,28 @@ const produced = new Set(all.map(([, s]) => s.trim()).filter(Boolean));
 for (const [name, html] of pages) {
   check(
     `${name} — the masthead is the product name (D-083), not the protocol token`,
-    html.includes(`<h1 class="wordmark">${copy.product.name}</h1>`) &&
-      html.includes(`<p class="gloss">${copy.product.gloss}</p>`),
+    html.includes(`<h1 class="wordmark">${copy.product.name}</h1>`),
     copy.product.name
+  );
+
+  /**
+   * ⚠️⚠️ THE GLOSS IS `index.html`'s ALONE, AND ASKING BOTH PAGES FOR IT WAS THE BUG.
+   * It explains the name to a first-time reader, and `app.css` hides it on
+   * `html[lang="fi"]` because it is a tautology to a Finn. This loop required it on
+   * `ended.html` too — a page reachable only by ending a session, with no
+   * render-blocking language boot to make the Finnish rule apply before first paint.
+   * So the check that was supposed to protect the masthead was holding an English
+   * sentence in place on the one page where it was both useless and wrong. Found by
+   * the 2026-08-24 outside review.
+   *
+   * ⭐ Stated as a rule about WHERE, not as an exemption for a filename: the gloss
+   * belongs where somebody meets the product for the first time, and there is
+   * exactly one such page.
+   */
+  const introduces = name === "index.html";
+  check(
+    `${name} — ${introduces ? "explains the name to a first-time reader" : "does not re-explain the name on the way out"}`,
+    html.includes(`<p class="gloss">${copy.product.gloss}</p>`) === introduces
   );
   check(`${name} — and \`lpm\` is not shown to anybody as a heading or a title`, !/<title>[^<]*\blpm\b|<h1[^>]*>\s*lpm\s*</i.test(html));
 }
@@ -1057,13 +1088,113 @@ for (const [name, html] of pages) {
 // notice and two list labels), which is how "the copy is all in one file" stayed
 // approximately true while being false.
 {
-  const appJs = readFileSync(appDir + "app.js", "utf8");
-  // Sentence-shaped literals: three or more words, in quotes, outside comments.
-  const withoutComments = appJs.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  const sentences = [...withoutComments.matchAll(/"([A-Z][^"\\]{12,})"/g)]
-    .map((m) => m[1])
-    .filter((s) => s.split(" ").length >= 3 && !produced.has(s.trim()));
-  equal("⭐ and `app/app.js` does not type a sentence of its own", sentences.join(" | "), "");
+  /**
+   * ⚠️⚠️ THIS CHECK USED TO TEST A SHAPE AND IS NOW WRITTEN AS THE RULE, and the
+   * difference was five sentences. It read
+   *
+   *     matchAll(/"([A-Z][^"\\]{12,})"/g)
+   *
+   * — a DOUBLE quote, a leading CAPITAL, at least TWELVE characters — which is the
+   * shape of the four strings that were found when it was written, and not the shape
+   * of the rule it is labelled with. `` `not sent: ${err.message}` `` walked past it
+   * for three independent reasons at once, and so did D-085's four build-line
+   * sentences, which start with an interpolation. Any one of the three would have
+   * been enough to hide them. The 2026-08-24 outside review found the first; widening
+   * this to the rule found the other four the same minute.
+   *
+   * ⭐ So: EVERY string literal, whatever its quotes, wherever its capitals, however
+   * short — and "is it prose?" asked of the words rather than of the punctuation.
+   * `typedStrings` walks the source rather than stripping comments beforehand, which
+   * is what stops an apostrophe in a comment from being read as an opening quote.
+   */
+  /**
+   * ⚠️⚠️ TWO WORDS, NOT THREE, AND THE THIRD IS WHAT LET THE BUG THROUGH TWICE.
+   * `` `not sent: ${err.message}` `` reduces to `"not sent: "` once the interpolation
+   * is blanked — TWO words. The first widening of this check kept a three-word
+   * threshold, and the mutation test put the exact reported string back and PASSED.
+   * Widening three axes and leaving a fourth is not widening; it is moving where the
+   * hole is. Written down because it happened here, one screen below a comment
+   * warning about exactly this.
+   */
+  const prose = (text) =>
+    text
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length >= 2 && /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’,.:;!?-]*$/.test(w)).length >= 2;
+
+  /**
+   * ⚠️ THE ONE EXCLUSION, AND IT IS A CATEGORY RATHER THAN A LIST OF FILENAMES OR
+   * LINE NUMBERS. An `Error` message is not interface prose: nothing renders it, and
+   * `app.js` explicitly shows `primitives.reason` in `#failcode` while the throw
+   * beside it carries the developer's half. Excluding by CONSTRUCT means a new throw
+   * is covered and a new sentence is not, which an allowlist could not promise.
+   */
+  const thrown = (src, line) => /\b(new [A-Za-z]*Error|throw)\b/.test(src.split("\n")[line - 1] ?? "");
+
+  /**
+   * ⚠️ NOT PROSE, AND EACH IS A CONSTRUCT RATHER THAN A LINE NUMBER. A class list is
+   * CSS; a `b64uDecode` label names the field for the decode error that quotes it.
+   * Neither is a sentence anybody reads on a screen.
+   */
+  const machine = (src, line) => {
+    const l = src.split("\n")[line - 1] ?? "";
+    return /\bclassName\b|\bclassList\b/.test(l) || /\bb64uDecode(Exact)?\(/.test(l);
+  };
+
+  /**
+   * ⚠️⚠️ THE DIAGNOSTICS READOUT IS ENGLISH BY DECISION, AND THIS IS THAT DECISION
+   * WRITTEN DOWN RATHER THAN A HOLE. D-085's panel is a fixed-width technical
+   * readout whose FIELD LABELS — `build`, `boot`, `key`, `link`, `proof`, `problem`,
+   * `curve`, `screen`, `browser` — are English and typed in `app.js`. Translating the
+   * values beside them while the labels stayed English would produce a half-Finnish
+   * table, which is worse for the tester reading it out than a consistently English
+   * one. The panel's SENTENCES are a different matter and did move: the build line
+   * tells a person to reload the page, and `diagnostics.notDerived` / `proofAt` are
+   * phrases rather than measurements — all of them are in `copy.js` and translated.
+   *
+   * ⚠️ Scoped to the two functions that BUILD the readout, so a sentence typed
+   * anywhere else in `app.js` is still caught. If the panel should become Finnish,
+   * this exclusion is the one place to delete.
+   */
+  const readout = (src, line) => {
+    const l = src.split("\n")[line - 1] ?? "";
+    // A value WRITTEN into the `measurements` record, which nothing but the readout
+    // renders. Written at the moment it is measured and read a screen away, so the
+    // enclosing-function test below cannot see it.
+    if (/\bmeasurements\.\w+ = \{/.test(l)) return true;
+    const before = src.split("\n").slice(0, line).join("\n");
+    const fn = before.lastIndexOf("function ");
+    return /^function (renderDiagnostics|describeProblem)\b/.test(before.slice(fn, fn + 40));
+  };
+
+  let excluded = 0;
+  for (const name of ["app.js", "ended.js"]) {
+    const src = readFileSync(appDir + name, "utf8");
+    const sentences = typedStrings(new URL(`../app/${name}`, import.meta.url))
+      .filter(([line, text]) => {
+        if (!prose(text) || produced.has(text.trim())) return false;
+        if (thrown(src, line) || machine(src, line) || readout(src, line)) {
+          excluded++;
+          return false;
+        }
+        return true;
+      })
+      .map(([line, text]) => `${name}:${line} ${text.trim().slice(0, 56)}`);
+    equal(`⭐⭐ and \`app/${name}\` does not type a sentence of its own`, sentences.join(" | "), "");
+  }
+
+  /**
+   * ⚠️⚠️ AND THE OTHER DIRECTION, WHICH IS HOW AN EXCLUSION ROTS INTO A BLANKET. If
+   * the throw-shaped strings ever stop existing, or the pattern stops matching them,
+   * this drops to zero and the exclusion is silently covering nothing — or, worse,
+   * has been widened to cover everything. Either way it should be looked at rather
+   * than trusted.
+   */
+  check(
+    "⚠️ the three exclusions still match something, and still only a little",
+    excluded >= 3 && excluded <= 20,
+    `${excluded} excluded as throws, class lists, decode labels or the diagnostics readout`
+  );
 }
 
 // ================================== §4.3's thresholds, which moved on 2026-08-13

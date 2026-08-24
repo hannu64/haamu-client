@@ -2614,7 +2614,13 @@ $("composer").addEventListener("submit", async (e) => {
     // ⚠️ A CONFLICT REACHES HERE ONLY AFTER `flow/message.js` HAS GIVEN UP, which
     // means another tab has been writing to this channel without pause. Nothing was
     // sent, so pressing send again is the right answer and the right thing to say.
-    line(store.isConflict(err) ? copy.chat.busyElsewhere : `not sent: ${err?.reason ?? err?.message ?? err}`, "bad");
+    // ⚠️⚠️ THE EXCEPTION DOES NOT REACH THE SCREEN, AND NEITHER DOES ENGLISH. This
+    // line read `` `not sent: ${err?.reason ?? err?.message ?? err}` `` until
+    // 2026-08-24: a hard-coded sentence and a raw implementation string, in a file
+    // whose whole rule is that it types neither. `test/copy.mjs` passed the entire
+    // time, because its pattern matched double-quoted, capitalised, twelve-character
+    // strings — the shape of the four it caught when it was written.
+    line(store.isConflict(err) ? copy.chat.busyElsewhere : copy.chat.notSent, "bad");
   } finally {
     $("send").disabled = false;
     $("text").focus();
@@ -3110,10 +3116,11 @@ function showCode(spoken) {
 }
 
 async function runJoin(fragment) {
-  // §2.1: strip the fragment from the address bar the moment it is read, so the
-  // secret does not reach browser history, a screenshot, or the `Referer` of any
-  // later navigation. This belongs here rather than in the flow module — that
-  // module never touches the document.
+  // §2.1's strip, SECOND. `takeLinkFromUrl` did it at the read, which is what the
+  // section actually asks for; this line stays because it costs nothing and it is
+  // the one that covers a link reaching here by some route that did not come
+  // through the address bar. It must never be the only one again — see the note on
+  // `takeLinkFromUrl` for what "only one" cost.
   history.replaceState(null, "", location.pathname);
 
   only("progress");
@@ -3185,9 +3192,37 @@ $("menu-create").addEventListener("click", () => {
  * that re-joins a spent link forever.
  */
 window.addEventListener("hashchange", () => {
-  if (!location.hash.slice(1)) return;
-  void followLink(location.href);
+  const link = takeLinkFromUrl();
+  if (!link) return;
+  void followLink(link);
 });
+
+/**
+ * §2.1: read the link out of the address bar and strip it IN THE SAME ACT.
+ *
+ * ⚠️⚠️ THE STRIP USED TO LIVE IN `runJoin`, AND THAT IS TOO LATE BY MINUTES. Reading
+ * happens at boot; `runJoin` does not start until the person has unlocked — or
+ * CREATED — a KEY, which is eight words to write down and an Argon2 to wait through.
+ * `L` sat in the address bar, in the current history entry, and in reach of any
+ * screenshot or session restore for that whole time. Found by the 2026-08-24 outside
+ * review as its only I1 break, and the exposure is longest for a first-time user,
+ * who is the person least able to notice it.
+ *
+ * ⚠️ THE TWO EARLY RETURNS IN `followLink` LEFT IT THERE TOO — busy pairing, and no
+ * session yet. Stripping AT THE READ is what makes those unreachable as leaks,
+ * rather than each of them having to remember.
+ *
+ * ⭐ `history.replaceState` does NOT fire `hashchange`, so this cannot re-enter the
+ * listener above. That is a property of the platform rather than of this code, which
+ * is why it is written down in both places: a later refactor to `location.hash = ""`
+ * would make a loop that re-joins a spent link forever.
+ */
+function takeLinkFromUrl() {
+  if (!location.hash.slice(1)) return null;
+  const link = location.href;
+  history.replaceState(null, "", location.pathname);
+  return link;
+}
 
 /** A pairing is running in this document, so a second link has nowhere to go. */
 let busyPairing = false;
@@ -3895,10 +3930,14 @@ async function askServedBuild() {
 }
 
 function buildLine() {
-  if (servedBuild.state === "unasked") return `${BUILD}, asking the server`; // at most 4 s — see askServedBuild
-  if (servedBuild.state === "failed") return `${BUILD}, could not reach the server to compare`;
-  if (servedBuild.stamp === BUILD) return `${BUILD}, the current build`;
-  return `${BUILD} — OLD. The server has ${servedBuild.stamp}. Reload this page.`;
+  // ⚠️ FOUR SENTENCES THAT LIVED HERE UNTIL 2026-08-24 AND SHOULD NEVER HAVE. They are
+  // read by a person — Hannu read one of them off his own screen, which is why
+  // `askServedBuild` above has a timeout — and they were English in both languages.
+  const b = copy.diagnostics.build;
+  if (servedBuild.state === "unasked") return b.asking(BUILD); // at most 4 s — see askServedBuild
+  if (servedBuild.state === "failed") return b.failed(BUILD);
+  if (servedBuild.stamp === BUILD) return b.current(BUILD);
+  return b.stale(BUILD, servedBuild.stamp);
 }
 
 function renderDiagnostics() {
@@ -3908,11 +3947,11 @@ function renderDiagnostics() {
     // code the server has already replaced.
     `build       ${buildLine()}`,
     `boot        ${measurements.boot === null ? "—" : `${measurements.boot} ms`}`,
-    `key         ${argon ? `${argon.ms} ms, ${argon.heapMiB} MiB` : "not derived yet"}`,
+    `key         ${argon ? `${argon.ms} ms, ${argon.heapMiB} MiB` : copy.diagnostics.notDerived}`,
     `link        ${measurements.link === null ? "—" : `${measurements.link.ms} ms, ${measurements.link.what}`}`,
     // Only the side that MAKES a link does §9.1's work, so "—" on this row is
     // the joiner's correct answer and not a missing measurement.
-    `proof       ${measurements.proof === null ? "—" : `${measurements.proof.ms} ms at ${measurements.proof.bits} bits`}`,
+    `proof       ${measurements.proof === null ? "—" : copy.diagnostics.proofAt(measurements.proof.ms, measurements.proof.bits)}`,
     `problem     ${describeProblem()}`,
     `curve       ${measurements.fallback === null ? "—" : measurements.fallback ? "WASM fallback" : "WebCrypto"}`,
     `screen      ${window.innerWidth}×${window.innerHeight}`,
@@ -4173,7 +4212,9 @@ langs.apply(openedIn);
 paintCopy();
 
 // The link is held here and followed inside `withIdentity` — see the note there.
-if (location.hash.slice(1)) pendingJoin = location.href;
+// ⚠️ `takeLinkFromUrl` STRIPS AS IT READS (§2.1). It is not `location.href` any more,
+// and the difference is minutes of a live pairing secret in the address bar.
+pendingJoin = takeLinkFromUrl();
 
 // ⚠️ NOT AWAITED, AND IT IS AT TOP LEVEL: this is a notice, not a step. It reads
 // `sessionStorage` before anything is unlocked, which is all it can reach here —

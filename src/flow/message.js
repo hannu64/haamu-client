@@ -168,8 +168,17 @@ async function attempts(what, fn) {
  */
 async function raise(channel, generation) {
   if (generation <= channel.generation) return;
-  channel.generation = generation;
+
+  // ⚠️⚠️ THE AWAIT COMES FIRST, AND THE ORDER IS THE WHOLE OF THIS FUNCTION.
+  // Assigning before the write meant a FAILED roster write still moved the
+  // in-memory floor, so the retry took the early return above, never re-attempted
+  // the write, and the message was then persisted and acknowledged with the roster
+  // still at the old generation. That is the frozen-generation bug this function's
+  // own comment warns about, reached through its recovery path rather than its
+  // failure path — the first attempt fails loudly and correctly, and the second one
+  // succeeds while being wrong. Found by the 2026-08-24 outside review.
   if (channel.onGeneration) await channel.onGeneration(generation);
+  channel.generation = generation;
 }
 
 /** The durable floor: what the roster knows, or what this device has seen. */

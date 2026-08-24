@@ -121,6 +121,16 @@ echo "=== copy-fi.mjs — the Finnish against the English it translates ==="
 node test/copy-fi.mjs
 
 echo
+echo "=== app-document.mjs — the rules that exist because the app touches the document ==="
+# ⚠️⚠️ THESE RULES HAD NO HOME AND THAT IS WHY THEY WERE BROKEN. `flow/*.js` never
+# touches the document by design, so no flow suite can reach them; `copy.mjs` is about
+# sentences; the `e2e-*` suites need a server and are exempted in the published tree, so
+# a guard placed there would not run for somebody who clones the public repository and
+# types `./test.sh`. The 2026-08-24 outside review found two defects sitting in exactly
+# that gap — §2.1's strip of the invite link, and the ending page's title.
+node test/app-document.mjs
+
+echo
 echo "=== suite.mjs — is anything running the checks in test/? ==="
 # ⚠️⚠️ D-154: `test/theme.mjs` passed 18 checks for three days while no script, no CI job
 # and no document named it. A green suite is evidence only about the checks that ran, so

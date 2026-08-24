@@ -31,6 +31,14 @@
  * ternary to a sentence without adding a sample here fails the build.
  */
 export const SAMPLES = {
+  // ⚠️ D-085's build line. Two stamps that DIFFER, because `stale` renders both and a
+  // sample that passed the same value twice would draw a sentence nobody can ever see.
+  "diagnostics.proofAt": [[820, 20]],
+  "diagnostics.build.asking": [["9b61457b8a287bd1"]],
+  "diagnostics.build.failed": [["9b61457b8a287bd1"]],
+  "diagnostics.build.current": [["9b61457b8a287bd1"]],
+  "diagnostics.build.stale": [["9b61457b8a287bd1", "d3cbcfdaee75cd15"]],
+
   "chat.unreadable": [["a reason"]],
   "chat.reconnect.some": [[1], [3]],
   "deletion.confirmOne": [["Maija"]],

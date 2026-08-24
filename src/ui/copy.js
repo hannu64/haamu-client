@@ -1463,6 +1463,20 @@ export const chat = {
   // means another tab of this browser is writing to this conversation without
   // pause. Nothing was sent — so the sentence has to say that, and say what to do.
   busyElsewhere: "Not sent: another tab of this browser is using this conversation. Try again.",
+
+  // ⚠️⚠️ EVERY OTHER SEND FAILURE, AND UNTIL 2026-08-24 THERE WAS NO SENTENCE FOR IT
+  // AT ALL — `app.js` printed `not sent: ${err.message}` straight into the
+  // conversation, so a person who went offline read `Failed to fetch` in a red
+  // bubble, in English, in the middle of the Finnish interface. Feedback 13 had
+  // already reported that exact shape on the PAIRING path and it was fixed there and
+  // only there.
+  //
+  // ⚠️ IT DOES NOT SAY WHAT REACHED THE SERVER, and that restraint is the point.
+  // §6.5 persists before it transmits, so a throw here can land on either side of the
+  // network — "nothing was sent" would be a new false claim of exactly the kind this
+  // sentence exists to replace. `busyElsewhere` above may say it because its one
+  // cause is a write that provably never landed.
+  notSent: "Could not send. Try again.",
 };
 
 // ----------------------------------------------------- §4.2, §7.8 — the other tabs
@@ -2731,6 +2745,35 @@ export const diagnostics = {
 
   show: "Show timings",
   hide: "Hide timings",
+
+  /**
+   * D-085's build line, WHICH WAS TYPED IN `app/app.js` UNTIL 2026-08-24.
+   *
+   * ⚠️⚠️ FOUR ENGLISH SENTENCES, AND ONE OF THEM HANNU READ ON HIS OWN DEVICE —
+   * `askServedBuild`'s header quotes him reading *"build 9b61457b8a287bd1, asking the
+   * server"* off a screen. They were user-facing the whole time and never reached this
+   * file, so the Finnish interface showed them in English. Found by widening
+   * `test/copy.mjs`'s app.js check from the SHAPE of the strings it once caught to the
+   * RULE it is labelled with: the old pattern wanted a double quote, a capital and
+   * twelve characters, and these are template literals starting with an interpolation.
+   *
+   * ⭐ This is D-152 again — the same fault the comment below it records, in a fifth
+   * place. Sentences do not stay in one file because a rule says so; they stay because
+   * something checks, and a check that tests a shape tests the last bug.
+   */
+  // ⚠️ THE ROW VALUES A PERSON READS OUT. The field labels beside them (`build`,
+  // `boot`, `key`, …) are names of measurements and stay in `app.js`; these two are
+  // phrases, and were English in the Finnish interface for the same reason the build
+  // line was — nothing checked, because the check tested a shape.
+  notDerived: "not derived yet",
+  proofAt: (ms, bits) => `${ms} ms at ${bits} bits`,
+
+  build: {
+    asking: (id) => `${id}, asking the server`,
+    failed: (id) => `${id}, could not reach the server to compare`,
+    current: (id) => `${id}, the current build`,
+    stale: (id, served) => `${id} — OLD. The server has ${served}. Reload this page.`,
+  },
 };
 
 /**

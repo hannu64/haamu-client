@@ -96,6 +96,7 @@ export function createApi({ baseUrl = "", fetchImpl, timeoutMs = DEFAULT_TIMEOUT
     if (authorization) headers.Authorization = authorization;
 
     let res;
+    let text = "";
     try {
       res = await doFetch(base + path, {
         method,
@@ -107,6 +108,16 @@ export function createApi({ baseUrl = "", fetchImpl, timeoutMs = DEFAULT_TIMEOUT
         redirect: "error",
         signal: controller.signal,
       });
+      // ⚠️⚠️ THE BODY IS READ INSIDE THE DEADLINE, AND IT USED NOT TO BE. `clearTimeout`
+      // sat in a `finally` that ran the moment `fetch()` RESOLVED — which is when the
+      // response HEADERS arrive, not the body. A server that sent valid headers and
+      // then stopped writing left `res.text()` awaiting forever with the fifteen-second
+      // deadline already cancelled and the caller's abort no longer connected: a
+      // mailbox drain stays serialised for the life of the tab and reports nothing,
+      // and a pairing poll runs past both its visible-time budget and its expiry.
+      // Costs nothing to hold the timer open; costs the whole session not to.
+      // Found by the 2026-08-24 outside review.
+      if (res.status !== 204) text = await res.text();
     } catch (err) {
       throw new NetworkError(`${method} ${path}: ${err?.message ?? "request failed"}`, err);
     } finally {
@@ -118,7 +129,6 @@ export function createApi({ baseUrl = "", fetchImpl, timeoutMs = DEFAULT_TIMEOUT
     if (res.status === 204) return null;
 
     let parsed = null;
-    const text = await res.text();
     if (text !== "") {
       try {
         parsed = JSON.parse(text);
