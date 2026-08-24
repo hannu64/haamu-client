@@ -5546,6 +5546,70 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-160. ⭐⭐⭐ The client is published — and a guard written to catch an un-run test nearly exempted itself in the repository nobody could check it in
+
+**2026-08-24.** `hannu64/haamu-client` exists: `client/` plus `DECISIONS.md`, **AGPL-3.0-only**,
+mirrored from the private monorepo by `scripts/publish-client.sh` — privsend's proven clean-mirror
+tool, adapted. The monorepo stays the single source of truth; no private commit message crosses
+over. The server, the migrations and `deploy/` are **not** published.
+
+**The server being closed concedes no security claim, and the README says so in those words.** It
+receives a mailbox id, a public value and a ciphertext; the client is written on the assumption
+that it is hostile. Everything an auditor would want — the derivations, the handshake, the ratchet,
+what reaches disk, what leaves the device — is the half that is published.
+
+### ⭐⭐⭐ What publishing is FOR changed, on the evidence, before a line was written
+
+> *"even though 3 of my friends are IT professionals they are the most busy people… They are not
+> lazy but overworked. So most of the reviewers are 'normal' people."*
+
+The plan had assumed publication buys an **audit**. It does not: nobody in this panel is going to
+read 125 files. What it buys is that *"not open source, so it cannot be proven"* stops being
+unanswerable — and what an overworked reviewer will actually spend is **thirty seconds, once**.
+
+➡️ **A VERIFICATION THAT TAKES THIRTY SECONDS BEATS AN AUDIT NOBODY HAS A WEEKEND FOR.** So the
+public README leads with one command that compares every served file against `haamu.app`, not with
+a tour of the source tree. It is possible only because `src/` has no build step (ARCHITECTURE §7.1,
+and the reason it was a release blocker was never this) — and `dist/` is **committed in the public
+repository though gitignored in the private one**, so the three WASM artefacts cost a hash to check
+rather than a Rust toolchain. Three tiers, each cheaper than the last: hash the live bytes, diff
+the published bytes, rebuild from pinned source.
+
+### ⚠️ The README's own headline command failed on its first run, and neither cause was a fault
+
+Go's `http.FileServer` answers `app/index.html` with a **301** to `app/`, and **an empty body has a
+perfectly good hash** — so a content-only comparison reports a missing file as one that merely
+"differs". The command now checks the status code before the bytes and follows the redirect, and
+says why in the README, because the reader who pastes it needs to know which failures are real.
+➡️ **A verification offered to a stranger has to be run as a stranger would run it.** Ours had only
+ever run from a directory that also contained the server.
+
+### ⭐⭐⭐ And the finding of the day: the anti-orphan guard was one line from exempting itself
+
+`test/suite.mjs` exists because `test/theme.mjs` was green for three days while nothing invoked it
+(D-154). In the published tree it **crashed**: it reads `../../e2e.sh`, and `e2e.sh` is not
+published because the server is not. The obvious repair — tolerate a missing `e2e.sh` — is the
+trap, and it is the same shape one level out:
+
+> ⚠️⚠️ **Inferring "this must be the published client" from ONE missing file means that file going
+> missing FROM THE MONOREPO silently exempts every end-to-end suite** — the guard quietly weakening
+> at the exact moment it should shout.
+
+So the tree's shape is **asserted, not inferred**: a tree has a server *and* an `e2e.sh`, or
+neither, and anything else fails loudly. The exemption is then exactly the size of the absence —
+only `e2e-*.mjs`, only where earned — so a *non*-e2e test that loses its runner line still fails in
+the public repository, which is the one place a stranger runs `./test.sh` first.
+
+**Both new checks were mutation-tested and both failed as required**: hiding `e2e.sh` from the
+monorepo failed the shape check rather than silently exempting six suites, and commenting out
+`node test/roster.mjs` in the published clone was caught by name. ⭐ `test.sh` itself also had to
+learn the difference between *"the cross-implementation check cannot run here"* (published client —
+report it and **exit 0**) and *"this machine has no Go"* (monorepo — still exit 1). A reviewer who
+pastes `./test.sh` must not be told the suite failed when every client suite passed.
+
+➡️ **A GUARD MEETS ITS FIRST STRANGER IN THE REPOSITORY IT WAS NOT WRITTEN IN.**
+
+
 ### D-159. ⭐⭐⭐⭐ The switch — and a check of my own that passed its mutation twice
 
 **2026-08-24, step 4 of four, and the last.** Steps 1–3 shipped the language decision, the 308

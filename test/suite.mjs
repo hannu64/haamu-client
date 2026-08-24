@@ -25,13 +25,30 @@
  *
  * ⚠️ AND THIS FILE NAMES ITSELF. A checker that a runner forgot is the very thing it is for.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { check, equal, section, done } from "./harness.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
-const runners = read("../test.sh") + read("../../e2e.sh");
+/* ⚠️⚠️ THE PUBLISHED CLIENT HAS NO `../../e2e.sh`, AND THE EXEMPTION THAT BUYS HAS TO BE
+ * EXACTLY THE SIZE OF THE ABSENCE. `hannu64/haamu-client` ships `client/` alone: the
+ * end-to-end suites are driven by the monorepo's `e2e.sh`, which is not published because
+ * the SERVER is not published. So in that repository the `e2e-*.mjs` files are correctly
+ * invoked by nothing — and every OTHER test must still be named by `test.sh`, or this
+ * guard has been talked out of the job it exists for.
+ *
+ * ⚠️⚠️ AND THE SHAPE OF THE TREE IS ASSERTED RATHER THAN INFERRED FROM ONE FILE. Deciding
+ * "we must be the published client" from a missing `e2e.sh` alone means that `e2e.sh`
+ * going missing FROM THE MONOREPO would silently exempt every e2e suite — the guard
+ * quietly weakening at the exact moment it should shout. A tree is one of two shapes, and
+ * anything else fails below.
+ */
+const readIf = (p) => { try { return read(p); } catch { return null; } };
+const e2eRunner = readIf("../../e2e.sh");
+const hasServer = existsSync(new URL("../../server", import.meta.url));
+const PUBLISHED = !hasServer && e2eRunner === null;
+const runners = read("../test.sh") + (e2eRunner ?? "");
 
 /**
  * Is this file INVOKED, as opposed to merely mentioned?
@@ -51,13 +68,27 @@ section("every check in this directory is run by something");
 const files = readdirSync(here).filter((f) => f.endsWith(".mjs"));
 const asserting = files.filter((f) => /from "\.\/harness\.mjs"/.test(readFileSync(here + f, "utf8")));
 const runOnce = (f) => /RUN ONCE/.test(readFileSync(here + f, "utf8").slice(0, 400));
-const orphans = asserting.filter((f) => !invoked(f) && !runOnce(f));
+const drivenByE2E = (f) => f.startsWith("e2e-");
+const orphans = asserting.filter((f) => !invoked(f) && !runOnce(f) && !(PUBLISHED && drivenByE2E(f)));
 
 equal("⭐⭐⭐ no test file is left out of `test.sh` and `e2e.sh` (D-154)", orphans.join(", "), "");
 check(
   "⚠️ and this file is one of the ones that is run, or it could not say so",
   invoked("suite.mjs"),
   `${asserting.length} test files of ${files.length}, all named by a runner`
+);
+
+check(
+  "⚠️⚠️ the tree is one of the two shapes it is allowed to be (D-160)",
+  (hasServer && e2eRunner !== null) || (!hasServer && e2eRunner === null),
+  hasServer
+    ? "monorepo: server present, so e2e.sh must be too"
+    : "published client: no server, so no e2e.sh — every e2e suite is driven from the monorepo"
+);
+check(
+  "⚠️ the e2e exemption is taken only where it is earned, and covers only e2e files",
+  !PUBLISHED || asserting.filter((f) => !invoked(f) && !runOnce(f)).every(drivenByE2E),
+  PUBLISHED ? "published client" : "monorepo — no exemption applied at all"
 );
 
 // ⭐ The guard on the guard, twice. If the directory listing or the assertion pattern ever

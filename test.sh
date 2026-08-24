@@ -157,7 +157,27 @@ echo "=== the server, on the same frozen vectors ==="
 # building the canonical signing string differently: every request 401s,
 # intermittently at first. Two languages agreeing on a frozen file is what rules
 # it out.
-if command -v go >/dev/null 2>&1; then
+# ⚠️⚠️ TWO REASONS THIS CAN BE ABSENT, AND THEY ARE NOT THE SAME REASON.
+#
+#   · No `../server` — you are in the PUBLIC client repository (haamu-client).
+#     The server is not published, so this check cannot be run here and its
+#     absence is expected. Everything above it did run: this is a complete pass
+#     of the client. Reported and exit 0, because a reviewer who pastes
+#     `./test.sh` must not be told the suite failed when it did not.
+#
+#   · `../server` exists but no Go — you are in the monorepo, on a machine that
+#     cannot run the one check a second implementation can fail. That IS a
+#     failure: §5.2's whole point is that client and server can agree with
+#     themselves and disagree with each other. Exit 1, as before.
+if [ ! -d ../server ]; then
+    echo "  NOT AVAILABLE HERE: the server is not part of this repository."
+    echo "  §5.2's cross-implementation check runs in the private monorepo, where"
+    echo "  the Go server reads the same frozen file: client/test/vectors/lpm.json."
+    echo "  Every client suite above passed."
+    echo
+    echo "all client suites passed"
+    exit 0
+elif command -v go >/dev/null 2>&1; then
     ( cd ../server && go test ./internal/api/ -run TestProtocolVectors -count=1 )
 else
     echo "  SKIPPED: no Go toolchain here." >&2
