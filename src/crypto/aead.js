@@ -14,9 +14,26 @@ const subtle = globalThis.crypto.subtle;
 export const IV_LENGTH = 12;
 export const TAG_LENGTH = 16;
 
+/**
+ * The key, as WebCrypto wants it.
+ *
+ * ⚠️⚠️ A `CryptoKey` IS PASSED STRAIGHT THROUGH, AND THAT PATH IS THE POINT. §7.7
+ * requires `roster_key` to be produced by `deriveKey` and to exist *"never as
+ * bytes"*; a `seal`/`open` pair that could only take a `Uint8Array` would force
+ * every caller to materialise it, which is exactly what the client did until
+ * 2026-08-24 and exactly what the table said it did not. So the raw form is still
+ * accepted — `local_key` and the message vault genuinely come out of the Argon2 heap
+ * as bytes and §7.7's table says so plainly — and the derived form costs nothing.
+ *
+ * ⚠️ A `CryptoKey` ARRIVES WITH ITS USAGES ALREADY FIXED and this function cannot
+ * widen them. `hkdfKey` is called with both, so a key that reaches here can do both;
+ * a caller that supplied a narrower one gets WebCrypto's own refusal, which names
+ * the operation.
+ */
 async function importKey(key, usage) {
+  if (key instanceof CryptoKey) return key;
   if (!(key instanceof Uint8Array) || key.length !== 32) {
-    throw new RangeError("aead: key must be 32 bytes (AES-256)");
+    throw new RangeError("aead: key must be 32 bytes (AES-256) or a CryptoKey");
   }
   return subtle.importKey("raw", key, "AES-GCM", false, [usage]);
 }

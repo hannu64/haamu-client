@@ -129,4 +129,119 @@ section("the ending page speaks the language the person was just reading (D-159)
   );
 }
 
+// ═══════════════════════════════════ §3.5 — the one alarm, and why it cannot be dismissed
+
+section("§3.5 — the tripwire is recorded on the channel, not held on a screen");
+
+{
+  const src = code("../app/app.js");
+  const html = read("../app/index.html");
+  const flowRoster = code("../src/flow/roster.js");
+  const flowGhost = code("../src/flow/ghost.js");
+
+  /**
+   * ⚠️⚠️ THE RULE IS "RECORDED", NOT "SHOWN", AND UNTIL 0.9.22 ONLY THE SECOND HALF
+   * EXISTED. §3.5 has always required a *"prominent, non-dismissable warning naming
+   * the channel"*. The client showed one on the pairing screen and then every one of
+   * §3.6.2's three answers called `show("tripwire", false)` — so the product's only
+   * intrusion alarm was cleared by pressing a button the product itself offers,
+   * including *"not yet"*, which §3.6.2 expressly permits. Nothing was written down.
+   *
+   * So the rule tested here is about WHERE THE EVIDENCE GOES: the act that creates
+   * the channel carries it, because a second write is a window in which the channel
+   * exists and its alarm does not.
+   */
+  for (const [what, needle] of [
+    ["the roster channel", /addChannel\(\{[^}]*tripwire/],
+    ["the Ghost channel", /setChannel\(\{[^}]*tripwire/],
+  ]) {
+    check(`⭐⭐ ${what} is created carrying §3.5's evidence`, needle.test(src));
+  }
+
+  /**
+   * ⚠️ AND IT IS THE **VERIFIED** FLAG THAT IS RECORDED. The server raises `tripwire`
+   * whenever a second claim arrives and cannot do better — it has no key to check one
+   * with. An unverified flag means somebody who watched `pairing_id` go past forged a
+   * claim: a nuisance, not an interception. Recording that one would put a permanent
+   * alarm on an untouched channel at the choice of anyone who can see a request line,
+   * which §3.5 spends a paragraph saying must never happen.
+   */
+  check(
+    "⭐⭐⭐ and what is recorded is the VERIFIED flag, never the bare one",
+    /tripwire\s*=\s*Boolean\(result\.tripwire\?\.verified\)/.test(src)
+  );
+
+  /**
+   * ⚠️⚠️ NON-DISMISSABLE, TESTED AS THE ABSENCE OF EVERY WAY TO DISMISS IT rather than
+   * as the presence of today's code. Three separate things would each defeat it, and a
+   * check that looked only at the render call would miss two of them.
+   */
+  /**
+   * ⚠️⚠️ TO THE SEMICOLON, NOT TO THE FIRST `)`. This read `[^)]*\)` for one round and
+   * a mutation walked straight through it: the argument is `Boolean(entry.tripwire)`,
+   * so the first closing parenthesis is INSIDE it, and the pattern stopped there —
+   * `&& !verified` appended afterwards was never in the text being checked. The
+   * mutation passed, which is the only reason this is right now.
+   * ➡️ A pattern that cannot span a nested construct silently checks a prefix.
+   */
+  const clears = [...src.matchAll(/show\("chat-tripwire"[^;]*;/g)].map((m) => m[0]);
+  equal("⚠️ the chat alarm is rendered in exactly one place", clears.length, 1);
+  check(
+    "⭐⭐ and that place reads the CHANNEL's stored evidence",
+    /entry\.tripwire/.test(clears[0] ?? "")
+  );
+  check(
+    "⭐⭐⭐ it is not gated on `verified` — comparing digits does not un-hold a link",
+    !/verified/.test(clears[0] ?? "")
+  );
+  check(
+    "⭐⭐ nor on `closed` — how a conversation was OBTAINED outlives the other end leaving",
+    !/closed/.test(clears[0] ?? "")
+  );
+
+  /**
+   * ⚠️ THE STORAGE SIDE OF THE SAME RULE. `setVerified` has no inverse for §3.6.2's
+   * reason and `setTripwire` has none for §7.3.1 rule 7's; an assignment of `false`
+   * anywhere but the creation default would be an un-marking that survives on one
+   * device and is undone by the next merge — worse than not offering it at all.
+   */
+  /**
+   * ⚠️ THE DESTRUCTURING DEFAULT `{ tripwire = false }` IS NOT A CLEARING PATH and an
+   * earlier version of this check could not tell the two apart — it read the creation
+   * signature as the defect. What is forbidden is writing `false` over a STORED value,
+   * which in this codebase can only be a property assignment, a literal in an object
+   * being persisted, or a delete. A parameter default has neither a dot nor a colon
+   * in front of it, which is what separates them.
+   */
+  const CLEARS = [
+    /\.tripwire\s*=\s*(?:false|0|null|undefined)/g, //   entry.tripwire = false
+    /tripwire\s*:\s*(?:false|0|null|undefined)/g, //      { tripwire: false }
+    /delete\s+[\w.]*\.tripwire/g, //                     delete c.tripwire
+  ];
+  for (const [file, src2] of [["flow/roster.js", flowRoster], ["flow/ghost.js", flowGhost]]) {
+    const falses = CLEARS.flatMap((re) => [...src2.matchAll(re)].map((m) => m[0]));
+    equal(`⭐⭐ \`${file}\` has no path that clears the evidence`, falses.join(" | "), "");
+  }
+
+  // ⚠️ AND THE PATTERNS ARE ALIVE. Three regexes that matched nothing anywhere would
+  // pass the two checks above on an empty file, which is the way an absence-check rots.
+  const canary = "x.tripwire = false; ({ tripwire: null }); delete y.tripwire;";
+  equal(
+    "⚠️ each clearing pattern still recognises the thing it forbids",
+    CLEARS.filter((re) => new RegExp(re.source).test(canary)).length,
+    CLEARS.length
+  );
+  check("and it has a path that sets it", /setTripwire/.test(flowRoster) && /setTripwire/.test(flowGhost));
+
+  /**
+   * ⚠️ IT IS AN `alarm`, AND THAT IS A CLAIM ABOUT EVERY OTHER BANNER. `chat-unverified`
+   * is deliberately quiet because it appears on every ordinary conversation, and an
+   * alarm shown everywhere is an alarm trained away before the day it matters. This one
+   * appears only where a second holder of the invite link is a measured fact.
+   */
+  const el = html.match(/<div id="chat-tripwire"[^>]*>/)?.[0] ?? "";
+  check("⭐⭐ the chat alarm exists and is styled as an alarm", /class="[^"]*\balarm\b/.test(el));
+  check("⚠️ and it starts hidden, like every other banner", /\bhidden\b/.test(el));
+}
+
 done();

@@ -733,13 +733,70 @@ check(
   copy.closing.notSent
 );
 
-check(
-  "⚠️ nothing in the closing copy claims the other person SAW it",
-  !/(seen|read it|received|delivered|arrived)/i.test(
-    `${copy.closing.willTell} ${copy.closing.sent}`
-  ),
-  `${copy.closing.willTell} ${copy.closing.sent}`
-);
+/**
+ * ⭐⭐⭐ §6.7.1 RULE 2, WRITTEN FROM THE RULE — AND THE OLD CHECK IS WHY THAT MATTERS.
+ *
+ * The rule is one sentence: *"One bounded attempt, and a failure MUST NOT block or
+ * delay the removal … the copy MUST NOT promise it was delivered."* The check that
+ * stood here read `!/(seen|read it|received|delivered|arrived)/` over two strings —
+ * a **vocabulary**, not the rule — and directly underneath it `closing.sent` said
+ * ***"The other person has been told"***, which promises delivery in words the list
+ * did not contain. It passed for as long as it existed. The outside review of
+ * 2026-08-24 found four such sentences, and two more guards further down this file
+ * were REQUIRING two of them.
+ *
+ * ⚠️ SO IT IS THE WHOLE FAMILY, NOT TWO STRINGS. Every sentence the product says
+ * about a closing notice is scanned: both closing sentences, both panic reports, and
+ * the confirmation. A new one is caught by being in the family, not by being added
+ * to a list.
+ *
+ * ⚠️⚠️ AND IT FORBIDS THE CLAIM IN BOTH DIRECTIONS. A send that fails locally cannot
+ * tell "never arrived" from "arrived, answer lost", so *"nothing reached them"* is
+ * exactly as unsupported as *"they have been told"* — it was in `panic.toldNone`,
+ * and no reviewer had ever called it a delivery claim because it reads as modesty.
+ */
+{
+  const CLAIMS_DELIVERY = [
+    /\b(has|have|had|was|were|is|are)\s+(been\s+)?(told|informed|notified)\b/i,
+    /\bwill\s+be\s+(told|informed|notified)\b/i,
+    /\b(seen|read it|received|delivered|arrived|got it)\b/i,
+    /\breached\b/i,
+    /\bthey (know|knew)\b/i,
+  ];
+  const family = [
+    ["closing.willTell", copy.closing.willTell],
+    ["closing.sent", copy.closing.sent],
+    ["panic.otherSide", copy.panic.otherSide],
+    ["panic.told", copy.panic.told(3, 5)],
+    ["panic.toldNone", copy.panic.toldNone],
+  ];
+  const guilty = family.filter(([, t]) => CLAIMS_DELIVERY.some((re) => re.test(t))).map(([k]) => k);
+  equal(
+    "⭐⭐⭐ §6.7.1 rule 2 — no closing sentence claims the notice was delivered",
+    guilty.join(", "),
+    ""
+  );
+
+  /**
+   * ⚠️⚠️ THE CANARY IS THE FIVE STRINGS THAT SHIPPED, and it is the only thing that
+   * proves this guard is stronger than the one it replaced rather than merely
+   * differently worded. Each was live in the product on 2026-08-24; each must be
+   * caught. A guard for a defect that cannot reproduce the defect is a guess.
+   */
+  const SHIPPED = [
+    "The other person will be told that this conversation has ended.",
+    "The other person has been told that you ended the conversation.",
+    "The people you were talking to are told that these conversations have ended.",
+    "5 conversations deleted, and the other person was told in 3 of them.",
+    "Nobody could be told — nothing reached them, and their copies are still open.",
+  ];
+  const missed = SHIPPED.filter((t) => !CLAIMS_DELIVERY.some((re) => re.test(t)));
+  equal(
+    `⚠️ and it catches all ${SHIPPED.length} of the sentences this rule was written against`,
+    missed.join(" | "),
+    ""
+  );
+}
 
 check(
   "⭐⭐⭐ §6.7.1 rule 6 — the receiver is told their own copy is untouched",
@@ -826,6 +883,90 @@ check(
   copy.ghost.cost
 );
 
+/*
+  ⚠️⚠️⚠️ THE NEXT THREE CHECKS ARE THE ONES THAT KEPT THE FORBIDDEN CLAIM IN PLACE,
+  AND THAT IS THE FINDING RATHER THAN A CONSEQUENCE OF IT.
+
+  §7.6: *"Ghost mode's guarantee is 'nothing is written to the roster and nothing is
+  recoverable on another device'. It is NOT 'nothing is written to disk', and it is
+  NOT 'dies with the tab'."* Until 2026-08-24 the check below **required**
+  `/impossible to open/` — the second forbidden sentence, in its strongest form, made
+  mandatory by the guard whose stated subject is that exact prohibition. Four
+  sentences of Ghost copy said it, one test insisted on it, and the section they all
+  cite forbids it.
+
+  ➡️ **A GUARD AND THE THING IT GUARDS CAN AGREE WITH EACH OTHER AND BOTH DISAGREE
+  WITH THE SPECIFICATION.** Nothing inside the pair can see it: the copy passes, the
+  test passes, and the only witness is the document neither of them re-reads. An
+  outside reviewer with §7.6 and no history found it in one pass.
+
+  ⭐ AND THE HARM RAN THE OTHER WAY FROM THE USUAL OVERCLAIM. A person told the
+  conversation is impossible to open closes the laptop and walks away; Firefox's
+  session restore brings the tab back — measured in §7.6, surviving a full browser
+  restart — and hands the next person the root, the messages and the ratchet.
+*/
+
+/**
+ * Does this sentence CLAIM the conversation cannot be opened again? §7.6 forbids it
+ * of every sentence about the tab going away.
+ *
+ * ⚠️ IT IS NOT APPLIED TO `endConfirm`, AND THE EXCEPTION IS THE WHOLE POINT OF THE
+ * REPAIRED COPY. §7.8's ending clears `sessionStorage` itself (`flow/ending.js` step
+ * 3), so after the deliberate ending the claim is TRUE — and the new sentences send
+ * the reader there precisely because it is the one act that earns it.
+ */
+const claimsUnopenable = (text) =>
+  /(impossible to open|cannot be opened|can never be opened|nothing can (bring|reopen)|gone for good|lost for good|for good —|loses it for good)/i.test(
+    text
+  );
+
+/**
+ * Does it CLAIM erasure — as opposed to denying it?
+ *
+ * ⚠️⚠️ CLAUSE BY CLAUSE, BECAUSE A WORD LIST CANNOT SEE A NEGATION. The check this
+ * replaces read `!/(erase|erased|wiped|deleted|disappear)/i`, so the true sentence
+ * *"it is not erased"* failed it exactly as hard as the false one it was written to
+ * catch. ➡️ **A PATTERN THAT DOES NOT NOTICE A NEGATION FORBIDS THE HONEST SENTENCE
+ * TOO** — met twice in one day on 2026-08-24, here and in `!isGhost()`.
+ */
+const claimsErasure = (text) =>
+  text
+    .split(/[.;—:]/)
+    .some((clause) => /\b(erase[sd]?|wipe[sd]?|scrubbed|shredded|destroyed|disappears?)\b/i.test(clause) &&
+      !/\b(not|never|no|without)\b/i.test(clause));
+
+const TAB_LOSS = {
+  offer: copy.ghost.offer,
+  offerWhat: copy.ghost.offerWhat,
+  what: copy.ghost.what,
+  cost: copy.ghost.cost,
+  notErased: copy.ghost.notErased,
+};
+
+for (const [name, text] of Object.entries(TAB_LOSS)) {
+  check(`⛔⛔ \`ghost.${name}\` does not say the conversation becomes impossible to open (§7.6)`,
+    !claimsUnopenable(text), text.slice(0, 90) + "…");
+  check(`⛔ \`ghost.${name}\` does not claim erasure either`, !claimsErasure(text));
+}
+
+// ⚠️ AND THE FACT THAT REPLACES IT MUST BE PRESENT SOMEWHERE, or the copy has simply
+// gone quiet about the thing a person can act on. §7.6's measured residual is that a
+// browser which restores sessions can bring the conversation back on THIS device.
+check(
+  "⭐⭐⭐ and the copy says what §7.6 measured instead: a restoring browser can bring it back",
+  [copy.ghost.cost, copy.ghost.notErased].every((t) => /(reopen|reopens|restore|open it again)/i.test(t)),
+  copy.ghost.cost
+);
+
+// ⚠️ THE LOSS IS STILL WARNED ABOUT. D-016 measured five testers out of five losing
+// the tab, so a repair that removed the warning along with the overclaim would be a
+// different defect with better paperwork.
+check(
+  "⭐⭐ while the cost is still stated plainly — the warning was never the problem",
+  /(usually|almost always|expect)/i.test(`${copy.ghost.offer} ${copy.ghost.offerWhat} ${copy.ghost.cost}`),
+  copy.ghost.offer
+);
+
 check(
   "⭐⭐⭐ and it puts the leftover bytes on the person's own device, because that is §7.6's residual",
   // ⚠️ D-112 REVERSED THIS SENTENCE AND THE CHECK FOLLOWED THE PROPERTY, NOT THE
@@ -842,10 +983,14 @@ check(
   // Re-pointed, not relaxed (D-107): it now requires BOTH halves of §7.6's honest pair
   // — the bytes stay, and unreachability is all that is claimed — where it used to
   // accept either half on its own.
+  // ⚠️ THE THIRD CLAUSE USED TO BE `/impossible to open/` — see the block above. It is
+  // replaced by the fact §7.6 actually measured, not deleted: a sentence that dropped
+  // the false claim and said nothing in its place would leave the reader with no
+  // reason to use the ending control.
   /disk|your device/.test(copy.ghost.notErased) &&
     /not scrubbed|rather than scrubbed/.test(copy.ghost.notErased) &&
-    /impossible to open/.test(copy.ghost.notErased) &&
-    !/erased|wiped/.test(copy.ghost.notErased),
+    /(reopen|open it again)/i.test(copy.ghost.notErased) &&
+    !claimsErasure(copy.ghost.notErased),
   copy.ghost.notErased
 );
 
@@ -1242,6 +1387,44 @@ check(
   /collected it/.test(copy.server.whenItGoes) && copy.server.whenItGoes.includes(String((2 * EPOCH_SECONDS) / 86400)),
   copy.server.whenItGoes
 );
+
+/**
+ * ⭐⭐⭐ §5.4's PROMISE IS A FLOOR, AND THE COPY USED TO QUOTE THE CEILING.
+ *
+ * Both sentences said the uncollected message goes *"when the mailbox is recycled,
+ * 14 days later"* — and §5.1.1's clock starts at the MAILBOX's creation, not the
+ * message's. A message sent late in a mailbox's life gets nearer §5.4's *"at least
+ * 7 days"* than the 14 it was shown, so a person who came back on the eighth day
+ * expecting the number in front of them would find the message gone. The sentence
+ * was defensible read carefully and wrong read normally, which is the worse of the
+ * two failures for copy.
+ *
+ * ⚠️ THE CHECK IS THE FLOOR AND THE REFERENCE POINT, NOT THE WORDING. Any sentence
+ * quoting the ceiling must say what it is measured from; the number a person can
+ * rely on is the floor, so the floor has to be present at all.
+ */
+{
+  const floor = String(EPOCH_SECONDS / 86400);
+  const ceiling = String((2 * EPOCH_SECONDS) / 86400);
+  const retention = [
+    ["server.whenItGoes", copy.server.whenItGoes],
+    ["terms.server.body[2]", read(copy.terms.server.body[2])],
+  ];
+  for (const [path, text] of retention) {
+    check(
+      `⭐⭐ \`${path}\` gives the ${floor}-day floor §5.4 actually promises`,
+      new RegExp(`at least ${floor} days`).test(text),
+      text
+    );
+    // ⚠️ The ceiling may still appear — it is true and it is useful — but never as a
+    // bare "N days later", which attaches it to the message the reader is thinking about.
+    check(
+      `⚠️ and its ${ceiling}-day figure names what it is measured from`,
+      !text.includes(ceiling) || /mailbox was made|mailbox was created/.test(text),
+      text
+    );
+  }
+}
 
 // ⚠️ ROUND 4 CUT *"and it is not nothing"* AND THIS CHECK USED TO REQUIRE THOSE
 // WORDS. The requirement is not the phrase — it is that the paragraph does not
@@ -1687,6 +1870,10 @@ check(
   copy.ghost.endConfirm
 );
 
+// ⚠️ RE-POINTED (§6.7.1 rule 2, 0.9.22). Feedback 1 asked that the sentence say WHAT
+// the notice says, and that requirement is untouched by the correction above — what
+// changed is that it no longer also claims the notice arrived. The check follows the
+// property, not the words: the sentence still names what was said.
 check(
   "⭐ feedback 1 — the closing notice says what the other person was told",
   /ended the conversation/.test(copy.closing.sent),
@@ -1701,7 +1888,10 @@ check(
 
 check(
   "⚠️⚠️ and the line under it does not claim erasure, which §7.6 forbids and Hannu's draft did",
-  !/(erase|erased|wiped|deleted|disappear)/i.test(copy.ghost.offerWhat),
+  // ⚠️ NEGATION-AWARE SINCE 2026-08-24 — see `claimsErasure`. The word list this
+  // replaces failed the honest sentence *"it is not erased"* just as hard as the
+  // false one.
+  !claimsErasure(copy.ghost.offerWhat),
   copy.ghost.offerWhat
 );
 
@@ -1869,7 +2059,6 @@ section("what the third round changed");
     ["panic.reach", "conversations"],
     ["panic.told", "conversations"],
     ["panic.otherSide", "the other people — genuinely plural, one per conversation"],
-    ["panic.toldNone", "the other people"],
     ["phrase.capReached", "candidate phrases"],
     ["tabs.endUnconfirmed", "tabs"],
     ["terms.key.body.0", "the words"],
@@ -1877,6 +2066,12 @@ section("what the third round changed");
     ["terms.server.body.0", "messages"],
     ["verification.checkLater", "digits"],
     ["verification.matched", "digits"],
+    // §3.5's alarm, 2026-08-24. Both are "the six digits" — read and ruled. ⚠️ The
+    // sentence names them immediately before the pronoun in each case, which is the
+    // condition D-016b's rule actually cares about: a Finnish reader hearing a plural
+    // is right, because it IS one.
+    ["pairing.tripwire", "the six digits"],
+    ["verification.tripwire", "the six digits"],
   ]);
 
   const used = all.filter(([, s]) => /\b(they|them)\b/i.test(s));
@@ -1986,9 +2181,17 @@ check(
  * separate: `otherSide` is on the confirmation, before anything happens, and it is
  * the only one both paths through the action can show.
  */
+/**
+ * ⚠️⚠️ THIS GUARD REQUIRED THE SENTENCE §6.7.1 FORBIDS. Its label said the quiet part
+ * out loud — *"promises the other people are told"* — and rule 2 says the copy MUST
+ * NOT promise it was delivered. Feedback 5's actual request was that the bulk deletion
+ * send the notice AT ALL, which the single deletion did and it did not; that is what is
+ * checked now. The promise was never the requirement, only the shape it was first
+ * written in. ➡️ Write the guard from the spec, with the spec open.
+ */
 check(
-  "⭐⭐⭐ feedback 5 — the panic confirmation promises the other people are told",
-  /are told/.test(copy.panic.otherSide),
+  "⭐⭐⭐ feedback 5 — the panic confirmation says a closing notice goes to each person",
+  /closing notice/.test(copy.panic.otherSide) && /each person/.test(copy.panic.otherSide),
   copy.panic.otherSide
 );
 
@@ -2003,7 +2206,7 @@ check(
 
 check(
   "⚠️ the count is of notices SENT, and the sentence for none of them going says so",
-  /could be told/.test(copy.panic.toldNone) && /still open/.test(copy.panic.toldNone),
+  /could be sent/.test(copy.panic.toldNone) && /still open/.test(copy.panic.toldNone),
   copy.panic.toldNone
 );
 

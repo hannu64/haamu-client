@@ -13,6 +13,11 @@
 
 import * as stream from "../src/net/stream.js";
 import * as live from "../src/flow/live.js";
+import * as messageFlow from "../src/flow/message.js";
+import * as sessionStore from "../src/storage/sessions.js";
+import { ROLE_JOINER } from "../src/protocol/pairing.js";
+import * as olm from "../src/crypto/olm.js";
+import { readFileSync } from "node:fs";
 import { EPOCH_SECONDS, epochNumber, nextBoundary } from "../src/protocol/epoch.js";
 import { check, equal, section, rejects, done } from "./harness.mjs";
 
@@ -269,6 +274,236 @@ section("§5.4.2 — two triggers, one drain");
     ok = false;
   });
   check("a failed drain does not wedge the next one", ok);
+}
+
+// ======================================= §7.8 step 1 — asking a drain to stop is
+//                                         not the same as it having stopped
+
+/*
+  ⚠️⚠️ `idle()` EXISTS BECAUSE `run()` DELIBERATELY LIES TO ITS CALLER, and that lie
+  is the right one. A trigger arriving during a drain is COALESCED — it returns at
+  once, because three wakes during one drain are one more drain, not three (the
+  section above). So `await run()` tells a caller nothing about the drain that is
+  actually in the store right now.
+
+  §7.8 step 1 needs the opposite question. The 2026-08-24 outside review found the
+  consequence: a wake starts a drain via `void drainNow()`, the mailbox answers, and
+  while the plaintext is being written the person ends the session — `stop()` called
+  `abort()` and returned, step 3 emptied the database, and the drain that was already
+  past its abort checks wrote the conversation back in. It reappeared at the next
+  unlock.
+
+  ➡️ **A FUNCTION THAT RETURNS EARLY BY DESIGN CANNOT ALSO BE THE ANSWER TO "IS IT
+  FINISHED?"** — the two need separate handles, and the second one had never been
+  written.
+*/
+section("§7.8 step 1 — `idle()` waits for the drain that is actually running");
+
+{
+  let finished = 0;
+  let release;
+  const held = new Promise((r) => (release = r));
+  const run = live.serialiser(async () => {
+    await held;
+    finished++;
+  });
+
+  void run(); // ⚠️ the wake path: nobody holds this promise, which is the whole case
+  await tick();
+
+  let idled = false;
+  const waiting = run.idle().then(() => (idled = true));
+  await tick();
+  check("⭐⭐ idle() does NOT resolve while a drain is in the store", !idled);
+  equal("and nothing has finished yet", String(finished), "0");
+
+  release();
+  await waiting;
+  check("it resolves once the drain has finished", idled);
+  equal("and the drain really did finish", String(finished), "1");
+
+  // ⚠️ THE COALESCED RUN COUNTS TOO. A trigger that arrived mid-drain has not
+  // started when `stop()` is called, and it writes to the same store.
+  let release2;
+  const held2 = new Promise((r) => (release2 = r));
+  let done2 = 0;
+  const run2 = live.serialiser(async () => {
+    await held2;
+    done2++;
+  });
+  void run2();
+  await tick();
+  void run2(); // coalesced into a second pass
+  let idled2 = false;
+  const waiting2 = run2.idle().then(() => (idled2 = true));
+  release2();
+  await waiting2;
+  check("⭐⭐ idle() also covers the run that was coalesced into the current one", idled2);
+  equal("both passes ran", String(done2), "2");
+
+  // ⚠️ AND IT NEVER REJECTS. A drain that failed is a drain that finished, and an
+  // ending must not be abandoned half-done because the network went away.
+  const boom = live.serialiser(async () => {
+    throw new Error("network");
+  });
+  void boom().catch(() => {});
+  let survived = false;
+  await boom.idle().then(() => (survived = true), () => {});
+  check("⭐ idle() resolves rather than rejecting when the drain failed", survived);
+}
+
+/*
+  ⚠️⚠️ AND THE SAME QUESTION ASKED OF THE THING THE ENDING ACTUALLY CALLS. The block
+  above proves the mechanism; this one proves it is WIRED. That distinction is the
+  one the 2026-08-24 review kept finding — four times in one pass, a check asking
+  whether something exists rather than whether it is used — and `app/app.js`'s
+  `stopEverything` was a live example: its own header said *"it has to be awaitable,
+  because step 3 clears the database these streams write into"*, it was declared
+  `async`, every caller awaited it, and inside it called `stop()` without `await`
+  against a `stop()` that returned instantly.
+
+  ⭐ The fake below is only the TRANSPORT. Epoch derivation, request signing, the
+  serialiser and the loops are the real ones, so a `stop()` that stopped awaiting any
+  one of them fails here.
+*/
+section("§7.8 step 1 — `startLive().stop()` does not resolve until the drain has");
+
+{
+  let release;
+  const held = new Promise((r) => (release = r));
+  let reached;
+  // ⚠️ A PROMISE, NOT A COUNT OF TICKS. `drainChannel` polls three epochs (§4.1) and
+  // each mailbox is an HKDF away, so "the drain has reached the mailbox" is a good
+  // many microtasks after `startLive` returns — and a test that guessed the number
+  // would pass while the drain had not started, which is a test of nothing.
+  const atTheMailbox = new Promise((r) => (reached = r));
+  let drains = 0;
+
+  // ⚠️ THE REAL WASM, AND IT IS NOT OPTIONAL HERE. `messageFlow.receive` loads the
+  // Olm wrapper before it touches the network, so a run without it never reaches the
+  // mailbox at all — the drain fails early, `stop()` returns quickly, and the check
+  // below passes while testing nothing. Measured while writing it: exactly that.
+  await olm.initOlm({ wasm: readFileSync(new URL("../wasm/dist/lpm_olm_wasm_bg.wasm", import.meta.url)) });
+
+  const api = {
+    signed: async (method, path) => {
+      if (method === "GET" && path.endsWith("/messages")) {
+        drains++;
+        reached();
+        await held; // the mailbox does not answer until this test says so
+        return { messages: [] };
+      }
+      // Everything else — register, stream token — is refused, which puts the
+      // stream loop on the poll path and is exactly what a browser with no
+      // EventSource does. §5.3 says that is allowed to happen.
+      const err = new Error("unavailable");
+      err.reason = "unavailable";
+      throw err;
+    },
+  };
+
+  const channel = messageFlow.openChannel({
+    api,
+    backend: sessionStore.memoryBackend(),
+    pickleKey: sessionStore.randomPickleKey(),
+    channelRoot: new Uint8Array(32).fill(0x3c),
+    role: ROLE_JOINER,
+  });
+
+  const running = live.startLive(channel);
+  await atTheMailbox;
+  equal("a drain is in flight", String(drains), "1");
+
+  let stopped = false;
+  const promise = running.stop();
+  check("⭐ stop() returns something awaitable at all — it used to return undefined",
+    typeof promise?.then === "function");
+  const stopping = promise.then(() => (stopped = true));
+  for (let i = 0; i < 20; i++) await tick();
+  check("⭐⭐⭐ stop() has NOT resolved while the drain is still in the store", !stopped,
+    "this is the whole of B#2: `abort()` and return is a request, not a stop");
+
+  release();
+  await stopping;
+  check("and it resolves once the drain is finished", stopped);
+}
+
+/*
+  ⚠️⚠️⚠️ AND NOW THE DRAIN NOBODY IS AWAITING, WHICH IS THE ONE B#2 IS ACTUALLY
+  ABOUT — AND WHICH THE BLOCK ABOVE CANNOT SEE.
+
+  Up there the blocked drain was started by `streamLoop` with `await drainNow()`, so
+  the loop itself is parked on it: a `stop()` that awaited only the loops would pass
+  that test while doing nothing about `idle()`. **Measured, on 2026-08-24, by
+  mutating exactly that** — `Promise.allSettled([...loops])` alone kept all 45 checks
+  green.
+
+  ➡️ **WIDENING SOME AXES OF A GUARD MOVES THE HOLE; IT DOES NOT CLOSE IT.** The same
+  lesson as D-161's copy guard, met again in the same week, in a different file. The
+  axis that mattered here is WHO STARTED THE DRAIN.
+
+  §5.3's wake path starts one with `void drainNow()` — nobody holds that promise, by
+  design, because a wake must not block the stream it arrived on. That is the drain
+  that was writing to the database while §7.8 step 3 emptied it. So this block gets
+  the stream genuinely connected, fires a real `wake` through the fake EventSource,
+  and stops while the loops are parked inside `runOnce` rather than inside the drain.
+*/
+section("§7.8 step 1 — and the wake-path drain, which no loop is holding");
+
+{
+  let release;
+  const held = new Promise((r) => (release = r));
+  let blocking = false;
+  let reachedBlocked;
+  const atTheBlockedDrain = new Promise((r) => (reachedBlocked = r));
+
+  const api = {
+    signed: async (method, path) => {
+      if (method === "GET" && path.endsWith("/messages")) {
+        if (!blocking) return { messages: [] }; // the opening drain passes straight through
+        reachedBlocked();
+        await held;
+        return { messages: [] };
+      }
+      if (path.endsWith("/register")) return {};
+      if (path.endsWith("/stream-token")) return { token: "t" };
+      return {};
+    },
+  };
+
+  const channel = messageFlow.openChannel({
+    api,
+    backend: sessionStore.memoryBackend(),
+    pickleKey: sessionStore.randomPickleKey(),
+    channelRoot: new Uint8Array(32).fill(0x7d),
+    role: ROLE_JOINER,
+  });
+
+  last = null;
+  const running = live.startLive(channel, { eventSource: Fake });
+
+  // Wait for the connection to be opened at all, then hand it the `ready` a real
+  // server sends. That is what puts `streamLoop` inside `runOnce` instead of inside
+  // a drain — which is the whole precondition of this block.
+  for (let i = 0; i < 500 && last === null; i++) await tick();
+  check("the stream was opened", last !== null);
+  last.emit("ready");
+  for (let i = 0; i < 50 && running.state !== live.LIVE; i++) await tick();
+  equal("the stream is live, so no loop is sitting on a drain", running.state, live.LIVE);
+
+  blocking = true;
+  last.emit("wake"); // §5.3's wake → `void drainNow()`; nobody holds this promise
+  await atTheBlockedDrain;
+
+  let stopped = false;
+  const stopping = running.stop().then(() => (stopped = true));
+  for (let i = 0; i < 50; i++) await tick();
+  check("⭐⭐⭐ stop() STILL waits — for a drain no loop is holding", !stopped,
+    "awaiting the loops alone passes the block above and fails here");
+
+  release();
+  await stopping;
+  check("and it resolves once that drain is finished too", stopped);
 }
 
 done();

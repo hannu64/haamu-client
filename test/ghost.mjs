@@ -24,6 +24,7 @@ import * as store from "../src/storage/sessions.js";
 import { b64uEncode } from "../src/crypto/b64u.js";
 import { MESSAGE_TTL_S, GHOST_PREFIX } from "../src/storage/vault.js";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { check, equal, section, done, hex } from "./harness.mjs";
 
 /**
@@ -271,6 +272,78 @@ section("`discard` — the mode was opened and not used");
   equal("an id alone does not resume a session", String(await ghosts.resumable({ sessionStorage })), "false");
   await ghost.setChannel({ root: ROOT, role: "I" });
   equal("⭐ a CONVERSATION does — that is what the boot path looks for", String(await ghosts.resumable({ sessionStorage })), "true");
+}
+
+
+// ============================ §3.6.2's third answer, in the mode with no roster
+
+/*
+  ⚠️⚠️ THE CONTROL THIS GUARDS IS THE ONE NOBODY PRESSES IN TESTING. "This is not
+  the person I meant to reach" is §3.6.2's third answer and the whole reason the six
+  digits are on the screen — and until 2026-08-24 it removed nothing in Ghost mode.
+  `app/app.js` read `if (entry.local) … else if (!isGhost()) …`: two branches for
+  three modes, so Ghost fell off the end. The Olm state went, the message log went,
+  and the channel entry stayed — so `backToStart()` read it and reopened the
+  conversation with the person who had just failed the comparison, over the same
+  root, ready for the next send to establish a fresh session on it.
+
+  ➡️ **A CONDITION WITH TWO BRANCHES AND THREE MODES SILENTLY DOES NOTHING IN THE
+  THIRD.** Nothing throws, nothing is logged, and the screen afterwards looks exactly
+  like the screen you would get if it had worked.
+*/
+section("§3.6.2 — 'this is not the person' leaves no Ghost conversation behind");
+
+{
+  const store = fakeSession();
+  const g = await ghosts.openGhost({ sessionStorage: store });
+  await g.setChannel({ root: new Uint8Array(32).fill(0x11), role: "I", name: "" });
+  check("there is a conversation to remove", (await g.channel()) !== null);
+
+  await g.removeChannel();
+  equal("⭐⭐⭐ the channel entry is GONE — the boot path has nothing to reopen",
+    String(await g.channel()), "null");
+  check("⭐⭐ and `resumable()` agrees, which is what `backToStart()` asks",
+    (await ghosts.resumable({ sessionStorage: store })) === false);
+
+  // ⚠️ AND THE SESSION IS STILL A GHOST SESSION. This is not `discard()`: the same
+  // control in Kept mode returns the person to an empty list, not out of the mode.
+  const again = await g.setChannel({ root: new Uint8Array(32).fill(0x22), role: "J", name: "" });
+  check("⭐ a new conversation can still be opened in the same Ghost session", again.root !== undefined);
+
+  /*
+    ⚠️⚠️ AND IT IS CALLED. Everything above proves a remover exists and works, and a
+    remover that nothing invokes would pass every one of those checks with the defect
+    untouched — which is the shape the 2026-08-24 review found FOUR times in one pass
+    (`copy.product.endedTitle` defined in both languages and read by nothing, §2.1's
+    strip living in a function that ran minutes late, and two more).
+    ➡️ **A CHECK THAT ASKS WHETHER SOMETHING EXISTS CANNOT TELL YOU WHETHER IT IS
+    USED.** `app/app.js` cannot be imported here — it touches the document on its
+    first line — so this reads it as source, which is enough for the one question.
+  */
+  const appSrc = readFileSync(fileURLToPath(new URL("../app/app.js", import.meta.url)), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+  check("⭐⭐ `app/app.js` calls it — a remover nothing invokes is not a fix",
+    /session\.ghost\.removeChannel\(\)/.test(appSrc));
+  /*
+    ⚠️ AND THE SHAPE OF THE BRANCH, because "calls it somewhere" is not the rule.
+    Measured while mutation-testing this on 2026-08-24: a first attempt at this check
+    matched `entry.local … isGhost() … roster.removeChannel` and passed against the
+    original two-branch code, because `!isGhost()` contains `isGhost()`.
+    ➡️ **A PATTERN THAT DOES NOT NOTICE A NEGATION TESTS THE OPPOSITE RULE AS
+    HAPPILY AS THE RULE.** So the three questions are asked separately.
+  */
+  // ⚠️ ANCHORED ON THE FUNCTION, NOT ON THE FIRST `if (entry.local)`. There is an
+  // earlier one eleven thousand characters up, in the list rendering, and a slice
+  // that started there swept in half the file — including several honest
+  // `!isGhost()` guards that have nothing to do with this rule. The first attempt at
+  // this check did exactly that and reported the opposite of the truth.
+  const fn = appSrc.slice(appSrc.indexOf("async function removeConversation"));
+  const branch = fn.slice(fn.indexOf("if (entry.local)"), fn.indexOf("roster.removeChannel(rootBytesOf(entry))"));
+  check("⭐⭐ Ghost is its own branch", /else if \(isGhost\(\)\)/.test(branch));
+  check("⭐⭐ and is NOT tested by negation — that is how it fell off the end",
+    !/!isGhost\(\)/.test(branch));
+  check("⭐ and that branch removes the channel", /ghost\.removeChannel\(\)/.test(branch));
 }
 
 done();

@@ -74,12 +74,15 @@ import * as mailboxFlow from "./mailbox.js";
  *   malformed       not an envelope this version can parse
  *   unsupported     it decrypted perfectly and is from a newer version of the
  *                   client than this one (§6.7). NOT a failure — say so differently
+ *   tampered        it decrypted perfectly and §6.7.2's copy of the routing fields
+ *                   disagrees with the envelope's. Only the server can do that
  */
 export const UNDECRYPTABLE = "undecryptable";
 export const STALE_SESSION = "stale_session";
 export const REPLAYED = "replayed";
 export const MALFORMED = "malformed";
 export const UNSUPPORTED = "unsupported";
+export const TAMPERED = "tampered";
 
 /**
  * Everything the two calls below need.
@@ -250,11 +253,11 @@ async function sendOnce(channel, text, { signal, unixSeconds, kind = payloads.KI
 
   const session = existing
     ? olm.unpickle(existing.pickle, channel.pickleKey)
-    : olm.initiate(channel.channelRoot, sessionId);
+    : olm.initiate(channel.channelRoot, sessionId, channel.role);
 
   let envelope;
   try {
-    const payload = payloads.buildPayload({ text, sentAt: now, kind });
+    const payload = payloads.buildPayload({ text, sentAt: now, kind, sessionId, generation });
     const message = session.encrypt(envelopes.pad(payloads.encodePayload(payload)));
     envelope = envelopes.buildEnvelope({ sessionId, generation, type: message.type, body: message.body });
     record = withPickle(record, k, session.pickle(channel.pickleKey));
@@ -439,7 +442,11 @@ function handle(channel, record, m, epoch, now, refused) {
     try {
       const padded = session.decrypt({ type: envelope.type, body: envelope.body });
       record = withPickle(record, decision.session, session.pickle(channel.pickleKey));
-      return stage(record, m, epoch, now, read(padded, envelope));
+      // ⚠️ NO `bound` CHECK IS NEEDED HERE and its absence is deliberate: this branch
+      // adopts nothing. The session already exists and its generation is this device's
+      // own durable record of it, so §6.7.2's verdict has no state to protect — only a
+      // sentence to choose, which `result` already carries.
+      return stage(record, m, epoch, now, read(padded, envelope).result);
     } catch {
       // A failure against a session this device HAS is §5.4.2's genuine case.
       return count(record, m, epoch, now, UNDECRYPTABLE, refused);
@@ -451,14 +458,43 @@ function handle(channel, record, m, epoch, now, refused) {
   // ACCEPT — §6.3, and the only place a pre-key message may open a new session.
   let accepted;
   try {
-    accepted = olm.accept(channel.channelRoot, envelope.sessionId, {
-      type: envelope.type,
-      body: envelope.body,
-    });
+    accepted = olm.accept(
+      channel.channelRoot,
+      envelope.sessionId,
+      { type: envelope.type, body: envelope.body },
+      // ⚠️ THIS DEVICE'S PAIRING ROLE, not "the responder" — §6.2 via `crypto/olm.js`.
+      // The same value goes to `initiate`, because it is a property of the channel
+      // rather than of the direction this particular session happens to run in.
+      channel.role
+    );
   } catch {
     return count(record, m, epoch, now, UNDECRYPTABLE, refused);
   }
   try {
+    /*
+      ⚠️⚠️ THE DECRYPTION COMES FIRST AND THE ADOPTION IS CONDITIONAL ON IT — §6.7.2,
+      and this ORDER is the whole of the fix the 2026-08-24 outside review asked for.
+
+      This is the only place in the client where a value the server can alter is
+      written into durable state, and until today it was written BEFORE the plaintext
+      that authenticates it had been looked at. `olm.accept` succeeding proves the
+      BODY is genuine and says nothing whatever about `generation`, which is not an
+      input to it. So a hostile server could take one real pre-key message, change
+      `generation: 1` to `Number.MAX_SAFE_INTEGER`, and this device would decrypt it
+      happily and persist the attacker's number — where §7.3.1 rule 3's max-merge
+      makes it permanent and `nextGeneration()` can never exceed it. The channel is
+      then dead for good, including after the server becomes honest again, and the
+      only cure is to pair again.
+
+      ⭐ AND `bound` IS NOT THE SAME QUESTION AS "CAN I SHOW THIS". A payload from a
+      newer version is unrenderable and perfectly bound — it may open its session. A
+      payload from an OLDER version renders as a version notice and proves nothing
+      about its envelope — it may not. Reading one answer off the other is how the
+      check would come back on the day a `kind` is added.
+    */
+    const { bound, result } = read(accepted.plaintext, envelope);
+    if (!bound) return stage(record, m, epoch, now, result);
+
     record = sessionRules.accepted(record, {
       sessionId: envelope.sessionId,
       generation: envelope.generation,
@@ -470,7 +506,7 @@ function handle(channel, record, m, epoch, now, refused) {
     });
     const k = sessionRules.key(envelope.sessionId);
     record = withPickle(record, k, accepted.session.pickle(channel.pickleKey));
-    return stage(record, m, epoch, now, read(accepted.plaintext, envelope));
+    return stage(record, m, epoch, now, result);
   } finally {
     accepted.session.free();
   }
@@ -488,20 +524,59 @@ function withPickle(record, k, pickle) {
   return { ...record, sessions: { ...record.sessions, [k]: { ...record.sessions[k], pickle } } };
 }
 
-/** Padded bytes → §6.7's payload, or a named refusal that is not a failure. */
+/**
+ * Padded bytes → §6.7's payload, or a named refusal that is not a failure.
+ *
+ * ⚠️⚠️ IT RETURNS TWO THINGS AND THE SECOND ONE IS NOT FOR THE SCREEN. `result` is
+ * what the person is shown; `bound` is whether §6.7.2's comparison actually ran and
+ * agreed, which is the caller's permission to write anything derived from this
+ * envelope's `generation` into durable state. They are separate because they answer
+ * to different sections and disagree in both directions: a payload from a newer
+ * version cannot be RENDERED and is perfectly bound, and a payload from an older one
+ * renders as a version notice while proving nothing about the envelope it rode in.
+ *
+ * ⚠️ `bound` IS DELIBERATELY NOT PART OF `result`. `stage()` spreads the result into
+ * the staging list, and this is a decision taken once at the moment of decryption —
+ * not a fact about the message worth carrying to storage, where a later reader could
+ * mistake a stale copy of it for a fresh check.
+ */
 function read(padded, envelope) {
   let payload;
   try {
     // ⚠️ §6.5: bounds-check `true_length` before using it — `unpad` does, and the
     // field is peer-controlled.
-    payload = payloads.decodePayload(envelopes.unpad(padded));
+    //
+    // ⚠️⚠️ §6.7.2: THE ENVELOPE GOES IN. `decodePayload` has no default for it, so
+    // the comparison cannot be skipped by a caller that forgets it exists — which
+    // is what the signature it replaced allowed, and what the bug was.
+    payload = payloads.decodePayload(envelopes.unpad(padded), {
+      sessionId: envelope.sessionId,
+      generation: envelope.generation,
+    });
   } catch (err) {
-    return { failure: MALFORMED, detail: err.message };
+    return { bound: false, result: { failure: MALFORMED, detail: err.message } };
+  }
+  if (payload instanceof payloads.MisboundPayload) {
+    // The ratchet worked and the two copies disagree, so the envelope was rewritten
+    // between the sender and here. Nothing but the server is in that position.
+    return {
+      bound: false,
+      result: {
+        failure: TAMPERED,
+        detail: `${payload.field}: envelope ${payload.claimed}, message ${payload.sealed}`,
+      },
+    };
   }
   if (payload instanceof payloads.UnsupportedPayload) {
-    return { failure: UNSUPPORTED, detail: `${payload.unsupported}: ${payload.detail}` };
+    return {
+      bound: payload.bound,
+      result: { failure: UNSUPPORTED, detail: `${payload.unsupported}: ${payload.detail}` },
+    };
   }
-  return { payload, sessionId: b64uEncode(envelope.sessionId), generation: envelope.generation };
+  return {
+    bound: true,
+    result: { payload, sessionId: b64uEncode(envelope.sessionId), generation: envelope.generation },
+  };
 }
 
 /**

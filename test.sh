@@ -23,6 +23,24 @@ echo "=== session.mjs — §6.3's session rules and §6.7's payload ==="
 node test/session.mjs
 
 echo
+echo "=== binding.mjs — §6.7.2, over a hostile mailbox with no server ==="
+# ⚠️⚠️ THE ONLY THING FAKED HERE IS THE TRANSPORT, and that is what lets a security
+# property be guarded where a stranger will actually run it. `e2e-message.mjs` proves
+# the honest path against the real Go server and CANNOT run in the published client
+# repository — there is no `../server` there, and the tail of this script says so and
+# exits 0. A generation the server rewrote in transit must never reach the roster; that
+# rule would otherwise be guarded only in a file the public repository skips.
+node test/binding.mjs
+
+echo
+echo "=== inflight.mjs — §3.4.1b, when the browser refuses to save the record ==="
+# ⚠️ Same reason as `binding.mjs` above: the real `initiate` runs against a fake api,
+# so the property — that a device which could not save its half of a pairing SAYS so
+# before the other party is committed — is guarded in a file a stranger who clones the
+# public repository actually runs. `e2e-pair.mjs` needs ../server and is skipped there.
+node test/inflight.mjs
+
+echo
 echo "=== stream.mjs — §5.3's transport policy ==="
 # No browser, no server, no clock: a network that accepts connections and drops
 # them two seconds later, a socket that is open and black-holed, and an epoch

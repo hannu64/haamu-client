@@ -157,15 +157,16 @@ function wrapWebStorage(webStorage) {
         return null;
       }
     },
+    /**
+     * ⚠️⚠️ IT THROWS NOW, AND THE COMMENT THAT USED TO SIT HERE WAS HALF RIGHT.
+     * It said *"nothing to do and nothing to report"*: the first half stands —
+     * failing the pairing over a full quota would be worse — but the second half was
+     * the defect. `saveInFlight` turns this into a boolean and the interface says so,
+     * because §3.4.1b requires the interface to AGREE WITH THE RECORD, and
+     * `keepOpen.kept` promises in as many words that closing the browser is safe.
+     */
     async set(_key, value) {
-      // Full, refused, or serialising something unserialisable. Pairing still works
-      // for as long as the tab lives; it just stops surviving a discard. Failing the
-      // pairing over it would be worse.
-      try {
-        webStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-      } catch {
-        /* nothing to do and nothing to report */
-      }
+      webStorage.setItem(STORAGE_KEY, JSON.stringify(value));
     },
     async delete() {
       try {
@@ -198,10 +199,27 @@ function webStorageOrNull(storage) {
   }
 }
 
-/** Persist the in-flight session. `pairing_id` is not stored — it derives from L. */
+/**
+ * Persist the in-flight session. `pairing_id` is not stored — it derives from L.
+ *
+ * ⭐⭐ RETURNS WHETHER THE RECORD IS ACTUALLY THERE, AND THAT IS THE WHOLE FIX.
+ * It swallowed every failure and returned nothing, so a device with a full or
+ * refused store published its commitment, displayed a link good for §3.4.1b's whole
+ * TTL, and told the person — in `keepOpen.kept`, in as many words — that closing the
+ * browser was safe and they could carry on next time they typed their KEY. There was
+ * no record to carry on from. The friend waits on a session the initiator can never
+ * complete, and nothing anywhere said so.
+ *
+ * ⚠️ IT IS STILL NOT FATAL, AND THAT PART OF THE OLD REASONING WAS RIGHT. A browser
+ * refusing storage can complete a pairing perfectly well inside one tab; refusing to
+ * pair at all would take the product away from the people most likely to be using a
+ * locked-down browser. **The failure is reported, not raised** — §3.4.1b rule 10's
+ * own principle, that a client which cannot classify keeps working and tells the
+ * truth about what it has.
+ */
 async function saveInFlight(storage, { role, linkSecret, privateKey, expiresAt }) {
   const s = recordStore(storage);
-  if (!s) return;
+  if (!s) return false;
   try {
     await s.set(INFLIGHT_KEY, {
       v: 1,
@@ -210,10 +228,10 @@ async function saveInFlight(storage, { role, linkSecret, privateKey, expiresAt }
       priv: b64uEncode(privateKey),
       expires_at: expiresAt,
     });
+    return true;
   } catch {
-    // Full, refused, or a store that is not answering. Pairing still works for as
-    // long as the tab lives; it just stops surviving a discard. Failing the pairing
-    // over it would be worse.
+    // Full, refused, or a store that is not answering.
+    return false;
   }
 }
 
@@ -957,7 +975,12 @@ export async function initiate({ api, origin, storage, signal, as = "link", onEv
   // Stored BEFORE the offer goes out. If the page is discarded between the two,
   // the worst case is an unclaimed session that expires with the link; stored
   // after, the worst case is a live link this device can no longer complete.
-  await saveInFlight(storage, { role: pairing.ROLE_INITIATOR, linkSecret, privateKey, expiresAt });
+  // ⚠️ THE EVENT GOES OUT BEFORE THE OFFER DOES, for the same reason the write does:
+  // everything after this line is visible to the other party, and a person deciding
+  // whether to keep a tab open needs to know before the link exists, not after.
+  if (!(await saveInFlight(storage, { role: pairing.ROLE_INITIATOR, linkSecret, privateKey, expiresAt }))) {
+    onEvent({ type: "not_durable", role: pairing.ROLE_INITIATOR });
+  }
 
   try {
     const solution = await solveProofOfWork(api, signal, onEvent);
@@ -1131,7 +1154,9 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
     );
     // ⚠️ Since 0.8.5 J holds its private key until the reveal (§3.4.1), so it
     // needs the same survivable storage the initiator has always needed.
-    await saveInFlight(storage, { role: pairing.ROLE_JOINER, linkSecret, privateKey, expiresAt });
+    if (!(await saveInFlight(storage, { role: pairing.ROLE_JOINER, linkSecret, privateKey, expiresAt }))) {
+      onEvent({ type: "not_durable", role: pairing.ROLE_JOINER });
+    }
 
     // ⚠️⚠️ `publicKey`, NOT `heldHere.privateKey` — THE KEY THIS CALL JUST SAVED, NOT THE
     // ONE IT ENTERED WITH. The 409 handler used to ask `heldHere`, which is the record

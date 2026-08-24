@@ -59,6 +59,7 @@ export const FI = {
   "chat.thisOne": "Tämä keskustelu",
   "chat.unsupported": "Saapui viesti, joka on lähetetty tätä uudemmasta sovelluksen versiosta.",
   "chat.undecryptable": "Saapui viesti, jota tämä laite ei osaa lukea. Se lähetettiin ennen kuin tämä laite palautettiin.",
+  "chat.tampered": "Saapui viesti, jonka osoitetiedot oli muutettu matkalla. Sisältö pysyi salattuna eikä kukaan muu päässyt lukemaan sitä — mutta tämä laite ei toimi sellaisen viestin perusteella, jota palvelin on muuttanut. Pyydä ystävääsi lähettämään se uudestaan.",
   "chat.staleSession": "Yksi viesti on kadonnut. Se saapui ennen kuin tämä keskustelu muodostettiin uudelleen — pyydä ystävääsi lähettämään se uudestaan.",
   "chat.reconnect.what": "Lähetä viesti, niin tämä keskustelu kytkeytyy uudelleen.",
   "chat.reconnect.cost": "Ennen kuin lähetät uuden viestin, et voi vastaanottaa viestejä ystävältäsi.",
@@ -78,8 +79,8 @@ export const FI = {
   "chat.notSent": "Lähetys ei onnistunut. Yritä uudelleen.",
 
   // ── closing
-  "closing.willTell": "Toiselle henkilölle kerrotaan, että tämä keskustelu on loppunut.",
-  "closing.sent": "Toiselle henkilölle on kerrottu, että lopetit keskustelun.",
+  "closing.willTell": "Yritämme kerran lähettää toiselle henkilölle ilmoituksen, että tämä keskustelu on loppunut.",
+  "closing.sent": "Lopetusilmoitus lähetettiin, ja siinä kerrotaan, että lopetit keskustelun.",
   "closing.notSent": "Keskustelu on poistettu täältä, mutta toiselle henkilölle ei saatu kerrottua — mikään ei mennyt perille. Hänen kopionsa on yhä auki hänen laitteellaan.",
   "closing.theyLeft": "Tämä keskustelu on loppunut.",
   "closing.theyLeftWhat": "Toinen henkilö lopetti sen, ja hänen kopionsa siitä on poissa. Tänne ei voi enää lähettää mitään.",
@@ -112,11 +113,11 @@ export const FI = {
   // ── ghost
   "ghost.title": "Haamu-tila",
   "ghost.duplicatedTitle": "Tämä välilehti on kopio",
-  "ghost.offer": "Haamu-tila — ei AVAINTA, ja kun tämä välilehti suljetaan, keskustelu on poissa",
-  "ghost.offerWhat": "Haamu-keskustelua ei koskaan lisätä yhteystietoihisi. Välilehden sulkeminen hävittää sen lopullisesti — missään ei ole mitään, mikä voisi tuoda sen takaisin.",
-  "ghost.what": "Tämä keskustelu pysyy tässä selaimen välilehdessä. Sitä ei koskaan lisätä keskustelulistaan, joten palvelimella ei ole mitään, mikä yhdistäisi sen sinuun, eikä sitä voi avata toisella laitteella.",
-  "ghost.cost": "Jos tämä välilehti sulkeutuu tai selain pysähtyy, keskustelu on poissa. AVAINTA ei ole eikä kopiota ole missään muualla, joten mikään ei voi tuoda sitä takaisin.",
-  "ghost.notErased": "Kun tämä välilehti on auki, selain kirjoittaa laitteellesi. Sitä ei voi estää. Keskustelua ei kaavita pois laitteeltasi, mutta sitä on mahdotonta avata. Jos haluat: tyhjennä tämän sivuston tiedot selaimesi asetuksista.",
+  "ghost.offer": "Haamu-tila — ei AVAINTA, ja jos tämä välilehti menee, keskustelu menee yleensä sen mukana",
+  "ghost.offerWhat": "Haamu-keskustelua ei koskaan lisätä yhteystietoihisi, eikä se koskaan päädy muille laitteillesi. Välilehden sulkeminen hävittää sen lähes aina — mutta sitä ei pyyhitä pois, joten lopeta se tarkoituksella.",
+  "ghost.what": "Tämä keskustelu pysyy tässä selaimen välilehdessä. Sitä ei koskaan lisätä keskustelulistaan, joten palvelimella ei ole siitä merkintää muiden keskustelujesi rinnalla, eikä sitä voi avata toisella laitteella. Sen minkä palvelin näkee mistä tahansa keskustelusta, se näkee myös tästä.",
+  "ghost.cost": "Jos tämä välilehti sulkeutuu, varaudu siihen, että keskustelu on poissa: AVAINTA ei ole eikä kopiota ole millään muulla laitteella. Selain, joka avaa välilehtesi uudelleen, voi joskus tuoda sen takaisin tälle laitteelle, joten ainoa varma tapa on lopettaa se tarkoituksella.",
+  "ghost.notErased": "Kun tämä välilehti on auki, selain kirjoittaa laitteellesi. Sitä ei voi estää. Keskustelua ei kaavita pois laitteeltasi, kun välilehti menee, ja selain, joka avaa välilehtesi uudelleen, voi joskus avata sen täällä uudestaan. Jos haluat sen pois: lopeta se tarkoituksella ja tyhjennä sitten tämän sivuston tiedot selaimesi asetuksista.",
   "ghost.start": "Luo kutsulinkki",
   "ghost.noStore": "Tämä selain ei anna tämän sivun säilyttää mitään, ei edes yhden välilehden ajan, joten keskustelulla ei ole paikkaa missä olla. AVAIMEN käyttöönotto toimii sen sijaan.",
   "ghost.linkElsewhere": "Haamu-keskusteluja voi olla vain yksi jokaista välilehteä kohti. Avaa kutsulinkki uudessa välilehdessä tai lopeta tämä ensin.",
@@ -201,6 +202,7 @@ export const FI = {
   "pairing.linkIsOnce": "Tämä kutsulinkki toimii kerran, yhdelle henkilölle, 24 h ajan. Lähetä se niin kuin tavallisestikin puhut sen henkilön kanssa.",
   "pairing.keepOpen.kept": "Kutsulinkki toimii 24 h. Jos muutat mielesi tai se meni jonnekin minne et tarkoittanut, peruuta se. Jos suljet tämän selaimen ennen kuin ystäväsi avaa sen, kutsulinkki toimii yhä loppuajan — seuraavan kerran kun kirjoitat AVAIMESI, voit jatkaa sen kanssa tai peruuttaa sen silloin.",
   "pairing.keepOpen.ghost": "Pidä tämä välilehti auki, kunnes ystäväsi on avannut sen. Haamu-tilassa tämä välilehti pitää hallussaan sinun puoltasi pariliitoksesta — jos suljet sen, kutsulinkkiä ei voi viedä loppuun ja tarvitsette kumpikin uuden.",
+  "pairing.notDurable": "Tämä selain ei antanut tämän sivun tallentaa sinun puoltasi pariliitoksesta. Pidä tämä välilehti auki, kunnes pariliitos on valmis — jos se sulkeutuu, teidän molempien on aloitettava alusta.",
   "pairing.waiting": "Odotetaan, että ystäväsi avaa sen…",
   "pairing.step.preparing": "Valmistellaan kutsulinkkiä…",
   "pairing.step.finishing": "Viimeistellään",
@@ -248,7 +250,7 @@ export const FI = {
   "pairing.interruptedTitle": "Pariliitos keskeytyi",
   "pairing.failureUnknown": "Jokin meni vikaan ennen kuin pariliitos valmistui.",
   "pairing.interruptedUnknown": "Pariliitos pysähtyi ennen kuin se valmistui. Kutsulinkki on yhä hyvä ja tällä selaimella on yhä se mitä tarvitaan, joten voit jatkaa.",
-  "pairing.tripwire": "Joku muu yritti avata tämän kutsulinkin ennen sitä henkilöä, jolle sen lähetit. Itse pariliitos on kunnossa, mutta joku on nähnyt linkin. Mieti, onko sillä merkitystä.",
+  "pairing.tripwire": "Joku muu yritti avata tämän kutsulinkin. Keskustelu meni sille, joka vastasi ensin, eikä mikään täällä kerro, oliko se ystäväsi. Vertaile kuusi numeroa ennen kuin luotat tähän keskusteluun, ja poista se, jos ne eivät täsmää.",
   "pairing.failure.link_malformed": "Tämä kutsulinkki on vaillinainen — #-merkin jälkeinen osa puuttuu. Pyydä uusi.",
   "pairing.failure.code_malformed": "Koodissa on 16 merkkiä. Vertaa siihen, mitä ystäväsi luki — koodissa ei koskaan ole kirjaimia I tai L eikä numeroa 1, joten jokin sellainen on jotain muuta. Nolla siinä missä kuulit Oscarin on aivan oikein.",
   "pairing.failure.offer_unverified": "Se mitä palvelin tarjoaa, ei täsmää tämän kutsulinkin kanssa. Älä jatka: tämä on joko vioittunut kutsulinkki tai palvelin, joka työntää väliin jotain omaansa.",
@@ -268,10 +270,10 @@ export const FI = {
   "panic.ask": "Kirjoita AVAIMESI vahvistukseksi. Tätä ei voi perua.",
   "panic.reach": "Tämä poistaa itse keskustelulistasi, joten jokainen laitteesi, joka sen jälkeen kysyy sitä palvelimelta, pudottaa ne. Laite joka on sammutettu, poissa verkosta tai vain jatkaa jo hallussaan olevia keskusteluja, ei ehkä koskaan kysy — ja siihen asti se näyttää yhä sen mitä sillä oli.",
   "panic.keeps": "Poistettujen keskustelujen päivämäärät tallennetaan AVAIMESI taakse. Niitä ei näytetä millään ruudulla.",
-  "panic.otherSide": "Henkilöille joiden kanssa puhuit kerrotaan, että nämä keskustelut ovat loppuneet. Tämä ei poista mitään heidän laitteiltaan eikä pysäytä mitään, mikä on jo matkalla heille.",
+  "panic.otherSide": "Lopetusilmoitus lähetetään jokaiselle, jonka kanssa puhuit. Tämä ei poista mitään heidän laitteiltaan eikä pysäytä mitään, mikä on jo matkalla heille.",
   "panic.survives": "AVAIMESI toimii tämän jälkeenkin ja avaa tyhjän listan. Tämä poistaa keskustelut, ei AVAINTASI.",
   "panic.done": "Keskustelusi on poistettu listalta. Tämä laite on tyhjennetty.",
-  "panic.toldNone": "Keskustelut poistettiin. Kenellekään ei saatu kerrottua — mikään ei mennyt perille, ja heidän kopionsa ovat yhä auki heidän laitteillaan.",
+  "panic.toldNone": "Keskustelut poistettiin. Lopetusilmoitusta ei saatu lähetettyä, ja heidän kopionsa ovat yhä auki heidän laitteillaan.",
   "panic.fromGate": "Minun täytyy poistaa jokainen keskustelu",
 
   // ── phrase
@@ -320,7 +322,7 @@ export const FI = {
 
   // ── server
   "server.cannotRead": "Viestit menevät palvelimelle salattuina. Palvelimella on 3 asiaa: [postilaatikko](mailbox) eli luotu tunnusnumero, yksi julkinen arvo ja salattu viesti. Mikään, millä sen voisi avata, ei koskaan päädy palvelimelle, joten se ei pysty lukemaan keskusteluasi.",
-  "server.whenItGoes": "Viesti poistetaan palvelimelta sillä hetkellä, kun vastaanottajan laite on hakenut sen. Kaikki hakematta jäänyt poistetaan, kun postilaatikko kierrätetään 14 päivän kuluttua.",
+  "server.whenItGoes": "Viesti poistetaan palvelimelta sillä hetkellä, kun vastaanottajan laite on hakenut sen. Kaikkea hakematta jäänyttä säilytetään vähintään 7 päivää, ja se poistetaan, kun postilaatikko kierrätetään — 14 päivää sen jälkeen, kun postilaatikko luotiin.",
   "server.list": "Keskustelulistasi säilytetään myös palvelimella, salattuna AVAIMESI alle ja arkistoituna numeron alle. Ei puhelinta, ei nimeä, ei sähköpostiosoitetta — eikä palvelin pysty lukemaan sitäkään.",
   "server.metadata": "Palvelin näkee, että jokin postilaatikko — luotu tunnusnumero — vastaanotti jonkin kokoisen salatun viestin jollain hetkellä. Se on [metatietoa](metadata): ei luettavaa tekstiä, ei nimeä, ei sähköpostiosoitetta. Jokaisen viestejä välittävän palvelimen on tiedettävä ainakin tuon verran.",
   "server.ghostAdds": "Tässä tilassa tuohon listaan ei kirjoiteta mitään, joten palvelimella ei ole mitään, mikä yhdistäisi tämän keskustelun mihinkään henkilöllisyyteesi.",
@@ -359,7 +361,7 @@ export const FI = {
   "terms.server.title": "Mitä palvelimella on",
   "terms.server.body.0": "Viestit salataan laitteellasi ennen kuin ne lähtevät minnekään, ja puretaan ystäväsi laitteella. Välissä palvelimella on postilaatikko — luotu tunnusnumero — yksi julkinen arvo, joka jäi keskustelun muodostamisesta, ja itse salattu viesti.",
   "terms.server.body.1": "Mikään, millä sen voisi purkaa, ei koskaan päädy palvelimelle. Jos joku varastaisi palvelimen, siellä ei yksinkertaisesti ole mitään, millä viestin lukisi.",
-  "terms.server.body.2": "Viesti poistetaan sillä hetkellä, kun ystäväsi laite on hakenut sen ja ilmoittanut siitä. Kaikki hakematta jäänyt poistetaan, kun postilaatikko kierrätetään 14 päivän kuluttua.",
+  "terms.server.body.2": "Viesti poistetaan sillä hetkellä, kun ystäväsi laite on hakenut sen ja ilmoittanut siitä. Kaikkea hakematta jäänyttä säilytetään vähintään 7 päivää, ja se poistetaan, kun postilaatikko kierrätetään — 14 päivää sen jälkeen, kun postilaatikko luotiin.",
   "terms.server.body.3": "Keskustelulistasi säilytetään myös palvelimella, jotta muut laitteesi löytävät sen. Se on salattu AVAIMESI alle ja arkistoitu numeron alle — ei puhelinta, ei nimeä, ei sähköpostiosoitetta — eikä palvelin pysty lukemaan sitäkään.",
   "terms.mailbox.label": "postilaatikko",
   "terms.mailbox.title": "Postilaatikko",
@@ -391,6 +393,8 @@ export const FI = {
 
   // ── verification
   "verification.unverified": "[Kuutta numeroa](six-digits) ei ole vertailtu tässä keskustelussa.",
+  "verification.tripwireTitle": "Joku muu avasi tämän keskustelun kutsulinkin",
+  "verification.tripwire": "Joku muu kuin ystäväsi sai tämän kutsulinkin ja yritti käyttää sitä. Keskustelu meni sille, joka vastasi ensin, eikä mikään täällä kerro, onko tämä ystäväsi.\n\nVertaile [kuusi numeroa](six-digits) ystäväsi kanssa ääneen. Jos ne täsmäävät, tämä on ystäväsi. Jos eivät täsmää, poista tämä keskustelu ja muodosta pariliitos uudelleen uudella kutsulinkillä, joka lähetetään eri tavalla.\n\nTämä ilmoitus säilyy, kunnes keskustelu poistetaan. Numeroiden vertailu ei poista sitä: se kertoo, kuka on toisessa päässä — ei sitä, ettei kukaan muu ole koskaan pitänyt kutsulinkkiä hallussaan.",
   "verification.check": "Vertaile kuusi numeroa",
   "verification.checkLater": "Nämä ovat samat kuusi numeroa kuin keskustelun alkaessa. Lue ne ystävällesi ja vertailkaa.",
   "verification.matched": "Ne ovat samat",
@@ -523,7 +527,7 @@ export const FI_BUILT = {
   // inflect, so that becomes *3:ssa niistä*, a written form nobody wants in a warning.
   // Putting the noun back after the digit gives the case somewhere to live.
   "panic.told": (n, of) =>
-    `${count(of, "keskustelu", "keskustelua")} poistettu, ja toiselle henkilölle kerrottiin ${n} keskustelussa.`,
+    `${count(of, "keskustelu", "keskustelua")} poistettu, ja lopetusilmoitus lähetettiin toiselle henkilölle ${n} keskustelussa.`,
 
   // ── phrase
   // ⭐ The zero branch is its own sentence and had never been on a review sheet in any of

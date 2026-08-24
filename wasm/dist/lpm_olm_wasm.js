@@ -88,13 +88,18 @@ export class LpmSession {
         wasm.__wbg_lpmsession_free(ptr, 0);
     }
     /**
-     * Role J (§6.2). Accepts the first message and returns its plaintext.
+     * Accept the first message on a session and return its plaintext (§6.2).
+     *
+     * ⚠️ `role` IS THIS DEVICE'S PAIRING ROLE, as above. §6.2's single `otk` is
+     * per-`session_id` rather than per-role, so it belongs to whichever party is
+     * RESPONDING on that session — which is this one, whatever its pairing role.
      * @param {Uint8Array} root
      * @param {Uint8Array} session_id
      * @param {string} message
+     * @param {string} role
      * @returns {LpmAccepted}
      */
-    static accept(root, session_id, message) {
+    static accept(root, session_id, message, role) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passArray8ToWasm0(root, wasm.__wbindgen_export3);
@@ -103,7 +108,9 @@ export class LpmSession {
             const len1 = WASM_VECTOR_LEN;
             const ptr2 = passStringToWasm0(message, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
             const len2 = WASM_VECTOR_LEN;
-            wasm.lpmsession_accept(retptr, ptr0, len0, ptr1, len1, ptr2, len2);
+            const ptr3 = passStringToWasm0(role, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+            const len3 = WASM_VECTOR_LEN;
+            wasm.lpmsession_accept(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -172,20 +179,28 @@ export class LpmSession {
         }
     }
     /**
-     * Role I (§6.2). Starts a session with no round trip and no key directory —
-     * the responder's keys come out of `R`.
+     * Start a session with no round trip and no key directory (§6.2) — the
+     * responder's keys come out of `R`.
+     *
+     * ⚠️ `role` IS THIS DEVICE'S PAIRING ROLE (§3), NOT "I am the one starting".
+     * See `Bootstrap::own`. §6.3 has either party create a session whenever it has
+     * no usable state, so a role-J device calls this routinely and must still use
+     * `idk_J`.
      * @param {Uint8Array} root
      * @param {Uint8Array} session_id
+     * @param {string} role
      * @returns {LpmSession}
      */
-    static initiate(root, session_id) {
+    static initiate(root, session_id, role) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passArray8ToWasm0(root, wasm.__wbindgen_export3);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passArray8ToWasm0(session_id, wasm.__wbindgen_export3);
             const len1 = WASM_VECTOR_LEN;
-            wasm.lpmsession_initiate(retptr, ptr0, len0, ptr1, len1);
+            const ptr2 = passStringToWasm0(role, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+            const len2 = WASM_VECTOR_LEN;
+            wasm.lpmsession_initiate(retptr, ptr0, len0, ptr1, len1, ptr2, len2);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);

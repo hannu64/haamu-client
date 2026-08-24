@@ -40,6 +40,40 @@ export async function hkdf(key, info, len) {
 }
 
 /**
+ * HKDF straight into a **non-extractable** `CryptoKey`, with the output bytes never
+ * existing in JavaScript at all.
+ *
+ * ⚠️⚠️ THIS IS §7.7's TABLE, NOT AN OPTIMISATION, and the difference between this
+ * and `hkdf(...)` followed by `importKey` is the whole of what §7.7 claims for
+ * `roster_key`. The two produce the identical key — measured — but the second one
+ * hands the raw 32 bytes to JavaScript on the way, where same-origin injected code
+ * can read them off the argument and keep a copy that works after the page is gone.
+ * §7.7's table says of `roster_key`: *"yes — `deriveKey` produces it directly, never
+ * as bytes"*. Until 2026-08-24 that row described no code; the client derived bits
+ * and re-imported them on every roster read and every roster write. Found by the
+ * outside review, which read the table and then the file.
+ *
+ * ⚠️ `usages` MUST BE THE FULL SET THE KEY WILL EVER NEED. A `CryptoKey` cannot be
+ * widened afterwards, and the roster is both sealed and opened under this one key,
+ * so a key imported for `["encrypt"]` alone fails at the first read — several
+ * minutes later and somewhere else entirely.
+ */
+export async function hkdfKey(key, info, derivedKeyType, usages) {
+  if (!(key instanceof Uint8Array)) throw new TypeError("hkdfKey: key must be a Uint8Array");
+  const infoBytes = typeof info === "string" ? asciiBytes(info, "hkdf info") : info;
+  if (!(infoBytes instanceof Uint8Array)) throw new TypeError("hkdfKey: info must be a string or Uint8Array");
+
+  const k = await subtle.importKey("raw", key, "HKDF", false, ["deriveKey"]);
+  return subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: infoBytes },
+    k,
+    derivedKeyType,
+    false, // ⚠️ NEVER `true`. That flag IS the property; see the header above.
+    usages
+  );
+}
+
+/**
  * HKDF with an explicit salt. Present only so the RFC 5869 test vectors — which
  * all use a salt — can exercise the same code path the protocol uses. No
  * protocol call site passes a salt; if one ever does, PROTOCOL.md §0.1 has to say

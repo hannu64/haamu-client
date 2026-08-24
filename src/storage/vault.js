@@ -58,6 +58,25 @@ function slot(store, key) {
 }
 
 /**
+ * Whether this record is THIS identity's, answered the only way it can be: by
+ * opening it.
+ *
+ * ⚠️ THE AAD IS PART OF THE ANSWER AND NOT AN EXTRA. `slot()` binds the store and
+ * the key into the tag, so a record moved to another key does not open here either
+ * — which is what makes "it opened" a statement about this row rather than about
+ * these bytes.
+ */
+async function opens(localKey, store, key, blob) {
+  if (!blob) return false;
+  try {
+    await aead.open(localKey, blob, slot(store, key));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The interface every persistent store in this client speaks: `get`, `set`,
  * `delete`, values JSON-able, everything async.
  *
@@ -226,9 +245,51 @@ export function openVault({ db, localKey }) {
     durable: records(db, DURABLE, localKey),
     messages: messageLog(db, localKey),
 
-    /** §7.8 step 2, and it does NOT reach `DURABLE`. */
+    /**
+     * §7.8 step 2, and it does NOT reach `DURABLE`.
+     *
+     * ⚠️⚠️ IT DELETES WHAT OPENS UNDER **THIS** `local_key`, NOT EVERYTHING IN THE
+     * STORES. Until 2026-08-24 this was `db.clear(ENDING_CLEARS)`, which empties
+     * whole object stores — so a browser holding two identities lost BOTH when
+     * either one ended ordinarily. What the other identity loses is not
+     * recoverable: its messages were acknowledged and deleted from the server the
+     * moment they arrived (§5.4.1), and its cached roster and Olm pickles go with
+     * them. §7.8 reserves that reach for the THOROUGH ending, which is a different
+     * control with a different warning, and `clearEverything` below still has it.
+     *
+     * ⭐⭐ THE RULE WAS ALREADY WRITTEN DOWN IN THIS FILE, IN THE METHOD NEXT DOOR.
+     * `sweep()` skips a record it cannot open and says why: *"Not ours — another
+     * identity in this browser... deleting what we cannot read would let any
+     * identity wipe another's history."* Exactly the rule, applied by the method
+     * that runs every few minutes and not by the one that runs once and is
+     * irreversible. ➡️ **A RULE STATED AT ONE CALL SITE IS NOT A RULE.** Found by
+     * an outside review that had not read `sweep`.
+     *
+     * ⚠️ WHAT IT LEAVES BEHIND, STATED RATHER THAN HIDDEN. A record of this
+     * identity's that will not decrypt — corrupted, or written under a key that is
+     * gone — survives the ending. It is a row nothing can read, including this
+     * client, and deleting rows on any weaker test than "it opened" is how one
+     * identity wipes another's. The thorough ending removes it.
+     *
+     * ⚠️ AND ONE RACE, WHICH §7.8 STEP 1 IS WHAT BOUNDS. The listing and the
+     * decryption happen outside the transaction, because a `crypto.subtle` call
+     * inside an IndexedDB transaction closes it. A message another tab appends in
+     * that window survives. Step 1 stops the things that write BEFORE this runs,
+     * which is what makes the window empty rather than merely small.
+     */
     async endSession() {
-      await db.clear(ENDING_CLEARS);
+      const plan = [];
+      let left = 0;
+      for (const store of ENDING_CLEARS) {
+        const mine = [];
+        for (const [key, blob] of await db.list(store, undefined)) {
+          if (await opens(localKey, store, key, blob)) mine.push(key);
+          else left++;
+        }
+        plan.push([store, mine]);
+      }
+      await db.deleteAll(plan);
+      return { deleted: plan.reduce((n, [, keys]) => n + keys.length, 0), left };
     },
 
     /**

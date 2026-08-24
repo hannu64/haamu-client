@@ -10,6 +10,8 @@
 import * as endings from "../src/flow/ending.js";
 import * as lock from "../src/flow/lock.js";
 import * as tabs from "../src/flow/tabs.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { check, equal, section, done } from "./harness.mjs";
 
 // ⚠️ THIS SECTION RUNS FIRST, AND THAT IS NOT ARBITRARY. §7.8 step 0's "the
@@ -37,17 +39,102 @@ section("§7.8 step 0 — the document that comes back with its heap intact");
   handlers.pageshow({ persisted: true });
   equal("⭐ a restore of a document that never ended does nothing", String(navigated.length), "0");
 
-  await endings.endSession({ client: null, keys: {}, sessionStorage: null, navigate: () => {} });
+  /**
+   * ⚠️⚠️ THIS BLOCK USED TO ASSERT THE DEFECT. It ended a session, fired a restore, and
+   * required the handler to navigate to `ENDED_PATH` — the bare path, with no
+   * fragment. Step 5 puts the MODE and the census OUTCOME in that fragment precisely
+   * because step 3 has cleared every store that could carry them, so a restore that
+   * drops it lands a **Ghost** ending on the **Kept** page: *"you will need your eight
+   * words to open it again"*, shown to somebody who has no words and nothing to
+   * reopen. The guard and the code agreed with each other and both disagreed with
+   * §7.8. ➡️ The destination a restore repeats is the destination the ending CHOSE.
+   */
+  const keys = { session: new Uint8Array([7, 7, 7, 7]) };
+  let cleared = 0;
+  await endings.endSession({
+    client: null,
+    keys,
+    sessionStorage: null,
+    clearStorage: async () => { cleared++; },
+    navigate: (p) => navigated.push(p),
+  });
   check("the document is marked ended", endings.hasEnded());
+  equal("the ending itself navigated once", String(navigated.length), "1");
+  const destination = navigated[0];
 
   handlers.pageshow({ persisted: false });
-  equal("an ordinary load of the ended page does not re-navigate", String(navigated.length), "0");
+  equal("an ordinary load of the ended page does not re-navigate", String(navigated.length), "1");
+
+  /**
+   * ⭐⭐⭐ THE HEAP IS BACK, AND THAT IS THE WHOLE PREMISE. A restored document brings
+   * its buffers with it on at least one mainstream Chromium build, so the bytes step 2
+   * overwrote can be live again. Refilling the buffer here is what a restore looks
+   * like from this module's side, and a defence that only re-navigates would leave it
+   * full.
+   */
+  keys.session.fill(9);
+  handlers.pageshow({ persisted: true });
+
+  equal(
+    "⭐⭐⭐ a BFCACHE restore leaves again, with no user action",
+    String(navigated.length),
+    "2"
+  );
+  equal(
+    "⭐⭐⭐ and it repeats the destination the ENDING chose, fragment and all",
+    navigated[1],
+    destination
+  );
+  check(
+    "⚠️ the destination carries §7.8.1's census outcome, which no store could have held",
+    /#(un)?confirmed/.test(destination),
+    destination
+  );
+  equal(
+    "⭐⭐ and step 2 is repeated on the restored heap, not assumed to have stuck",
+    keys.session.join(""),
+    "0000"
+  );
+  // ⚠️ A TURN OF THE MICROTASK QUEUE FIRST, AND THAT IS THE DESIGN SPEAKING. The
+  // repeat deliberately does not await the storage clear: a `pageshow` handler that
+  // waits is a handler running while the restored document is already interactive,
+  // and step 5 must not queue behind step 3. So the call is made and the answer is
+  // not waited for — which is exactly what this line has to model.
+  await Promise.resolve();
+  await Promise.resolve();
+  check("⚠️ and step 3 is repeated too", cleared >= 2, `clearStorage ran ${cleared}×`);
+}
+
+{
+  /**
+   * ⭐⭐ THE TWO VARIANTS THE OLD HANDLER ERASED, TESTED AS THEMSELVES. `?clear=1` is
+   * §7.8 step 5's Clear-Site-Data variant and `-ghost` is 0.8.14's mode — a restore
+   * that dropped either one landed the person on a page making a promise about their
+   * session that was false for it.
+   */
+  const handlers = {};
+  const navigated = [];
+  const target = { addEventListener: (type, fn) => (handlers[type] = fn) };
+  endings.armBfcacheDefence({ target, navigate: (p) => navigated.push(p) });
+
+  await endings.endSession({
+    client: null,
+    keys: {},
+    sessionStorage: null,
+    navigate: (p) => navigated.push(p),
+    thorough: true,
+    mode: "ghost",
+  });
+  const destination = navigated[0];
+  check("⚠️ a thorough Ghost ending goes to the clearing variant, marked ghost", 
+    destination.includes("clear=1") && destination.includes("-ghost"), destination);
 
   handlers.pageshow({ persisted: true });
-  equal(
-    "⭐⭐⭐ but a BFCACHE restore of an ended document leaves again, with no user action",
-    navigated.join(","),
-    endings.ENDED_PATH
+  equal("⭐⭐⭐ and a restore of it goes to exactly the same place", navigated[1], destination);
+  check(
+    "⚠️ which is NOT the bare path the handler used to guess",
+    navigated[1] !== endings.ENDED_PATH,
+    navigated[1]
   );
 }
 
@@ -193,6 +280,56 @@ section("§7.8 — the order, which is the part that was wrong");
 }
 
 // ================================================== §7.7's one exception
+
+// ============================ §7.8 step 1, in the file that actually calls it
+
+/*
+  ⚠️⚠️ EVERYTHING ELSE IN THIS FILE TESTS `flow/ending.js`, AND THE 2026-08-24 DEFECT
+  WAS NOT IN `flow/ending.js`. §7.8 step 1 is `stopDelivery()`, and the client's
+  implementation of it lived in `app/app.js` — which no suite here can import,
+  because it touches the document from its first line. So the order was proved,
+  correctly, over a `stopDelivery` that in production returned before it had stopped
+  anything.
+
+  ⭐ `stopEverything()` WAS `async`, EVERY CALLER AWAITED IT, AND ITS OWN HEADER SAID
+  *"it has to be awaitable, because step 3 clears the database these streams write
+  into"*. Inside, it called `live.stop()` without `await`, against a `stop()` that
+  only called `abort()`. Four things agreeing that the wait mattered, and no wait.
+  ➡️ **A CHECK THAT ASKS WHETHER SOMETHING IS `async` CANNOT TELL YOU WHETHER IT
+  AWAITS ANYTHING.**
+
+  So this is a SOURCE rule, and it is written as the rule rather than as the bug: a
+  `stop()` whose result is dropped must be dropped ON PURPOSE, spelled `void`. Then
+  every site is a decision somebody made, and a bare call is the one shape that
+  cannot happen by accident. `syncStreams` is the site that legitimately does not
+  wait, and it says so.
+*/
+section("§7.8 step 1 — every `live.stop()` in `app/app.js` is a decision");
+
+{
+  const src = readFileSync(fileURLToPath(new URL("../app/app.js", import.meta.url)), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  // ⚠️ THE UNIT IS THE LINE, and that is the rule rather than a convenience for the
+  // regex: the decision about waiting has to be READABLE BESIDE THE CALL. One site
+  // hands its promise to `Promise.all` on the same line, which is a decision a
+  // reader can see; a bare call on a line with neither word is the one shape that
+  // means nobody chose.
+  const lines = src.split("\n").filter((l) => /\.live\.stop\(\)/.test(l));
+  check("there are stop sites to check at all", lines.length >= 3, `${lines.length} sites`);
+
+  const undecided = lines.filter((l) => !/\b(await|void)\b/.test(l));
+  equal("⭐⭐ none of them drops the promise silently", String(undecided.length), "0",
+    undecided.join(" | "));
+
+  // ⚠️ AND BOTH ANSWERS MUST STILL BE IN USE. A rule satisfied by making every site
+  // `void` would pass the line above and reintroduce the defect everywhere — that is
+  // D-161's lesson, that widening a guard on some axes moves the hole rather than
+  // closing it. So the guard asserts the mixture, not just the absence.
+  check("⭐ at least one site waits", lines.some((l) => /\bawait\b/.test(l)));
+  check("⭐ and at least one deliberately does not", lines.some((l) => /\bvoid\b/.test(l)));
+}
 
 section("§7.7 — the overwrite, and exactly what it reaches");
 

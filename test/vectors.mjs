@@ -22,11 +22,12 @@ import * as epoch from "../src/protocol/epoch.js";
 import * as mailboxes from "../src/protocol/mailbox.js";
 import * as signing from "../src/protocol/signing.js";
 import * as envelope from "../src/protocol/envelope.js";
+import * as payload from "../src/protocol/payload.js";
 import * as passphrase from "../src/protocol/passphrase.js";
 import * as roster from "../src/protocol/roster.js";
 import * as pow from "../src/protocol/pow.js";
 import * as x25519 from "../src/crypto/x25519.js";
-import { check, equal, section, done, hex } from "./harness.mjs";
+import { check, equal, rejects, section, done, hex } from "./harness.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const v = JSON.parse(readFileSync(join(here, "vectors", "lpm.json"), "utf8"));
@@ -211,6 +212,49 @@ equal("envelope type", parsedEnvelope.type, v.envelope.example.type);
 check("the envelope carries no eph_pub (§6.4)", !("eph_pub" in v.envelope.example));
 check("the envelope carries no direction field (§4.2)", !("direction" in v.envelope.example));
 
+// -------------------------------------------------------- §6.7, §6.7.1, §6.7.2
+section("§6.7 — the payload, and §6.7.2's binding");
+
+{
+  const sessionId = b64uDecode(v.payload.example.session_id);
+  const built = payload.buildPayload({
+    text: v.payload.example.text,
+    sentAt: v.payload.example.sent_at,
+    sessionId,
+    generation: v.payload.example.generation,
+  });
+  equal("the payload this build produces is the frozen one",
+    JSON.stringify(built, Object.keys(v.payload.example).sort()),
+    JSON.stringify(v.payload.example, Object.keys(v.payload.example).sort()));
+  equal("payload v", String(payload.PAYLOAD_V), String(v.payload.v));
+  equal("the version the binding starts at", String(payload.BINDING_FROM_V), String(v.payload.binding_from_v));
+
+  // ⚠️ §6.5's bucket is the ONE thing about the encoding a server can observe, so it
+  // is the one thing worth freezing. The byte string itself is not — see the `_note`.
+  equal("and it pads to the frozen bucket",
+    String(envelope.pad(payload.encodePayload(built)).length), String(v.payload.example_padded_length));
+
+  const closing = payload.buildClosing({
+    sentAt: v.payload.closing.sent_at,
+    sessionId,
+    generation: v.payload.closing.generation,
+  });
+  check("§6.7.1's notice still carries no words", !("text" in closing));
+  equal("and pads to the same bucket, so the server cannot tell it from a message",
+    String(envelope.pad(payload.encodePayload(closing)).length), String(v.payload.closing_padded_length));
+
+  // ⭐⭐ THE ONE A SECOND IMPLEMENTATION CAN FAIL. Everything above says the payload
+  // has the fields; this says the receiver ACTS on them. §6.7.2's whole value is the
+  // comparison, and a build that carried both fields and compared neither would pass
+  // every other line here.
+  const sealed = payload.encodePayload(built);
+  const honest = payload.decodePayload(sealed, { sessionId, generation: v.payload.example.generation });
+  equal("an untouched envelope reads back as the message", honest.text, v.payload.example.text);
+  const rewritten = payload.decodePayload(sealed, { sessionId, generation: Number.MAX_SAFE_INTEGER });
+  check("⭐⭐ and a rewritten generation is refused, not adopted",
+    rewritten instanceof payload.MisboundPayload, rewritten?.field);
+}
+
 // -------------------------------------------------------------- §7.2, §7.4
 section("§7.2, §7.4 — passphrase derivations");
 
@@ -227,7 +271,47 @@ equal("the roster salt", b64uEncode(await passphrase.rosterSalt(canonicalBytes))
 
 const rk = await passphrase.deriveRosterKeys(K_MASTER);
 equal("roster_id", b64uEncode(rk.rosterId), v.passphrase.roster_id);
-equal("roster_key", b64uEncode(rk.rosterKey), v.passphrase.roster_key);
+/*
+  ⚠️⚠️ `roster_key` IS THE ONE VECTOR HERE THAT IS NO LONGER COMPARED AS BYTES, AND
+  THAT IS §7.7 WORKING RATHER THAN A GAP IN THIS FILE. Its table says of this key
+  *"yes — `deriveKey` produces it directly, never as bytes"* — so from 2026-08-24
+  `deriveRosterKeys` returns a non-extractable `CryptoKey` and there are no bytes
+  for `b64uEncode` to take. The frozen value did not move: it is the same 32 bytes
+  the 2026-08-11 freeze recorded, and `test/derive.mjs` still computes them
+  independently from PROTOCOL.md.
+
+  ⭐ WHAT CHANGED IS HOW AGREEMENT IS PROVED, AND THE NEW PROOF IS THE STRONGER ONE.
+  Sealing under the frozen bytes and opening with the derived key shows the two are
+  the same key AND that the derived one reached WebCrypto as an AES-GCM key with the
+  usages the roster needs — neither of which a string comparison could see. A byte
+  comparison that passes while the key is imported for the wrong algorithm is a real
+  failure mode; this one cannot have it.
+*/
+const frozenRosterKey = b64uDecode(v.passphrase.roster_key);
+const sealedUnderFrozen = await roster.sealRoster(frozenRosterKey, roster.emptyRoster(TIMESTAMP));
+let openedByDerived = null;
+try {
+  openedByDerived = await roster.openRoster(rk.rosterKey, sealedUnderFrozen.blob);
+} catch (err) {
+  console.log(`  (opening with the derived key threw: ${err.message})`);
+}
+check("⭐⭐ roster_key — the derived key OPENS what the frozen bytes sealed",
+  openedByDerived?.roster?.written_at === TIMESTAMP);
+check("⭐ and it is a CryptoKey that says it is not extractable (§7.7)",
+  rk.rosterKey instanceof CryptoKey && rk.rosterKey.extractable === false);
+// ⚠️ THE PATTERN IS NARROW ON PURPOSE. With `/.*/` this check passes when
+// `rosterKey` is a `Uint8Array` again — `exportKey` then throws a TYPE error, which
+// is an error, which satisfies "rejects". Measured while mutation-testing this very
+// fix on 2026-08-24: the raw-bytes mutation left this line green and only the
+// `instanceof` beside it went red. A refusal is only evidence if it is the RIGHT
+// refusal.
+await rejects("⭐⭐ and WebCrypto REFUSES to export it — the claim, not the flag",
+  () => globalThis.crypto.subtle.exportKey("raw", rk.rosterKey), /extractab/i);
+// ⚠️ The negative, in the same shape, so the check above is testing the key rather
+// than AES-GCM's willingness to open anything.
+const otherKeys = await passphrase.deriveRosterKeys(new Uint8Array(32).fill(0x77));
+await rejects("a different key does not open the same blob",
+  () => roster.openRoster(otherKeys.rosterKey, sealedUnderFrozen.blob), /.*/);
 equal("roster_auth public key", b64uEncode(rk.rosterAuth.publicKey), v.passphrase.roster_auth_public);
 equal("the Argon2id parameters (D-034)", JSON.stringify(passphrase.ARGON2_PARAMS), JSON.stringify(v.passphrase.argon2));
 

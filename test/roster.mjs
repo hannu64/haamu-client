@@ -179,6 +179,48 @@ section("§7.3.1 rule 6 — a verification cannot be lost by a merge (§3.6.2)")
   check("and a verification made on one device reaches the other", d.channels[0].verified);
 }
 
+// ============================ §7.3.1 rule 7 — the tripwire merges by OR (§3.5)
+
+// ⚠️⚠️ THE MERGE NAMES EVERY FIELD IT KEEPS, so a field with no rule is not merged
+// conservatively — it is DROPPED, on the first collision between two devices. That is
+// the failure this section exists to make impossible: a §3.5 alarm stored correctly,
+// passing every test that never merged, and gone in the field on the day two devices
+// sync. ⭐ The whole point of the marker is that it OUTLIVES the screen it was raised
+// on, so a merge that loses it is the same defect as the dismiss button it replaced.
+
+section("§7.3.1 rule 7 — §3.5's evidence cannot be lost by a merge");
+
+{
+  const tripped = roster({ written_at: 1000, channels: [channel(1, { tripwire: true })] });
+  const clean = roster({ written_at: 9999, channels: [channel(1, { tripwire: false })] });
+
+  const { roster: a } = await rosters.mergeRosters(tripped, clean);
+  check("⭐⭐ a LATER roster that says false does not clear the alarm", a.channels[0].tripwire);
+
+  const { roster: b } = await rosters.mergeRosters(clean, tripped);
+  check("and the same holds with the arguments the other way round", b.channels[0].tripwire);
+
+  // ⭐ THE ONE THAT MATTERS MOST: the alarm was raised on the laptop and the person
+  // opens the conversation on the phone. A marker that did not travel would be
+  // defeated by the most ordinary act there is.
+  const older = roster({ channels: [channel(2)] });
+  const { roster: c } = await rosters.mergeRosters(older, roster({}));
+  equal("⭐ a roster written before the field existed reads as false, not undefined",
+    String(c.channels[0].tripwire), "false");
+
+  const { roster: d } = await rosters.mergeRosters(older, roster({ channels: [channel(2, { tripwire: true })] }));
+  check("⭐⭐ evidence recorded on one device reaches the other", d.channels[0].tripwire);
+
+  // ⚠️ AND THE TWO FIELDS ARE INDEPENDENT. Comparing the six digits settles who is at
+  // the far end; it does not un-hold the invite link, and a merge that let `verified`
+  // stand in for `tripwire` would quietly retire the alarm on the day somebody
+  // answered §3.6.2 on their other device.
+  const verifiedOnly = roster({ channels: [channel(3, { verified: true, tripwire: false })] });
+  const trippedOnly = roster({ channels: [channel(3, { verified: false, tripwire: true })] });
+  const { roster: e } = await rosters.mergeRosters(verifiedOnly, trippedOnly);
+  check("⭐⭐⭐ a verified channel still carries its tripwire", e.channels[0].tripwire && e.channels[0].verified);
+}
+
 // ============================================================= §7.3.2 freshness
 
 section("§7.3.2 — the version the client trusts is inside the ciphertext");

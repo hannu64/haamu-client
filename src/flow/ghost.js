@@ -176,12 +176,22 @@ export async function openGhost({ sessionStorage = globalThis.sessionStorage } =
      * roster to hold a second, and inventing a list in `sessionStorage` would be
      * inventing the structure §7.6 removed.
      */
-    async setChannel({ root, role, name }) {
+    async setChannel({ root, role, name, tripwire = false }) {
       // §3.6.2 rule 1: unverified until somebody compares six digits with a
       // person. There is no roster here, so §7.3.1 rule 6 has nothing to merge in
       // this mode — but it is the same field under the same name, because the chat
       // view must not have to learn which mode it is in.
-      const entry = { root: b64uEncode(root), role, name: name ?? "", generation: 0, verified: false, ghost: true };
+      const entry = {
+        root: b64uEncode(root),
+        role,
+        name: name ?? "",
+        generation: 0,
+        verified: false,
+        // §3.5, and the same argument as `verified` immediately above: the same
+        // field under the same name, so the chat view never has to know the mode.
+        tripwire: Boolean(tripwire),
+        ghost: true,
+      };
       await store.set(CHANNEL_KEY, entry);
       return entry;
     },
@@ -191,6 +201,15 @@ export async function openGhost({ sessionStorage = globalThis.sessionStorage } =
       const entry = await store.get(CHANNEL_KEY);
       if (!entry) return null;
       entry.verified = true;
+      await store.set(CHANNEL_KEY, entry);
+      return entry;
+    },
+
+    /** §3.5, in the mode with one conversation and no list. Monotone, no inverse. */
+    async setTripwire() {
+      const entry = await store.get(CHANNEL_KEY);
+      if (!entry) return null;
+      entry.tripwire = true;
       await store.set(CHANNEL_KEY, entry);
       return entry;
     },
@@ -270,6 +289,38 @@ export async function openGhost({ sessionStorage = globalThis.sessionStorage } =
      */
     keys(channelRoot = null) {
       return channelRoot ? { pickleKey, channelRoot } : { pickleKey };
+    },
+
+    /**
+     * §3.6.2's third answer, and §7.3.1a's deletion, in the mode with no roster.
+     *
+     * ⚠️⚠️ IT EXISTS BECAUSE ITS ABSENCE WAS A HOLE, AND THE HOLE HAD A SHAPE WORTH
+     * KEEPING. `app/app.js`'s `removeConversation` reads *"remove it from the roster,
+     * unless this is Ghost mode"* — and in Ghost mode it then removed nothing at all,
+     * because there was no third branch. The Olm state and the message log went, the
+     * channel entry stayed, and `backToStart()` read it and reopened the
+     * conversation. After a SAS mismatch, that is the conversation with the person
+     * who is **not** who they said they were, reopened over the same root, ready for
+     * the next send to establish a fresh session on it. Found by the 2026-08-24
+     * outside review.
+     *
+     * ➡️ **A CONDITION WITH TWO BRANCHES AND THREE MODES SILENTLY DOES NOTHING IN THE
+     * THIRD.** `else if (!isGhost())` reads like a guard and behaves like a hole.
+     *
+     * ⚠️ IT IS NOT `discard()` AND MUST NOT BECOME IT. `discard()` removes what
+     * `openGhost` minted — the pickle key and the session id — and its own comment
+     * forbids reaching it once a channel exists. This removes the CONVERSATION and
+     * leaves the Ghost session standing, which is what the same control does in Kept
+     * mode: the person is returned to a mode with nothing in it, not signed out of a
+     * mode they are still in.
+     *
+     * ⚠️ THE OLM STATE AND THE MESSAGE LOG ARE NOT REMOVED HERE, and that is not an
+     * omission. `removeConversation` already removes both by the mode-agnostic route
+     * (`storage/sessions.js` and `session.messages`), and a second remover would be a
+     * second place for the list to drift.
+     */
+    async removeChannel() {
+      await store.delete(CHANNEL_KEY);
     },
 
     /**

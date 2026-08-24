@@ -28,6 +28,7 @@ const PICKLE_KEY = Buffer.alloc(32, 0x2b);
 const P1 = "first message, frozen as a vector";
 const PR = "the reply that advances the ratchet";
 const P2 = "second turn, after the ratchet moved";
+const PJ = "the joiner had no session and sent first";
 
 if (ROOT.length !== 32) die(`root is ${ROOT.length} bytes, must be 32`);
 
@@ -35,10 +36,10 @@ const build = JSON.parse(lpmBuildInfo());
 const expected = derivePublicKeys(ROOT, SESSION_ID);
 
 // --- produce the artefacts ------------------------------------------------
-const initiator = LpmSession.initiate(ROOT, SESSION_ID);
+const initiator = LpmSession.initiate(ROOT, SESSION_ID, "I");
 const first = initiator.encrypt(bytes(P1));
 
-const accepted = LpmSession.accept(ROOT, SESSION_ID, first);
+const accepted = LpmSession.accept(ROOT, SESSION_ID, first, "J");
 if (text(accepted.plaintext) !== P1) die("the freshly built pair cannot talk to itself");
 const responder = accepted.takeSession();
 
@@ -52,6 +53,36 @@ if (JSON.parse(second).type !== "normal") die("the second turn should be a norma
 const responderPickle = responder.pickle(PICKLE_KEY);
 if (text(LpmSession.unpickle(responderPickle, PICKLE_KEY).decrypt(second)) !== P2)
   die("the pickle does not restore into something that can decrypt");
+
+// --- the OTHER direction, added 2026-08-24 --------------------------------
+//
+// ⚠️⚠️ ADDITIVE, AND NOTHING ABOVE THIS LINE MOVED. Everything the 2026-08-11 build
+// froze is still frozen: role I initiating uses `idk_I` exactly as it always did, so
+// `prekey_message`, `normal_message`, `responder_pickle` and the derived keys are
+// byte-for-byte what they were. This block ADDS the direction that had no vector —
+// which is precisely why it had a defect nobody could see.
+//
+// ⭐ THE DIRECTION WITH NO VECTOR IS THE DIRECTION WITH THE BUG, and that is not a
+// coincidence. Until 2026-08-24 `initiate` always used `idk_I` whoever called it, so
+// a role-J device opened its sessions from the wrong identity key. Two copies of this
+// wrapper never noticed — §6.2 gives both parties both private keys — and neither did
+// any test, because every test drove I first. What catches it is a frozen artefact
+// whose identity key is compared against `derive.mjs`'s independent computation.
+const jSessionId = Buffer.alloc(16, 0x4a);
+const jExpected = derivePublicKeys(ROOT, jSessionId);
+const jStarts = LpmSession.initiate(ROOT, jSessionId, "J");
+const jFirst = jStarts.encrypt(bytes(PJ));
+
+const jOnTheWire = JSON.parse(prekeyPublicKeys(jFirst));
+if (jOnTheWire.identityKey !== jExpected.idk_J)
+  die(`a role-J session must be addressed FROM idk_J: wire ${jOnTheWire.identityKey}, node ${jExpected.idk_J}`);
+if (jOnTheWire.identityKey === jExpected.idk_I)
+  die("a role-J session is addressed from idk_I — this is the 2026-08-24 defect, do not freeze it");
+if (jOnTheWire.oneTimeKey !== jExpected.otk)
+  die(`otk disagrees on the J direction: wire ${jOnTheWire.oneTimeKey}, node ${jExpected.otk}`);
+
+const jAccepted = LpmSession.accept(ROOT, jSessionId, jFirst, "I");
+if (text(jAccepted.plaintext) !== PJ) die("a role-I device cannot read the joiner's first message");
 
 // --- refuse to freeze anything the independent implementation disagrees with -
 const onTheWire = JSON.parse(prekeyPublicKeys(first));
@@ -75,4 +106,9 @@ console.log(JSON.stringify({
   normal_message: second,
   normal_plaintext: P2,
   responder_pickle: responderPickle,
+  // ── added 2026-08-24: the pairing JOINER opening a session (§6.2, §6.3) ──
+  j_session_id_b64u: b64u(jSessionId),
+  j_derived_public_keys: jExpected,
+  j_prekey_message: jFirst,
+  j_prekey_plaintext: PJ,
 }, null, 2));

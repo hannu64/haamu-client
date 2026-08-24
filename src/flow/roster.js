@@ -433,8 +433,16 @@ export function openRoster({
       return current().channels.find((c) => c.root === root) ?? null;
     },
 
-    /** §7.3.3 case 2. `role` is immutable once written (§7.3.1 rule 2). */
-    async addChannel({ root, name, role }) {
+    /**
+     * §7.3.3 case 2. `role` is immutable once written (§7.3.1 rule 2).
+     *
+     * ⚠️ `tripwire` IS TAKEN HERE RATHER THAN SET AFTERWARDS, because §3.5 says
+     * *"before or with the roster write that creates the channel"*. A second write
+     * would leave a window in which the channel exists and its alarm does not —
+     * small, but exactly long enough to be the window a failed write falls into,
+     * and it would spend a second §7.3.3 case 2 write on the server for one fact.
+     */
+    async addChannel({ root, name, role, tripwire = false }) {
       const encoded = b64uEncode(root);
       return write((r) => {
         if (r.channels.some((c) => c.root === encoded)) return r;
@@ -448,6 +456,9 @@ export function openRoster({
           // present one as verified because the pairing succeeded — pairing
           // succeeding is what both of §3.6's attacks look like.
           verified: false,
+          // §3.5, carried in from the pairing that produced the evidence — never
+          // set later, and never cleared at all.
+          tripwire: Boolean(tripwire),
         });
         return r;
       }, CHANNEL_CHANGE);
@@ -473,6 +484,30 @@ export function openRoster({
       return write((r) => {
         const c = r.channels.find((x) => x.root === encoded);
         if (c) c.verified = true;
+        return r;
+      }, CHANNEL_CHANGE);
+    },
+
+    /**
+     * §3.5: a verified second claim arrived for this channel's invitation.
+     *
+     * ⚠️⚠️ THIS IS THE LINE THAT MAKES §3.5's WARNING "NON-DISMISSABLE", AND
+     * UNTIL 0.9.22 THERE WAS NO LINE. The evidence lived in the pairing result and
+     * was dropped the moment the user answered §3.6.2's question — including
+     * *"not yet"*, which §3.6.2 expressly permits, so the product's only intrusion
+     * alarm was cleared by pressing the button the product itself offers.
+     *
+     * ⚠️ MONOTONE, NO INVERSE, exactly as `setVerified` is and for §7.3.1 rule 7's
+     * reason: OR is the only merge that cannot lose an event that happened once on
+     * one device. The remedy for a channel you have stopped trusting is deletion.
+     */
+    async setTripwire(root) {
+      const encoded = b64uEncode(root);
+      const entry = current().channels.find((c) => c.root === encoded);
+      if (!entry || entry.tripwire) return roster;
+      return write((r) => {
+        const c = r.channels.find((x) => x.root === encoded);
+        if (c) c.tripwire = true;
         return r;
       }, CHANNEL_CHANGE);
     },

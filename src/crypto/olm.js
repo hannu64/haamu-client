@@ -112,22 +112,36 @@ export class OlmSession {
   }
 }
 
-/** Role I (§6.2): start a session from `R` alone, with no round trip. */
-export function initiate(channelRoot, sessionId) {
-  return new OlmSession(required().LpmSession.initiate(channelRoot, sessionId));
+/**
+ * §6.2: start a session from `R` alone, with no round trip.
+ *
+ * ⚠️⚠️ `role` IS THIS DEVICE'S **PAIRING** ROLE (§3), AND IT IS NOT "I am the one
+ * starting this session". §6.2 says each party "uses only its own role's identity
+ * key", and that role is fixed for the life of the channel — while §6.3 has either
+ * party create a session whenever it has no usable state, so a role-J device calls
+ * this routinely. Until 2026-08-24 there was no argument here at all and the crate
+ * always used `idk_I`, which is the same sentence read as though I and J meant
+ * session initiator and responder. Two copies of this client could not tell the
+ * difference; a second implementation built from PROTOCOL.md can.
+ */
+export function initiate(channelRoot, sessionId, role) {
+  return new OlmSession(required().LpmSession.initiate(channelRoot, sessionId, role));
 }
 
 /**
- * Role J (§6.2): accept a pre-key message and read it.
+ * §6.2: accept a pre-key message and read it.
  *
  * ⚠️ CALL THIS ONLY WHEN NO SESSION EXISTS FOR THIS `session_id`. Accepting the
  * same pre-key message twice succeeds and rebuilds the session at ratchet zero —
  * measured 2026-08-11, and it is what §6.3's replay rule is about. A pre-key
  * message for a session this device already holds is an ordinary message on that
  * session and must go to `decrypt`.
+ *
+ * ⚠️ `role` IS THIS DEVICE'S PAIRING ROLE, as in `initiate` above — the same
+ * argument for the same reason, and not "I am the responder".
  */
-export function accept(channelRoot, sessionId, message) {
-  const accepted = required().LpmSession.accept(channelRoot, sessionId, toCrate(message));
+export function accept(channelRoot, sessionId, message, role) {
+  const accepted = required().LpmSession.accept(channelRoot, sessionId, toCrate(message), role);
   try {
     return { session: new OlmSession(accepted.takeSession()), plaintext: accepted.plaintext };
   } finally {

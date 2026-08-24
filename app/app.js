@@ -1184,9 +1184,20 @@ async function syncStreams() {
     }
   }
 
+  /*
+    ⚠️ THE RULE FOR AWAITING A `stop()` — and this is the one site that does not have
+    to. `live.stop()` became awaitable on 2026-08-24 because an in-flight drain writes
+    the advanced ratchet and the decrypted message to storage AFTER the abort. That
+    matters wherever the NEXT thing destroys what the drain would write to: §7.8's
+    ending clears the store, and removing a conversation deletes its record — both
+    await. Here nothing is destroyed. This tab has merely stopped displaying a
+    conversation whose record stays exactly where it is, so a drain that lands a
+    moment later lands correctly, and blocking the interface on it would be a pause
+    the person can feel for no benefit.
+  */
   for (const [hash, running] of streams) {
     if (wanted.has(hash)) continue;
-    running.live.stop();
+    void running.live.stop();
     streams.delete(hash);
   }
   for (const [hash, entry] of wanted) {
@@ -1310,7 +1321,10 @@ async function heard(message) {
     // still running against a channel whose record was just deleted drains, finds
     // no session, and writes a fresh one — putting back the conversation another
     // tab has just told the user is gone.
-    streams.get(message.channel)?.live.stop();
+    // ⚠️ AWAITED, and the paragraph above is the reason. A `stop()` that only asked
+    // the drain to stop left exactly the race it describes — the drain was already
+    // past its abort checks and wrote the record back.
+    await streams.get(message.channel)?.live.stop();
     streams.delete(message.channel);
     seen.delete(message.channel);
     for (const [id, hash] of elsewhere) if (hash === message.channel) elsewhere.delete(id);
@@ -1403,7 +1417,23 @@ async function watch(hash) {
 async function stopEverything() {
   lockWatch?.stop();
   lockWatch = null;
-  for (const [, running] of streams) running.live.stop();
+
+  /*
+    ⚠️⚠️ THE `await` IS THE FUNCTION, AND ITS ABSENCE WAS A DEFECT THIS COMMENT
+    ALREADY DESCRIBED. The header above has said "it has to be awaitable, because
+    step 3 clears the database these streams write into" since it was written — and
+    the loop below called `stop()` without awaiting it, against a `stop()` that only
+    called `abort()` and returned. So the function was `async`, awaited everywhere it
+    was called, and awaited nothing: an in-flight drain went on decrypting and
+    writing while §7.8 step 3 emptied the store underneath it, and the conversation
+    the person had just ended came back at the next unlock. Found by the 2026-08-24
+    outside review; `flow/live.js`'s `stop()` is the other half of the fix.
+
+    ⭐ ALL OF THEM AT ONCE, NOT ONE AFTER ANOTHER. Each `stop()` aborts first and
+    waits second, so the waits overlap; ending a person with eight open conversations
+    should take as long as the slowest drain, not the sum of eight.
+  */
+  await Promise.all([...streams.values()].map((running) => running.live.stop()));
   streams.clear();
   elsewhere.clear();
   watching = null;
@@ -1824,6 +1854,28 @@ const rootBytesOf = (entry) => entry.rootBytes ?? b64uDecode(entry.root, "channe
 // ---------------------------------------------------------------- the notices
 
 /** A notice is a thing that happened to this device, not a step in a flow. */
+/**
+ * §3.4.1b: this device could not write the in-flight pairing record.
+ *
+ * ⚠️⚠️ THE INTERFACE HAS TO AGREE WITH THE RECORD, AND WITHOUT THIS IT SAID THE
+ * OPPOSITE. `keepOpen.kept` tells the person in as many words that closing the
+ * browser is safe and that they can carry on next time they type their KEY — which
+ * is true exactly when the record exists. On a device with a full or refused store
+ * it did not, the friend was left waiting on a session that could never be
+ * completed, and nothing anywhere said so.
+ *
+ * ⚠️ NOT AN `alarm`. Nothing is broken and nothing was attacked: one capability is
+ * missing and there is one thing to do about it. The alarm styling belongs to §3.5.
+ *
+ * ⚠️ SUPPRESSED IN GHOST, where `keepOpen.ghost` already says this and says it
+ * better — §3.4.1b rule 2 means a Ghost pairing never survives the tab by design,
+ * so the screen is already telling the truth and a second copy of it is noise.
+ */
+function warnNotDurable() {
+  if (isGhost()) return;
+  notice("not-durable", copy.pairing.notDurable);
+}
+
 function notice(id, body, { alarm = false, actions = [] } = {}) {
   clearNotice(id);
   const el = document.createElement("section");
@@ -2350,6 +2402,25 @@ async function showConversationState(entry) {
   prose("unverified-what", copy.verification.unverified);
   text("verify-now", copy.verification.check);
   text("chat-verified", verified ? copy.verification.verified : "");
+
+  /**
+   * §3.5's warning, which lives here rather than on the pairing screen because
+   * "non-dismissable" is a claim about the channel's whole life.
+   *
+   * ⚠️⚠️ IT IS NOT HIDDEN BY `closed`, AND IT IS THE ONLY BANNER HERE THAT IS NOT.
+   * The others describe a state of the conversation; this one describes how the
+   * conversation was OBTAINED, and that does not stop being true when the other
+   * end leaves. A closing notice from an interceptor is exactly the moment a
+   * person re-reads the screen for what happened.
+   *
+   * ⚠️ AND IT IS NEVER `verified`-GATED EITHER. Comparing the digits afterwards is
+   * the right thing to do and it does not un-happen the second claim: it says the
+   * person on the far end is the one you meant, not that nobody else ever held
+   * the link. §3.6.2's answer and §3.5's evidence are different facts.
+   */
+  show("chat-tripwire", Boolean(entry.tripwire));
+  text("tripwire-alarm-title", copy.verification.tripwireTitle);
+  prose("tripwire-alarm-what", copy.verification.tripwire);
 }
 
 /**
@@ -2632,6 +2703,7 @@ function unreadable(m) {
   if (m.failure === messageFlow.UNSUPPORTED) return copy.chat.unsupported;
   if (m.failure === messageFlow.UNDECRYPTABLE) return copy.chat.undecryptable;
   if (m.failure === messageFlow.STALE_SESSION) return copy.chat.staleSession;
+  if (m.failure === messageFlow.TAMPERED) return copy.chat.tampered;
   return copy.chat.unreadable(m.failure);
 }
 
@@ -2689,11 +2761,26 @@ async function removeConversation(entry, { tell = true } = {}) {
   const told = tell ? await tellThemItEnded(entry) : null;
 
   const hash = await rosters.rootHash(rootBytesOf(entry));
-  streams.get(hash)?.live.stop();
+  // ⚠️⚠️ AWAITED BEFORE ANYTHING IS DELETED. The two lines below this remove the
+  // channel from the roster or the quarantine; a drain still running against it
+  // finds no session, writes a fresh one, and puts back the conversation this
+  // control has just told the person is gone. See `syncStreams` for the rule.
+  await streams.get(hash)?.live.stop();
   streams.delete(hash);
   session.tabs.announce("gone", { id: TAB_ID, channel: hash });
+  /*
+    ⚠️⚠️ THREE MODES, THREE BRANCHES. This read `if (entry.local) … else if (!isGhost())
+    …` until 2026-08-24 — two branches for three cases, so Ghost mode fell off the end
+    and removed nothing. The channel entry survived, `backToStart()` read it, and the
+    conversation reopened: after a SAS mismatch, the conversation with the person who
+    is not who they said they were, over the same root, ready for the next send to
+    build a fresh session on it. ➡️ **A CONDITION WITH TWO BRANCHES AND THREE MODES
+    SILENTLY DOES NOTHING IN THE THIRD**, and `!isGhost()` reads like a guard while
+    behaving like a hole. Found by the 2026-08-24 outside review.
+  */
   if (entry.local) await session.quarantine.forget(entry.root);
-  else if (!isGhost()) await session.roster.removeChannel(rootBytesOf(entry));
+  else if (isGhost()) await session.ghost.removeChannel();
+  else await session.roster.removeChannel(rootBytesOf(entry));
 
   // The mode-agnostic pair rather than `vault.*`: Ghost mode has no vault, and
   // this path is now reached from the SAS screen in both modes.
@@ -2748,7 +2835,15 @@ async function succeed(result) {
   // second claim arrives, and it cannot do better — it has no key with which to
   // check one (§3.5). An unverified flag means somebody who watched `pairing_id`
   // go past forged a claim, which is a nuisance and not an interception.
-  if (result.tripwire?.verified) {
+  //
+  // ⚠️⚠️ AND IT IS RECORDED, NOT MERELY SHOWN (§3.5, 0.9.22). Until this line the
+  // evidence lived in `result` and died with the screen: every one of §3.6.2's
+  // three answers called `show("tripwire", false)`, so the product's only
+  // intrusion alarm was cleared by pressing a button the product itself offers —
+  // including "not yet", which §3.6.2 expressly permits. It travels into the
+  // channel write below and is merged by §7.3.1 rule 7 thereafter.
+  const tripwire = Boolean(result.tripwire?.verified);
+  if (tripwire) {
     text("tripwire-body", copy.pairing.tripwire);
     show("tripwire");
   }
@@ -2774,12 +2869,17 @@ async function succeed(result) {
   // no blob is created, and the server is never told that this device holds a
   // conversation at all.
   if (isGhost()) {
-    const entry = await session.ghost.setChannel({ root: result.channelRoot, role: result.role, name });
+    const entry = await session.ghost.setChannel({
+      root: result.channelRoot,
+      role: result.role,
+      name,
+      tripwire,
+    });
     paired = { ...entry, rootBytes: result.channelRoot };
     return;
   }
 
-  await session.roster.addChannel({ root: result.channelRoot, name, role: result.role });
+  await session.roster.addChannel({ root: result.channelRoot, name, role: result.role, tripwire });
   const entry = session.roster.channel(result.channelRoot);
   paired = { ...entry, rootBytes: result.channelRoot };
   session.tabs.announce("roster", { id: TAB_ID });
@@ -3031,6 +3131,7 @@ async function runInitiate({ as = "link" } = {}) {
   // that invite link", where Cancel would have sent §3.4.1's DELETE for a pairing
   // that had already finished. Rule 5 replaces the record here anyway.
   clearNotice("resume");
+  clearNotice("not-durable");
   show("linkbox", false);
   show("codebox", false);
   clearPairingSurface();
@@ -3081,6 +3182,7 @@ async function runInitiate({ as = "link" } = {}) {
           markStep(copy.pairing.waiting);
         }
         if (e.type === "claimed") markStep(copy.pairing.step.finishing);
+        if (e.type === "not_durable") warnNotDurable();
       },
     });
     await succeed(result);
@@ -3146,6 +3248,7 @@ async function runJoin(fragment) {
           markStep(waitingOther);
         }
         if (e.type === "revealed") markStep(done);
+        if (e.type === "not_durable") warnNotDurable();
       },
     });
     await succeed(result);
@@ -3577,6 +3680,7 @@ async function runResume() {
       onEvent: (e) => {
         if (e.type === "claimed") markStep(waitingOther);
         if (e.type === "revealed") markStep(done);
+        if (e.type === "not_durable") warnNotDurable();
       },
     });
     if (!result) return void (await backToStart());

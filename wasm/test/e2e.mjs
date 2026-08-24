@@ -8,6 +8,7 @@ import zlib from "node:zlib";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { load, check, rejects, done, DIST, bytes, text } from "./harness.mjs";
+import { derivePublicKeys } from "./derive.mjs";
 
 const { LpmSession, prekeyPublicKeys, lpmBuildInfo } = await load();
 
@@ -24,7 +25,7 @@ check("the build reports what it is", !!build.wrapper && !!build.vodozemac,
 
 // --- 1. The initiator starts a session from R alone. -----------------------
 let t = process.hrtime.bigint();
-const initiator = LpmSession.initiate(R, SESSION_ID);
+const initiator = LpmSession.initiate(R, SESSION_ID, "I");
 const initiateMs = Number(process.hrtime.bigint() - t) / 1e6;
 check("initiator creates a session from R with no round trip", true, `${initiateMs.toFixed(1)} ms`);
 
@@ -38,7 +39,7 @@ check("body is base64url, unpadded (§0.1)",
 
 // --- 2. The responder accepts, deriving its own keys from the same R. ------
 t = process.hrtime.bigint();
-const accepted = LpmSession.accept(R, SESSION_ID, first);
+const accepted = LpmSession.accept(R, SESSION_ID, first, "J");
 const acceptMs = Number(process.hrtime.bigint() - t) / 1e6;
 check("responder decrypts it having derived its keys from R",
   text(accepted.plaintext) === "the first message, sent before any reply exists",
@@ -77,32 +78,83 @@ rejects("a wrong pickle key is rejected",
   () => LpmSession.unpickle(initiator.pickle(pickleKey), new Uint8Array(32).fill(8)),
   /unpickle/);
 
+// --- 6b. THE OTHER DIRECTION: the pairing JOINER opens the session. --------
+//
+// ⚠️⚠️ THIS IS THE DIRECTION THAT WAS WRONG FROM THE FIRST BUILD UNTIL 2026-08-24,
+// AND NO TEST COULD SEE IT, INCLUDING THIS ONE. `initiate` always used `idk_I` and
+// `accept` always used `idk_J`, which reads §6.2's *"its own role's identity key"*
+// as though I and J meant session initiator and responder rather than §3's fixed
+// pairing roles. Both parties derive both private keys from `R` — §6.2's
+// deniability property — so the pair below talks perfectly either way and every
+// check above stays green. ➡️ **WHEN BOTH SIDES ARE THE SAME IMPLEMENTATION, A
+// SHARED MISREADING IS INDISTINGUISHABLE FROM THE SPECIFICATION.**
+//
+// ⭐ So the check that has teeth is not "can they talk" — they always could. It is
+// WHICH IDENTITY KEY IS ON THE WIRE, compared against a value `derive.mjs` computes
+// from PROTOCOL.md with Node's own HKDF and X25519 and none of this crate's code.
+// That is the only witness here that is not a party to the misreading.
+{
+  const jSessionId = new Uint8Array(16).fill(0x4a);
+  const jStarts = LpmSession.initiate(R, jSessionId, "J");
+  const jFirst = jStarts.encrypt(bytes("the joiner had no session and sent first"));
+
+  const onWire = JSON.parse(prekeyPublicKeys(jFirst));
+  const expected = derivePublicKeys(Buffer.from(R), Buffer.from(jSessionId));
+  check("⭐⭐ a role-J device addresses its pre-key message FROM idk_J",
+    onWire.identityKey === expected.idk_J,
+    onWire.identityKey === expected.idk_J ? onWire.identityKey.slice(0, 12) + "…"
+      : `wire ${onWire.identityKey.slice(0, 12)}… but idk_J is ${expected.idk_J.slice(0, 12)}…`);
+  check("⭐⭐ and NOT from idk_I, which is what it did until 2026-08-24",
+    onWire.identityKey !== expected.idk_I);
+  check("the one-time key is the session's, whichever role responds",
+    onWire.oneTimeKey === expected.otk);
+
+  const iAccepts = LpmSession.accept(R, jSessionId, jFirst, "I");
+  check("and a role-I device accepts it",
+    text(iAccepts.plaintext) === "the joiner had no session and sent first");
+  const iSide = iAccepts.takeSession();
+  const back = iSide.encrypt(bytes("answered in the other direction"));
+  check("the reply comes back the other way",
+    text(jStarts.decrypt(back)) === "answered in the other direction");
+
+  // ⚠️ AND THE CROSS: the roles are not interchangeable labels. A device that
+  // answered with the WRONG role holds the wrong private key and cannot open it.
+  rejects("a device that answers with the wrong pairing role cannot open it",
+    () => LpmSession.accept(R, jSessionId, jFirst, "J"), /inbound session/);
+}
+
+// --- 6c. The role argument itself. ----------------------------------------
+rejects("an unknown role is refused, not guessed",
+  () => LpmSession.initiate(R, SESSION_ID, "i"), /pairing role/);
+rejects("and an absent one is refused too",
+  () => LpmSession.initiate(R, SESSION_ID, ""), /pairing role/);
+
 // --- 7. Rejections. Every one of these is a caller error that must return an
 // error rather than trap, because `panic = "abort"` poisons the instance. -----
 rejects("a wrong-length root is rejected",
-  () => LpmSession.initiate(bytes("too short"), SESSION_ID), /32 bytes/);
+  () => LpmSession.initiate(bytes("too short"), SESSION_ID, "I"), /32 bytes/);
 rejects("a wrong-length session_id is rejected",
-  () => LpmSession.initiate(R, new Uint8Array(15).fill(0x5e)), /16 bytes/);
+  () => LpmSession.initiate(R, new Uint8Array(15).fill(0x5e), "I"), /16 bytes/);
 rejects("a wrong-length pickle key is rejected",
   () => initiator.pickle(new Uint8Array(31)), /32 bytes/);
 rejects("standard-alphabet base64 is rejected",
-  () => LpmSession.accept(R, SESSION_ID, JSON.stringify({ type: "prekey", body: "AA+/" })),
+  () => LpmSession.accept(R, SESSION_ID, JSON.stringify({ type: "prekey", body: "AA+/" }), "J"),
   /base64url/);
 rejects("an unknown envelope type is rejected",
-  () => LpmSession.accept(R, SESSION_ID, JSON.stringify({ type: "olm", body: "AAAA" })),
+  () => LpmSession.accept(R, SESSION_ID, JSON.stringify({ type: "olm", body: "AAAA" }), "J"),
   /prekey.*normal/);
 rejects("a truncated envelope is rejected",
-  () => LpmSession.accept(R, SESSION_ID, "{not json"), /malformed/);
+  () => LpmSession.accept(R, SESSION_ID, "{not json", "J"), /malformed/);
 // A *well-formed* normal message, not a garbage one: garbage is rejected by the
 // version check inside `decode` and would never reach the rule being tested.
 check("the second turn really is a normal message", JSON.parse(second).type === "normal");
 rejects("a normal message cannot open a session",
-  () => LpmSession.accept(R, SESSION_ID, second), /pre-key/);
+  () => LpmSession.accept(R, SESSION_ID, second, "J"), /pre-key/);
 rejects("a wrong channel root cannot open the message",
-  () => LpmSession.accept(bytes("lpm-e2e-WRONG-root----32-bytes!!"), SESSION_ID, first),
+  () => LpmSession.accept(bytes("lpm-e2e-WRONG-root----32-bytes!!"), SESSION_ID, first, "J"),
   /inbound session/);
 rejects("a wrong session_id cannot open the message",
-  () => LpmSession.accept(R, new Uint8Array(16).fill(0x11), first), /inbound session/);
+  () => LpmSession.accept(R, new Uint8Array(16).fill(0x11), first, "J"), /inbound session/);
 
 // --- 8. Throughput on this machine. ---------------------------------------
 const N = 2000;

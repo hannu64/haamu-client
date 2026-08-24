@@ -753,6 +753,24 @@
         changed is which box the browser paints them in.
       -->
       <section id="chat" class="chatpane hidden">
+        <!--
+          §3.5's evidence, on the conversation, for as long as the conversation
+          exists. ⚠️⚠️ THIS ONE IS AN `alarm` AND THE UNVERIFIED BANNER BELOW IS
+          DELIBERATELY NOT, and the distinction is the whole reason either is
+          believable. Every ordinary conversation is unverified for a while, so a
+          banner that shouted there would be trained away long before the day it
+          mattered. This one appears on a conversation whose invitation was
+          demonstrably held by a second party — which is the day it matters.
+
+          ⚠️ IT IS FIRST IN THE SECTION, ABOVE EVERY OTHER BANNER, and it has no
+          dismiss control by design: §3.5 requires the warning to be
+          non-dismissable, and `roster.setTripwire` has no inverse. The remedy is
+          deleting the conversation.
+        -->
+        <div id="chat-tripwire" class="banner alarm hidden">
+          <p class="m0"><strong id="tripwire-alarm-title"></strong></p>
+          <div class="note" id="tripwire-alarm-what"></div>
+        </div>
         <!-- §3.6.2's state, on the conversation, for as long as it is unverified.
              It must not shout: the channel is encrypted either way and the one
              unchecked thing is who is at the far end. An alarm on every ordinary

@@ -320,6 +320,38 @@ function handle(db, name, guard = (work) => work) {
       await guard(finished(tx));
     },
 
+    /**
+     * Delete NAMED keys across several stores, in one transaction.
+     *
+     * ⚠️⚠️ IT EXISTS BECAUSE `clear()` REACHES TOO FAR AND ITS ATOMICITY IS STILL
+     * NEEDED. §7.8's ordinary ending clears "conversation state" — this identity's.
+     * `clear()` empties whole object stores, so ending one identity in a browser
+     * that holds two destroys the other's message history, which nothing can
+     * recover: those messages were acknowledged and deleted from the server the
+     * moment they arrived. Found by the 2026-08-24 outside review.
+     *
+     * ⭐ AND THE OBVIOUS FIX — a loop of `delete()` calls — WOULD UNDO THE FIX
+     * ABOVE IT. `clear()`'s own comment records why one transaction matters: a
+     * browser killed between two of them leaves a HALF-ENDED identity, whose
+     * message rows become readable again under the re-derived `local_key` on a
+     * device whose owner was told they were gone. So the scoping and the atomicity
+     * are one method: the caller decides WHICH keys outside the transaction, where
+     * it may decrypt; this issues every delete inside one, where it may not.
+     *
+     * `plan` is `[[store, keys], …]`. Every request is issued synchronously — see
+     * the file header.
+     */
+    async deleteAll(plan) {
+      const stores = plan.map(([store]) => store);
+      if (stores.length === 0) return;
+      const tx = db.transaction(stores, "readwrite");
+      for (const [store, keys] of plan) {
+        const os = tx.objectStore(store);
+        for (const key of keys) os.delete(key);
+      }
+      await guard(finished(tx));
+    },
+
     close() {
       db.close();
     },
@@ -394,6 +426,9 @@ export function memoryDatabase({ name = DB_NAME } = {}) {
     },
     async clear(list) {
       for (const store of list) of(store).clear();
+    },
+    async deleteAll(plan) {
+      for (const [store, keys] of plan) for (const key of keys) of(store).delete(enc(key));
     },
     close() {},
   };

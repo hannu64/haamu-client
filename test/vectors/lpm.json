@@ -237,6 +237,30 @@
       "body": "bm90IGEgcmVhbCBPbG0gY2lwaGVydGV4dA"
     }
   },
+  "payload": {
+    "section": "§6.7, §6.7.1, §6.7.2",
+    "frozen": "2026-08-24",
+    "_note": "ADDED 0.9.21, and additive only: no value that existed before this date changed. ⚠️ THE ENCODED BYTES ARE DELIBERATELY NOT FROZEN HERE. §6.7 says UTF-8 JSON and says nothing about key order, so two conforming implementations produce different byte strings from the same payload and interoperate perfectly. A vector that pinned the bytes would fail a correct implementation, which is worse than no vector. What is pinned is the object and the bucket it pads to — both order-independent.",
+    "v": 2,
+    "binding_from_v": 2,
+    "example": {
+      "v": 2,
+      "kind": "text",
+      "sent_at": 1754000000,
+      "session_id": "bHBtLXNlc3Npb24tMTZieQ",
+      "generation": 3,
+      "text": "hei"
+    },
+    "example_padded_length": 256,
+    "closing": {
+      "v": 2,
+      "kind": "closed",
+      "sent_at": 1754000000,
+      "session_id": "bHBtLXNlc3Npb24tMTZieQ",
+      "generation": 3
+    },
+    "closing_padded_length": 256
+  },
   "passphrase": {
     "section": "§7.2, §7.4",
     "phrase": "acid acorn acre acts afar affix aged agent",

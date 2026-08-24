@@ -128,6 +128,60 @@ impl Bootstrap {
             otk: hkdf32(&root.0, &otk_info),
         }
     }
+
+    /// §6.2: *"Each party holds the private keys for the three derived keypairs
+    /// but uses only its own role's identity key."*
+    ///
+    /// ⚠️⚠️ "ITS OWN ROLE" IS THE **PAIRING** ROLE (§3), FIXED FOR THE LIFE OF THE
+    /// CHANNEL — not "whoever is starting this session". Until 2026-08-24 this
+    /// crate had no role parameter at all: `initiate` always used `idk_I` and
+    /// `accept` always used `idk_J`, which reads the same sentence as though I and
+    /// J meant *session* initiator and responder. §6.3 is explicit that either
+    /// party creates a session when it has no usable state — first message, cleared
+    /// storage, device migration — so the pairing JOINER initiates routinely.
+    ///
+    /// ⭐ TWO COPIES OF THIS CLIENT NEVER NOTICED, AND COULD NOT HAVE. Both apply
+    /// the same wrong rule, both derive both private keys from `R` (§6.2's
+    /// deniability property), so every message decrypts and every test passes. What
+    /// breaks is a SECOND IMPLEMENTATION built from `PROTOCOL.md`: a conforming
+    /// role-I peer cannot accept a session this crate's role-J device opened,
+    /// because it is addressed to the wrong identity key. Found by the 2026-08-24
+    /// outside review, which had the specification and not this history.
+    fn own(&self, role: Role) -> &[u8; 32] {
+        match role {
+            Role::I => &self.idk_i,
+            Role::J => &self.idk_j,
+        }
+    }
+
+    fn peer(&self, role: Role) -> &[u8; 32] {
+        match role {
+            Role::I => &self.idk_j,
+            Role::J => &self.idk_i,
+        }
+    }
+}
+
+/// §3's pairing role, which this channel keeps for its whole life.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Role {
+    I,
+    J,
+}
+
+impl Role {
+    /// ⚠️ NO DEFAULT AND NO FALLBACK. An unrecognised role must be a loud error and
+    /// not a guess: guessing is precisely the behaviour being removed, and a silent
+    /// `else { Role::I }` would restore it for every caller that forgot the argument.
+    fn parse(s: &str) -> Result<Self, JsError> {
+        match s {
+            "I" => Ok(Role::I),
+            "J" => Ok(Role::J),
+            other => Err(JsError::new(&format!(
+                "role must be \"I\" or \"J\" (§3's pairing role), got {other:?}"
+            ))),
+        }
+    }
 }
 
 /// Overwrite every string in a `serde_json` tree.
@@ -345,14 +399,20 @@ pub struct LpmSession {
 
 #[wasm_bindgen]
 impl LpmSession {
-    /// Role I (§6.2). Starts a session with no round trip and no key directory —
-    /// the responder's keys come out of `R`.
-    pub fn initiate(root: &[u8], session_id: &[u8]) -> Result<LpmSession, JsError> {
+    /// Start a session with no round trip and no key directory (§6.2) — the
+    /// responder's keys come out of `R`.
+    ///
+    /// ⚠️ `role` IS THIS DEVICE'S PAIRING ROLE (§3), NOT "I am the one starting".
+    /// See `Bootstrap::own`. §6.3 has either party create a session whenever it has
+    /// no usable state, so a role-J device calls this routinely and must still use
+    /// `idk_J`.
+    pub fn initiate(root: &[u8], session_id: &[u8], role: &str) -> Result<LpmSession, JsError> {
+        let role = Role::parse(role)?;
         let root = root32(root)?;
         let session_id = session_id16(session_id)?;
         let b = Bootstrap::derive(&root, session_id);
-        let me = account_from_derived(&b.idk_i, None)?;
-        let peer_idk = Curve25519PublicKey::from(&Curve25519SecretKey::from_slice(&b.idk_j));
+        let me = account_from_derived(b.own(role), None)?;
+        let peer_idk = Curve25519PublicKey::from(&Curve25519SecretKey::from_slice(b.peer(role)));
         let peer_otk = Curve25519PublicKey::from(&Curve25519SecretKey::from_slice(&b.otk));
         let session = me
             .create_outbound_session(SessionConfig::version_1(), peer_idk, peer_otk)
@@ -360,13 +420,23 @@ impl LpmSession {
         Ok(Self { session })
     }
 
-    /// Role J (§6.2). Accepts the first message and returns its plaintext.
-    pub fn accept(root: &[u8], session_id: &[u8], message: &str) -> Result<LpmAccepted, JsError> {
+    /// Accept the first message on a session and return its plaintext (§6.2).
+    ///
+    /// ⚠️ `role` IS THIS DEVICE'S PAIRING ROLE, as above. §6.2's single `otk` is
+    /// per-`session_id` rather than per-role, so it belongs to whichever party is
+    /// RESPONDING on that session — which is this one, whatever its pairing role.
+    pub fn accept(
+        root: &[u8],
+        session_id: &[u8],
+        message: &str,
+        role: &str,
+    ) -> Result<LpmAccepted, JsError> {
+        let role = Role::parse(role)?;
         let root = root32(root)?;
         let session_id = session_id16(session_id)?;
         let b = Bootstrap::derive(&root, session_id);
-        let mut me = account_from_derived(&b.idk_j, Some(&b.otk))?;
-        let peer_idk = Curve25519PublicKey::from(&Curve25519SecretKey::from_slice(&b.idk_i));
+        let mut me = account_from_derived(b.own(role), Some(&b.otk))?;
+        let peer_idk = Curve25519PublicKey::from(&Curve25519SecretKey::from_slice(b.peer(role)));
         let prekey = match decode(message)? {
             OlmMessage::PreKey(p) => p,
             OlmMessage::Normal(_) => {

@@ -86,6 +86,12 @@ function validate(roster) {
     if (c.verified !== undefined && typeof c.verified !== "boolean") {
       throw new TypeError(`roster: verified must be a boolean, got ${JSON.stringify(c.verified)}`);
     }
+    // §3.5, and the same reasoning as `verified` above: optional on the wire
+    // because rosters written before 0.9.22 do not have it, and a missing field
+    // reads as `false` — a channel nobody recorded evidence against has none.
+    if (c.tripwire !== undefined && typeof c.tripwire !== "boolean") {
+      throw new TypeError(`roster: tripwire must be a boolean, got ${JSON.stringify(c.tripwire)}`);
+    }
   }
   return roster;
 }
@@ -136,6 +142,7 @@ export async function openRoster(rosterKey, blob) {
  *   4. `name` is last-write-wins by `created` order;
  *   5. `purged_at` takes the maximum, treating null as zero;
  *   6. `verified` is the OR of the two (§3.6.2).
+ *   7. `tripwire` is the OR of the two (§3.5).
  *
  * ⭐ RULE 6 IS THE ONE FIELD HERE WITH NO DISCRIMINATOR PROBLEM, and that is why
  * it is monotone rather than last-write-wins (D-080). Rule 4's defect was a
@@ -209,7 +216,10 @@ export async function mergeRosters(mine, theirs) {
     if (!held) {
       // Normalised here so that everything downstream of a merge has the field,
       // rather than only the entries that happened to collide.
-      channels.set(c.root, { entry: { ...c, verified: Boolean(c.verified) }, at });
+      channels.set(c.root, {
+        entry: { ...c, verified: Boolean(c.verified), tripwire: Boolean(c.tripwire) },
+        at,
+      });
       continue;
     }
     const { entry: existing, at: heldAt } = held;
@@ -241,6 +251,13 @@ export async function mergeRosters(mine, theirs) {
         name,
         generation: Math.max(c.generation, existing.generation), // rule 3
         verified: Boolean(c.verified) || Boolean(existing.verified), // rule 6
+        // ⚠️⚠️ RULE 7, AND THE OBJECT LITERAL IS WHY IT HAD TO BE ADDED HERE RATHER
+        // THAN LEFT TO SPREAD. This merge names every field it keeps, so a field
+        // with no rule is not merged conservatively — it is DROPPED, silently, on
+        // the first collision between two devices. §3.5's alarm stored without
+        // this line would survive every test that never merged and vanish in the
+        // field, which is the worst of the three possible outcomes.
+        tripwire: Boolean(c.tripwire) || Boolean(existing.tripwire), // rule 7
       },
       at: Math.max(at, heldAt),
     });

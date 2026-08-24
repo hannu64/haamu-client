@@ -32,9 +32,13 @@ export class LpmSession {
     free(): void;
     [Symbol.dispose](): void;
     /**
-     * Role J (§6.2). Accepts the first message and returns its plaintext.
+     * Accept the first message on a session and return its plaintext (§6.2).
+     *
+     * ⚠️ `role` IS THIS DEVICE'S PAIRING ROLE, as above. §6.2's single `otk` is
+     * per-`session_id` rather than per-role, so it belongs to whichever party is
+     * RESPONDING on that session — which is this one, whatever its pairing role.
      */
-    static accept(root: Uint8Array, session_id: Uint8Array, message: string): LpmAccepted;
+    static accept(root: Uint8Array, session_id: Uint8Array, message: string, role: string): LpmAccepted;
     decrypt(message: string): Uint8Array;
     /**
      * ⚠️ `plaintext` is the §6.5 **padded byte string**, not text — see rule 3
@@ -42,10 +46,15 @@ export class LpmSession {
      */
     encrypt(plaintext: Uint8Array): string;
     /**
-     * Role I (§6.2). Starts a session with no round trip and no key directory —
-     * the responder's keys come out of `R`.
+     * Start a session with no round trip and no key directory (§6.2) — the
+     * responder's keys come out of `R`.
+     *
+     * ⚠️ `role` IS THIS DEVICE'S PAIRING ROLE (§3), NOT "I am the one starting".
+     * See `Bootstrap::own`. §6.3 has either party create a session whenever it has
+     * no usable state, so a role-J device calls this routinely and must still use
+     * `idk_J`.
      */
-    static initiate(root: Uint8Array, session_id: Uint8Array): LpmSession;
+    static initiate(root: Uint8Array, session_id: Uint8Array, role: string): LpmSession;
     /**
      * vodozemac's own session identifier, which is **not** §6.3's `session_id`.
      * Exposed under an unambiguous name so the two can never be confused.
@@ -103,10 +112,10 @@ export interface InitOutput {
     readonly lpmBuildInfo: (a: number) => void;
     readonly lpmaccepted_plaintext: (a: number, b: number) => void;
     readonly lpmaccepted_takeSession: (a: number, b: number) => void;
-    readonly lpmsession_accept: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
+    readonly lpmsession_accept: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
     readonly lpmsession_decrypt: (a: number, b: number, c: number, d: number) => void;
     readonly lpmsession_encrypt: (a: number, b: number, c: number, d: number) => void;
-    readonly lpmsession_initiate: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly lpmsession_initiate: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
     readonly lpmsession_olmSessionId: (a: number, b: number) => void;
     readonly lpmsession_pickle: (a: number, b: number, c: number, d: number) => void;
     readonly lpmsession_unpickle: (a: number, b: number, c: number, d: number, e: number) => void;

@@ -405,8 +405,15 @@ export const terms = {
       "Nothing that could unscramble it ever reaches the server. If somebody stole the server, " +
         "there is simply nothing there to read the message with.",
 
+      // ⚠️⚠️ "${days(MAILBOX_LIFE_S)} DAYS LATER" WAS THE WRONG REFERENCE POINT, AND
+      // IT READ AS A PROMISE ABOUT THE MESSAGE. §5.1.1's clock runs from the MAILBOX's
+      // creation, not the message's, so a message sent late in a mailbox's life gets
+      // nearer §5.4's floor than its ceiling — a reader who came back on the eighth day
+      // expecting the number they were shown would find it gone. The floor is the number
+      // that is true of every message, so it is the one this sentence leads with.
       `A message is deleted the moment your friend's device has collected it and said so. Anything ` +
-        `never collected is deleted when the mailbox is recycled, ${days(MAILBOX_LIFE_S)} days later.`,
+        `never collected is held for at least ${days(EPOCH_SECONDS)} days, and goes when the ` +
+        `mailbox is recycled — ${days(MAILBOX_LIFE_S)} days after that mailbox was made.`,
 
       "Your conversation list is kept on the server too, so your other devices can find it. It is " +
         "encrypted under your KEY and filed under a number — no phone, no name, no email address — " +
@@ -542,9 +549,12 @@ export const server = {
   // sentence is read by both ends and only one of them is "the other person".
   // ⚠️ "and said so" moved to `terms.server`: it is §5.4.1's acknowledgement and it
   // is the kind of clause the tester round said to spend somewhere else.
+  // ⚠️ See `terms.server.body[2]`: the same correction, and the same reason. §5.4's
+  // promise is a FLOOR — "at least 7 days" — and the ceiling belongs to the mailbox.
   whenItGoes:
     "A message is deleted from the server the moment the receiver's device has collected it. " +
-    `Anything never collected is deleted when the mailbox is recycled, ${days(MAILBOX_LIFE_S)} days later.`,
+    `Anything never collected is held for at least ${days(EPOCH_SECONDS)} days, and goes when the ` +
+    `mailbox is recycled — ${days(MAILBOX_LIFE_S)} days after that mailbox was made.`,
 
   // §7.3: the roster is stored server-side, permanently, as ciphertext under a
   // number. It is the one thing this product does keep centrally and the copy
@@ -1336,6 +1346,21 @@ export const chat = {
   staleSession:
     "A message is lost. It arrived before this conversation was re-established — please ask your " +
     "friend to resend.",
+  // ⚠️⚠️ §6.7.2, ADDED 2026-08-24, AND IT IS THE ONE LINE IN THIS FILE THAT NAMES THE
+  // SERVER AS THE ACTOR. Every other refusal above describes a state — a version, a
+  // restore, a re-established conversation — and none of them accuses anybody. This
+  // one can only be reached by an envelope being rewritten in transit, and nothing but
+  // the server is in that position. Saying so is not alarmism: the whole product is
+  // built on not trusting it, so the one time that distrust is VINDICATED is exactly
+  // when the person should be told plainly. `list.versionMismatch` sets the register.
+  //
+  // ⭐ AND THE SECOND SENTENCE IS LOAD-BEARING. "Altered" without "stayed encrypted"
+  // reads as "somebody read my message", which is the opposite of what happened — the
+  // alteration is visible precisely BECAUSE the encryption held.
+  tampered:
+    "A message arrived whose delivery labels had been changed on the way. What was inside stayed " +
+    "encrypted and no one else could read it — but this device does not act on a message the " +
+    "server has altered. Please ask your friend to send it again.",
   unreadable: (reason) => `A message arrived that could not be read (${reason}).`,
 
   // ── D-130: this browser holds the conversation but has never held its keys ──
@@ -1715,7 +1740,32 @@ export const ghost = {
   // assumption and the label has to carry that: Ghost is the expert's deliberate
   // act, not the beginner's starting point — "for a first-timer Ghost is not a
   // privacy feature at all, it is just the state in which they lose everything".
-  offer: "Ghost mode — no KEY, and once this tab is closed the conversation is gone",
+  /*
+    ⚠️⚠️⚠️ THE FOUR SENTENCES BELOW ALL SAID "DIES WITH THE TAB", WHICH §7.6 NAMES AS
+    ONE OF THE TWO CLAIMS IT FORBIDS — and the comment on `what` had been quoting that
+    prohibition, correctly, for months, three lines away from three sentences making it.
+
+    §7.6, exactly: *"Ghost mode's guarantee is 'nothing is written to the roster and
+    nothing is recoverable on another device'. It is NOT 'nothing is written to disk',
+    and it is NOT 'dies with the tab'."* Measured in the same section: Firefox persists
+    `sessionStorage` for session restore, and it **survives a full browser restart**
+    whenever restore applies — "continue where you left off", crash recovery, an
+    OS-level app restore.
+
+    ⚠️ AND THE HARM RUNS THE OTHER WAY FROM THE USUAL OVERCLAIM. Most false promises
+    make a person feel safer than they are; this one makes them WALK AWAY. Somebody
+    told the conversation is gone closes the laptop and leaves it — and the next person
+    to open that browser gets the root, the messages and the ratchet. Found by the
+    2026-08-24 outside review.
+
+    ⭐ SO THE REPAIR IS NOT "SAY LESS". The loss is real and D-016 measured five testers
+    out of five losing the tab, so the warning has to stay; what changes is that losing
+    it is now the EXPECTATION rather than the guarantee, and the only guarantee offered
+    is the one §7.6 actually gives. The measurement that makes "usually" the right word
+    is §7.6's own: the restore is **not realised on Android or iOS**, so on a phone it
+    really is gone and on a desktop it may not be.
+  */
+  offer: "Ghost mode — no KEY, and losing this tab usually loses the conversation",
 
   /**
    * ⚠️⚠️ ONE LINE UNDER THE LINK, AND §7.6's EXACTNESS RULE BINDS IT HARDEST HERE.
@@ -1726,17 +1776,25 @@ export const ghost = {
    * `notErased` two screens later is where that gets its full sentence.
    */
   offerWhat:
-    "A Ghost conversation is never added to your contacts. Closing the tab loses it for good — " +
-    "there is nothing anywhere that could bring it back.",
+    "A Ghost conversation is never added to your contacts and never reaches your other devices. " +
+    "Closing the tab almost always loses it — but it is not erased, so end it deliberately.",
 
   // ⚠️⚠️ §7.6 STATES ITS GUARANTEE EXACTLY AND FORBIDS THE TWO SENTENCES EVERYBODY
   // WRITES INSTEAD. It is "nothing is written to the roster and nothing is
   // recoverable on another device". It is NOT "nothing is written to disk" — a
   // `sessionStorage` area is a file — and it is NOT "dies with the tab", which
   // earlier versions of the section claimed and which is false.
+  // ⚠️ AND THE SECOND HALF WAS AN OVERCLAIM OF ITS OWN (review C#5). It said *"there is
+  // nothing on the server tying it to you"*, which is a statement about the whole server
+  // and not about the roster. §7.6 removes the LIST ENTRY; §5.1 leaves the mailbox, the
+  // timing and the address exactly as they are in every other mode, and `server.what`
+  // already says so at length. A mode that removes one link is not a mode that removes
+  // them all, and the last sentence now points at the paragraph that has the rest.
   what:
-    "This conversation stays in this browser tab. It is never added to a conversation list, " +
-    "so there is nothing on the server tying it to you and no way to open it on another device.",
+    "This conversation stays in this browser tab. It is never added to a conversation list, so " +
+    "the server holds no record of it beside your other conversations, and there is no way to " +
+    "open it on another device. What the server can see of any conversation, it can still see " +
+    "of this one.",
 
   // ⚠️ THE COST IS STATED BEFORE THE CHOICE, not after it. Phase 0.5 measured five
   // testers out of five losing the browser tab (D-016), and Ghost mode is that
@@ -1744,8 +1802,9 @@ export const ghost = {
   // "looking exactly as though the conversation should still be there, and it is
   // gone", and that the client owes this user an explanation rather than a blank.
   cost:
-    "If this tab closes, or the browser stops, the conversation is gone. There is no KEY and " +
-    "no copy anywhere else, so nothing can bring it back.",
+    "If this tab closes, expect the conversation to be gone: there is no KEY, and no copy on " +
+    "any other device. A browser that reopens your tabs can sometimes bring it back on this " +
+    "device, so ending it deliberately is the only way to be sure.",
 
   // ⚠️ §7.6, and §7.8's "unreachable is not erased" one level down. The bytes reach
   // the disk like any others; process death removes them logically — a tombstone in
@@ -1786,9 +1845,14 @@ export const ghost = {
   // screen whose subject is *you cannot make this go away*. So it names site data, which
   // is the control that removes what the browser wrote. ⚠️ It still does not promise the
   // bytes are gone — "not scrubbed off your device" above is what stops it.
+  // ⚠️⚠️ "IT IS IMPOSSIBLE TO OPEN" WAS THE SAME FORBIDDEN CLAIM IN ITS STRONGEST FORM,
+  // and it sat in the paragraph whose whole subject is *you cannot make this go away*.
+  // The sentence that replaces it says the one thing a person can act on: a browser that
+  // reopens tabs can reopen this, so end it on purpose.
   notErased:
     "When this tab is open, the browser writes on your device. That cannot be prevented. The " +
-    "conversation is not scrubbed off your device, but it is impossible to open. If you want: " +
+    "conversation is not scrubbed off your device when the tab goes, and a browser that reopens " +
+    "your tabs can sometimes open it again here. If you want it gone: end it deliberately, then " +
     "clear this site's data in your browser settings.",
 
   start: "Create an invite link",
@@ -1935,8 +1999,10 @@ export const panic = {
   // SECOND sentence and this becomes the promise the rule was written against.
   // ⭐ "reach" → "stop": what a deletion cannot do to a message already in flight is
   // stop it, and "reach" was the vaguer verb.
+  // ⚠️ §6.7.1 rule 2 again, at scale. "are told" was a promise about fifty bounded
+  // best-effort sends at once; each one can fail on its own and none is acknowledged.
   otherSide:
-    "The people you were talking to are told that these conversations have ended. This does not " +
+    "A closing notice is sent to each person you were talking to. This does not " +
     "delete anything on their devices, and it does not stop anything already on its way to them.",
 
   // ⚠️⚠️ FEEDBACK 4 (round 3), AND THE LABEL WAS THE WHOLE DEFECT. Hannu pressed
@@ -1964,11 +2030,17 @@ export const panic = {
   // ⚠️ BOTH NUMBERS ARE COMPUTED AND SO IS THE GRAMMAR (D-082). "the other person"
   // stays singular because it is singular per conversation, which is what makes
   // this read correctly at one conversation and at fifty.
+  // ⚠️ §6.7.1 rule 2. The count is of notices this device SENT — the only number it
+  // can know. ⭐ "the other person" stays singular because it is singular per
+  // conversation, which is what makes this read correctly at one and at fifty (D-082).
   told: (n, of) =>
-    `${plural(of, "conversation")} deleted, and the other person was told in ${n} of them.`,
+    `${plural(of, "conversation")} deleted, and a closing notice was sent to the other person in ${n} of them.`,
 
+  // ⚠️ IT MUST NOT CLAIM NON-DELIVERY EITHER. It said *"nothing reached them"*, and a
+  // send that fails locally cannot tell "never arrived" from "arrived, answer lost" —
+  // the same ignorance that forbids the promise in the other direction.
   toldNone:
-    "The conversations were deleted. Nobody could be told — nothing reached them, and their copies " +
+    "The conversations were deleted. No closing notice could be sent, and their copies " +
     "are still open on their devices.",
 
   // §7.3.1a: reachable from a device the user has never used before, with the
@@ -2080,6 +2152,24 @@ export const pairing = {
       "Keep this tab open until your friend has opened it. In Ghost mode this tab is holding your half " +
       "of the pairing — close it and the invite link cannot be finished, and you will both need a new one.",
   },
+
+  /**
+   * §3.4.1b, when the in-flight record could not be written.
+   *
+   * ⚠️ ROLE-NEUTRAL ON PURPOSE. It is shown to an initiator watching a link, an
+   * initiator watching a code, and a joiner waiting for the reveal — three screens
+   * whose other sentences are deliberately different, because §2.2's copy may not
+   * say "link" and §2.1's may not say "code". Naming neither keeps one string honest
+   * on all three; the thing it has to say is about the TAB, which is the same in
+   * every case.
+   *
+   * ⚠️ IT DESCRIBES THE BROWSER'S REFUSAL, NOT A FAULT. A person on a locked-down
+   * or private-mode browser has not done anything wrong and nothing is broken —
+   * there is one capability missing and one thing to do about it.
+   */
+  notDurable:
+    "This browser would not let this page save your half of the pairing. Keep this tab open " +
+    "until the pairing finishes — if it closes, you will both need to start again.",
 
   waiting: "Waiting for your friend to open it…",
 
@@ -2497,9 +2587,28 @@ export const pairing = {
   // whenever a second claim arrives and has no key to check one with, so an
   // unverified flag means somebody forged a claim — a nuisance, not an
   // interception.
+  /**
+   * ⚠️⚠️ IT SAID *"The pairing itself is sound"* UNTIL 0.9.22, AND THAT SENTENCE WAS
+   * A COIN-FLIP STATED AS A FACT — quite possibly the inversion of the truth.
+   *
+   * A verified tripwire means the refused claim's MAC checked out against a key
+   * derived from `L` (§3.5, `readTripwire`), so **two different parties holding the
+   * invite link both claimed it**, and the session went to whichever reached the
+   * compare-and-set first. Nothing in the evidence says which. If the interceptor
+   * won the race — and an interceptor is watching for the link while a friend is
+   * merely reading a message — the pairing is with the interceptor, and this string
+   * was telling the user it was fine.
+   *
+   * ⭐ AND THE ALARM IS NEVER A FALSE ONE, which is what makes saying so affordable:
+   * `writeRetrying` reads back the `J_pub` only this device could have produced
+   * before ever re-sending a claim (§3.4.1b rule 10, §3.6.1), so an honest party's
+   * own retry cannot present as a second holder. The uncertainty is about WHO won,
+   * not about whether anything happened.
+   */
   tripwire:
-    "Somebody else tried to open this invite link before the person you sent it to. " +
-    "The pairing itself is sound, but the link was seen by someone. Consider whether that matters.",
+    "Somebody else tried to open this invite link. The conversation went to whoever answered " +
+    "first, and nothing here can tell you whether that was your friend. Compare the six digits " +
+    "before you trust this conversation, and delete it if they do not match.",
 
   failure: {
     link_malformed:
@@ -2655,6 +2764,36 @@ export const verification = {
    * those two, which is where its job went** (D-107).
    */
 
+  /**
+   * §3.5's warning where it actually has to live: on the conversation, for as long
+   * as the conversation exists.
+   *
+   * ⚠️⚠️ THIS IS THE ONE ALARM IN THE PRODUCT AND IT IS WHY EVERY OTHER BANNER IS
+   * QUIET. `unverified` above deliberately refuses to shout, because it appears on
+   * every ordinary conversation; this appears only where a second holder of the
+   * invite link is a measured fact, and it does not go away.
+   *
+   * ⚠️ IT MUST NOT SAY THE CONVERSATION IS COMPROMISED, and it must not say it is
+   * fine. Both are claims about who won a race this device did not witness. What it
+   * says is what happened and what the person can do about it — the six digits are
+   * the answer, and they are recomputable at any time (§3.6.2), so the instruction
+   * is always actionable.
+   *
+   * ⚠️ IT MUST NOT STOP AT "COMPARE THE DIGITS" EITHER. A comparison that MATCHES
+   * settles who is at the far end; it does not un-hold the link. That is why the
+   * last sentence is here and why the banner is not gated on `verified`.
+   */
+  tripwireTitle: "Somebody else opened this conversation's invite link",
+
+  tripwire:
+    "Somebody besides your friend had this invite link and tried to use it. The conversation " +
+    "went to whoever answered first, and nothing here can tell you whether this is your friend.\n\n" +
+    "Compare the [six digits](six-digits) with your friend out loud. If they match, this is " +
+    "your friend. If they do not, delete this conversation and pair again with a new invite " +
+    "link, sent a different way.\n\n" +
+    "This notice stays until the conversation is deleted. Comparing the digits does not remove " +
+    "it: it tells you who is at the far end, not that nobody else ever held the invite link.",
+
   check: "Compare the six digits",
 
   // §3.6.2: the SAS derives from the channel root, so it can be shown again at any
@@ -2689,13 +2828,27 @@ export const verification = {
  */
 export const closing = {
   // Appended to the deletion confirmation, before anything is removed.
-  willTell: "The other person will be told that this conversation has ended.",
+  /**
+   * ⚠️⚠️ §6.7.1 RULE 2: *"the copy MUST NOT promise it was delivered."* This said
+   * *"The other person will be told"* until 0.9.22, which is a promise about a
+   * bounded best-effort send — one attempt, no retry, no acknowledgement, and a
+   * server that can simply drop it. What the product actually does is TRY.
+   */
+  willTell: "We will try once to send the other person a notice that this conversation has ended.",
 
   // ⚠️ FEEDBACK 1. "They have been told." — told WHAT? The sentence was written
   // beside the code that sends the notice, where the subject is obvious, and read
   // on a screen where the last thing that happened was a deletion. A notice that
   // reports an outcome has to carry the outcome with it.
-  sent: "The other person has been told that you ended the conversation.",
+  /**
+   * ⚠️⚠️ THE SEND RESOLVING MEANS THE SERVER ACCEPTED THE CIPHERTEXT, NOT THAT
+   * ANYBODY READ IT. It said *"The other person has been told"* until 0.9.22 — the
+   * receiver may be offline until the mailbox expires, or a hostile server may
+   * simply withhold it, and the sender would have been relying on a warning that
+   * never happened. ⭐ Feedback 1's requirement survives the correction: the
+   * sentence still says WHAT the notice says, which is the part a person wants.
+   */
+  sent: "A closing notice was sent, saying that you ended the conversation.",
 
   // ⚠️ IT DID NOT GO, AND SAYING SO IS THE POINT. Nothing about the deletion
   // changes — the conversation is gone from here either way — and a person who

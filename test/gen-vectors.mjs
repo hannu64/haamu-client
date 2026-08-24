@@ -26,6 +26,7 @@ import * as epoch from "../src/protocol/epoch.js";
 import * as mailboxes from "../src/protocol/mailbox.js";
 import * as signing from "../src/protocol/signing.js";
 import * as envelope from "../src/protocol/envelope.js";
+import * as payload from "../src/protocol/payload.js";
 import * as passphrase from "../src/protocol/passphrase.js";
 import * as roster from "../src/protocol/roster.js";
 import * as pow from "../src/protocol/pow.js";
@@ -239,6 +240,21 @@ const mailbox0 = await mailboxes.deriveMailbox(R, 2900, mailboxes.DIR_I2J);
 const rosterMine = await passphrase.deriveRosterKeys(K_MASTER);
 const rosterTheirs = ref.rosterKeys(K_MASTER);
 
+// ⚠️ §7.7: `roster_key` is a non-extractable `CryptoKey` on the `src` side, so the
+// two implementations are held together by USE rather than by comparison. If they
+// have derived different keys this refuses to freeze anything, exactly as `agree`
+// would have. See the note beside `roster_key` below.
+{
+  const sealed = await roster.sealRoster(rosterTheirs.rosterKey, roster.emptyRoster(TIMESTAMP));
+  let opened = null;
+  try {
+    opened = await roster.openRoster(rosterMine.rosterKey, sealed.blob);
+  } catch (err) {
+    die("roster_key disagrees", `src cannot open what derive.mjs sealed (${err.message})`, "");
+  }
+  if (opened?.roster?.written_at !== TIMESTAMP) die("roster_key disagrees", "opened, but not into the roster that went in", "");
+}
+
 for (const c of cases) {
   const isRoster = c.tag === signing.TAG_ROSTER;
   const id = isRoster ? rosterMine.rosterId : mailbox0.mailboxId;
@@ -292,6 +308,41 @@ out.envelope = {
   }),
 };
 
+// ------------------------------------------------------------ §6.7, §6.7.1, §6.7.2
+//
+// ⚠️⚠️ THE ENCODED BYTES ARE DELIBERATELY NOT FROZEN, and leaving them out is the
+// harder call rather than the lazy one. §6.7 says "UTF-8 JSON" and says nothing
+// about key order, so two conforming implementations produce different byte strings
+// from the same payload and interoperate perfectly. A frozen `encoded` would fail a
+// correct second implementation over a difference the protocol does not have — which
+// is worse than no vector, because a vector's whole authority is that failing it
+// means something. What is pinned is the OBJECT and the bucket it pads to; both are
+// order-independent, and the bucket is the one thing §6.5 makes observable.
+const examplePayload = payload.buildPayload({
+  text: "hei",
+  sentAt: 1754000000,
+  sessionId,
+  generation: 3,
+});
+const closingPayload = payload.buildClosing({ sentAt: 1754000000, sessionId, generation: 3 });
+out.payload = {
+  section: "§6.7, §6.7.1, §6.7.2",
+  frozen: "2026-08-24",
+  _note:
+    "ADDED 0.9.21, and additive only: no value that existed before this date changed. " +
+    "⚠️ THE ENCODED BYTES ARE DELIBERATELY NOT FROZEN HERE. §6.7 says UTF-8 JSON and " +
+    "says nothing about key order, so two conforming implementations produce different " +
+    "byte strings from the same payload and interoperate perfectly. A vector that pinned " +
+    "the bytes would fail a correct implementation, which is worse than no vector. What " +
+    "is pinned is the object and the bucket it pads to — both order-independent.",
+  v: payload.PAYLOAD_V,
+  binding_from_v: payload.BINDING_FROM_V,
+  example: examplePayload,
+  example_padded_length: envelope.pad(payload.encodePayload(examplePayload)).length,
+  closing: closingPayload,
+  closing_padded_length: envelope.pad(payload.encodePayload(closingPayload)).length,
+};
+
 // ------------------------------------------------------------- §7.2 and §7.4
 // The four spellings below must all canonicalise to one byte string: a
 // non-breaking space, a tab, mixed case, an NFD "é" and a trailing newline are
@@ -321,7 +372,21 @@ out.passphrase = {
   // on either side yet (ROADMAP step 7), so these vectors start one step later.
   k_master: b64uEncode(K_MASTER),
   roster_id: agree("roster_id", rosterMine.rosterId, rosterTheirs.rosterId),
-  roster_key: agree("roster_key", rosterMine.rosterKey, rosterTheirs.rosterKey),
+  /*
+    ⚠️⚠️ THE FROZEN VALUE IS `derive.mjs`'s, AND FROM 2026-08-24 IT HAS TO BE. §7.7
+    requires `roster_key` to come out of `deriveKey` and to exist *"never as bytes"*,
+    so `src/protocol/passphrase.js` no longer produces a `Uint8Array` for `agree()`
+    to compare — there is nothing there to compare. The value below is unchanged from
+    the 2026-08-11 freeze, because it is the same HKDF it always was.
+
+    ⭐ AND THE AGREEMENT IS STILL CHECKED, one line up rather than here: the two
+    implementations are held together by `sealed`/`opened` above, which seals under
+    `derive.mjs`'s raw bytes and opens with `src`'s non-extractable key. A key that
+    opens what another key sealed IS that key, and the check also proves the derived
+    one reached WebCrypto as AES-GCM with both usages — which comparing 32 bytes
+    never could. `test/vectors.mjs` runs the same pair on every build.
+  */
+  roster_key: b64uEncode(rosterTheirs.rosterKey),
   roster_auth_public: agree("roster_auth pk", rosterMine.rosterAuth.publicKey, rosterTheirs.rosterAuth.publicKey),
 };
 

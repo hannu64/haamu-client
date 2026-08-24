@@ -3,7 +3,7 @@
 
 import { asciiBytes, concat, expectLength, utf8Bytes } from "../crypto/bytes.js";
 import { sha256 } from "../crypto/hash.js";
-import { hkdf } from "../crypto/hkdf.js";
+import { hkdf, hkdfKey } from "../crypto/hkdf.js";
 import { randomIndex } from "../crypto/random.js";
 import * as ed25519 from "../crypto/ed25519.js";
 import { WORDLIST } from "./wordlist.js";
@@ -168,7 +168,28 @@ export async function deriveRosterKeys(kMaster) {
   expectLength(kMaster, 32, "K_master");
   const [rosterId, rosterKey, authSeed, localKey, pickleKey] = await Promise.all([
     hkdf(kMaster, INFO_ROSTER_ID, 16),
-    hkdf(kMaster, INFO_ROSTER_KEY, 32),
+    /*
+      ⚠️⚠️ `roster_key` IS THE ONE LINE HERE THAT IS NOT `hkdf`, AND §7.7's TABLE IS
+      THE REASON. That table says of this key: *"yes — `deriveKey` produces it
+      directly, never as bytes"*, and lists it as one of only two rows in the whole
+      client that genuinely avoid raw exposure. Until 2026-08-24 the row described no
+      code: this was `hkdf(..., 32)` like its neighbours, and `crypto/aead.js`
+      re-imported those bytes on every roster read and every roster write.
+
+      ⭐ WHAT THE DIFFERENCE BUYS IS NARROW AND REAL. Neither form survives a device
+      that is already unlocked and running injected code — §11 names that as the
+      weakest link and §7.7 refuses to claim otherwise. What it stops is the copy
+      that OUTLIVES the page: injected code can patch `SubtleCrypto.prototype`,
+      wait for the next roster write, and read 32 bytes off the argument that decrypt
+      every roster blob the server holds, for ever, from anywhere. With this line it
+      can use the key while it is there and cannot take it away.
+
+      ⚠️ The neighbours are NOT an oversight. `local_key` and `pickle_key` leave as
+      bytes because their consumers need bytes — vodozemac pickles under a raw key,
+      and §7.7's table lists both as raw with the reason. Changing them would be
+      changing the claim, not honouring it.
+    */
+    hkdfKey(kMaster, INFO_ROSTER_KEY, { name: "AES-GCM", length: 256 }, ["encrypt", "decrypt"]),
     hkdf(kMaster, INFO_ROSTER_AUTH, 32),
     hkdf(kMaster, INFO_LOCAL_KEY, 32),
     hkdf(kMaster, INFO_PICKLE_KEY, 32),

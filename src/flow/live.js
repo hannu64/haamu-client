@@ -253,12 +253,36 @@ export function startLive(
     }
   }
 
-  void streamLoop();
-  void pollLoop();
+  // ⚠️ THE PROMISES ARE KEPT, NOT VOIDED. `stop()` has to await these; see below.
+  const loops = [streamLoop(), pollLoop()];
 
   return {
-    stop() {
+    /*
+      §7.8 step 1: stop everything that writes, and DO NOT RESOLVE UNTIL IT HAS
+      STOPPED.
+
+      ⚠️⚠️ THIS USED TO BE `stopping.abort()` AND NOTHING ELSE, WHICH IS A REQUEST
+      RATHER THAN A STOP. Found by the 2026-08-24 outside review, and the failure it
+      describes has no attacker in it: a wake starts a drain, the mailbox answers,
+      and while the plaintext is being decrypted and written the person presses the
+      ending control. `abort()` returns instantly, step 3 clears the database — and
+      then the drain that was already past its abort checks writes the advanced
+      ratchet and the decrypted message into the store that was just emptied. **The
+      conversation the person ended reappears at the next unlock.**
+
+      ⭐ ABORTING FIRST AND AWAITING SECOND IS THE ORDER, and both halves are needed.
+      The abort is what makes the wait short — every loop below checks the signal and
+      every `sleep` resolves on it — and the wait is what makes the abort mean
+      anything. Aborting alone stops the work that has not started; awaiting alone
+      would wait for loops that never end.
+
+      ⚠️ `allSettled`, NOT `all`. A stream that rejects as it is torn down is the
+      ordinary case, and an ending that propagated it would leave the person's data
+      half-removed with an error on the screen.
+    */
+    async stop() {
       stopping.abort();
+      await Promise.allSettled([...loops, drainNow.idle()]);
     },
     drainNow,
     get state() {
@@ -284,23 +308,48 @@ export function startLive(
  * three wakes during one drain are one more drain, not three.
  */
 export function serialiser(fn, stopped = () => false) {
-  let running = false;
+  let inFlight = null;
   let again = false;
-  return async function run() {
-    if (running) {
-      again = true;
-      return;
-    }
-    running = true;
+
+  async function loop() {
     try {
       do {
         again = false;
         await fn();
       } while (again && !stopped());
     } finally {
-      running = false;
+      inFlight = null;
     }
-  };
+  }
+
+  async function run() {
+    if (inFlight) {
+      again = true;
+      return;
+    }
+    inFlight = loop();
+    return inFlight;
+  }
+
+  /**
+   * Resolve when nothing is running — including a run that was coalesced into the
+   * current one and has not started yet.
+   *
+   * ⚠️⚠️ THIS IS §7.8 STEP 1's HANDLE AND IT IS THE WHOLE REASON `running` STOPPED
+   * BEING A BOOLEAN. `run()` deliberately returns at once when a drain is already
+   * going — three wakes during one drain are one more drain, not three — so a caller
+   * awaiting `run()` learns nothing about the drain that is actually in progress.
+   * The ending needs the opposite question: *is the work that writes to storage
+   * finished?* Until 2026-08-24 there was no way to ask it, and §7.8 step 1's
+   * "stop everything that writes" stopped only the things that had not started.
+   *
+   * ⚠️ IT NEVER REJECTS. A drain that failed is still a drain that finished, and an
+   * ending must not be blocked — or worse, abandoned half-done — because the network
+   * went away while the person was pressing the control.
+   */
+  run.idle = () => (inFlight ? inFlight.then(() => {}, () => {}) : Promise.resolve());
+
+  return run;
 }
 
 /** An abortable pause. Rejecting on abort would turn `stop()` into an error path. */

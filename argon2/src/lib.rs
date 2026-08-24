@@ -37,6 +37,25 @@
 
 use argon2::{Algorithm, Argon2, Block, Params, Version};
 
+/// The caller's two secret buffers, overwritten on every exit from `lpm_argon2id`.
+///
+/// ⚠️ IT EXISTS BECAUSE AN EARLY RETURN IS INVISIBLE AT THE PLACE THE WIPE IS
+/// WRITTEN. `lpm_argon2id` had its `fill(0)` calls on the success path, below a
+/// parameter check and a fallible allocation that both returned above them -- so the
+/// two failures a caller can actually provoke were the two that kept the passphrase.
+/// `Drop` cannot be forgotten by a future edit, which a fifth `return` statement can.
+struct Wipe<'a> {
+    password: &'a mut [u8],
+    salt: &'a mut [u8],
+}
+
+impl Drop for Wipe<'_> {
+    fn drop(&mut self) {
+        self.password.fill(0);
+        self.salt.fill(0);
+    }
+}
+
 /// Success.
 const OK: i32 = 0;
 /// §7.2's parameters were rejected by the library (m, t, p or the output length).
@@ -116,6 +135,22 @@ pub unsafe extern "C" fn lpm_argon2id(
         return ERR_ARGS;
     }
 
+    // ⚠️⚠️ THE SLICES ARE TAKEN BEFORE ANYTHING THAT CAN FAIL, AND `Wipe` IS WHY.
+    // Until 2026-08-24 they were created AFTER `Params::new` and after the memory
+    // reservation, so the two early returns below left the caller's password and salt
+    // sitting in linear memory -- on the low-memory device the `try_reserve_exact`
+    // path exists to serve, which is the one case it was written for. The comment
+    // under the hash said "whatever the outcome above was" and meant it, but the
+    // outcomes it could see began after the allocation.
+    //
+    // ⭐ A GUARD RATHER THAN A `fill(0)` ON EACH RETURN. There are four exits from
+    // here and a fifth is one edit away; `Drop` runs on all of them, including any
+    // added later by somebody who has not read this paragraph.
+    let wipe = Wipe {
+        password: core::slice::from_raw_parts_mut(password, password_len),
+        salt: core::slice::from_raw_parts_mut(salt, salt_len),
+    };
+
     let params = match Params::new(m_kib, t_cost, p_cost, Some(OUT_LEN)) {
         Ok(p) => p,
         Err(_) => return ERR_PARAMS,
@@ -127,17 +162,13 @@ pub unsafe extern "C" fn lpm_argon2id(
     }
     memory.resize(params.block_count(), Block::default());
 
-    let pw = core::slice::from_raw_parts_mut(password, password_len);
-    let sa = core::slice::from_raw_parts_mut(salt, salt_len);
-
     let mut derived = [0u8; OUT_LEN];
     let result = Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password_into_with_memory(pw, sa, &mut derived, &mut memory);
+        .hash_password_into_with_memory(&*wipe.password, &*wipe.salt, &mut derived, &mut memory);
 
-    // §7.7's exception: these are real writes to real buffers, on the way out,
-    // whatever the outcome above was.
-    pw.fill(0);
-    sa.fill(0);
+    // §7.7's exception. The password and salt are `Wipe`'s job now; the block array
+    // is wiped here because it exists only on this path -- a reservation that failed
+    // has nothing to clear, and a guard for it would be a guard over an empty `Vec`.
     for block in memory.iter_mut() {
         *block = Block::default();
     }

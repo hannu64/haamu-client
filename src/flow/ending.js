@@ -53,6 +53,19 @@ let ended = false;
 export const hasEnded = () => ended;
 
 /**
+ * Where the ending went, and how to repeat the parts of it a restore undoes.
+ *
+ * ⚠️⚠️ THE DESTINATION IS HERE BECAUSE IT CANNOT BE ANYWHERE ELSE. It carries the
+ * mode and the census outcome in a fragment (see step 5), and step 3 has cleared
+ * every store that could have held them — so a bfcache handler that does not
+ * remember it has no way to reconstruct it and can only guess. It guessed
+ * `ENDED_PATH`: a restored **Ghost** ending landed on the **Kept** page, which says
+ * *"you will need your eight words to open it again"* to somebody who has no words
+ * and nothing to reopen. That is the exact sentence 0.8.14 added the mode to prevent.
+ */
+let endedAt = null;
+
+/**
  * §7.8 step 0's second half: a document that comes back from the back/forward
  * cache comes back **with its heap intact** — every reference step 2 could only
  * drop is live again on a build that restores it. Measured on one mainstream
@@ -66,9 +79,27 @@ export const hasEnded = () => ended;
 export function armBfcacheDefence({ target = globalThis, navigate = defaultNavigate } = {}) {
   target.addEventListener?.("pageshow", (event) => {
     if (!ended || !event?.persisted) return;
-    // Nothing to clear that is not already cleared — the value here is repeating
-    // step 5, because the restored document is showing the conversation again.
-    navigate(ENDED_PATH);
+
+    /**
+     * ⚠️⚠️ IT SAID *"nothing to clear that is not already cleared"* AND THAT WAS THE
+     * ASSUMPTION THE WHOLE DEFENCE EXISTS TO DENY. The paragraph above this function
+     * says a restored document comes back **with its heap intact**; if that is true —
+     * and it was measured true on a mainstream Chromium build — then step 2's drops
+     * are undone by the restore, and repeating them is the only thing that makes them
+     * stick. Repeating a no-op costs nothing; skipping a needed one is the defect.
+     *
+     * ⚠️ THE NAVIGATION IS NOT INSIDE THE `try`. If the repeat throws — a zeroed key
+     * buffer reaching code that expected bytes is the likely way — leaving the
+     * conversation on screen would be a far worse outcome than an incomplete wipe.
+     * ⚠️ AND IT IS NOT AWAITED. A `pageshow` handler that waits is a handler running
+     * while the restored document is already interactive.
+     */
+    try {
+      endedAt?.repeat?.();
+    } catch {
+      // Step 5 matters more than step 2, and it is below.
+    }
+    navigate(endedAt?.destination ?? ENDED_PATH);
   });
 }
 
@@ -188,7 +219,31 @@ export async function endSession({
   // it while the section that warns about it was being edited.
   const path = thorough ? ENDED_PATH_THOROUGH : ENDED_PATH;
   const state = outcome.confirmed ? "confirmed" : "unconfirmed";
-  navigate(`${path}#${mode === "ghost" ? `${state}-ghost` : state}`, outcome);
+  const destination = `${path}#${mode === "ghost" ? `${state}-ghost` : state}`;
+
+  // §7.8 step 0's second half, completed: the bfcache handler now has the whole of
+  // step 5 to repeat rather than a guess at it, and the parts of steps 2 and 3 that a
+  // restore can undo. ⚠️ RECORDED BEFORE THE NAVIGATION, because a restore of THIS
+  // navigation is exactly the event being defended against.
+  endedAt = {
+    destination,
+    repeat: () => {
+      overwriteKeys(keys);
+      try {
+        session?.clear?.();
+      } catch {
+        // Same as step 3: a browser refusing `sessionStorage` must not stop an ending.
+      }
+      // ⚠️ FIRE AND FORGET, WITH THE REJECTION SWALLOWED ON PURPOSE. The keys this
+      // needs may already be zeroed by the line above, so it can reject — and an
+      // unhandled rejection during a restore is a console error on the one page that
+      // must not look broken.
+      Promise.resolve()
+        .then(() => clearStorage())
+        .catch(() => {});
+    },
+  };
+  navigate(destination, outcome);
 
   return { ...outcome, wiped };
 }

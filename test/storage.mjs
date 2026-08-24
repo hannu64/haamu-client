@@ -130,6 +130,88 @@ section("§7.8 — what an ending clears");
 }
 
 {
+  /*
+    ⚠️⚠️ THE ORDINARY ENDING ENDS **ONE** IDENTITY. Until 2026-08-24 it called
+    `db.clear(ENDING_CLEARS)`, which empties whole object stores — so a browser
+    holding two identities lost both when either ended, and what the other lost was
+    unrecoverable: its messages had been acknowledged and deleted from the server the
+    moment they arrived (§5.4.1). §7.8 reserves that reach for the THOROUGH ending,
+    which is a different control with its own warning.
+
+    ⭐⭐ AND THE RULE WAS ALREADY IN `vault.js`, IN THE METHOD NEXT DOOR. `sweep()`
+    has always skipped a record it cannot open, with the reason spelled out: *"Not
+    ours — another identity in this browser... deleting what we cannot read would let
+    any identity wipe another's history."* The method that runs every few minutes
+    obeyed it; the one that runs once and cannot be undone did not.
+    ➡️ **A RULE STATED AT ONE CALL SITE IS NOT A RULE.**
+  */
+  const one = db.memoryDatabase();
+  const mine = vault.openVault({ db: one, localKey });
+  const theirs = vault.openVault({ db: one, localKey: other });
+
+  await mine.conversation.set("lpm.session.mine", { pickle: "M" });
+  await mine.messages.append("chanM", { dir: "in", text: "minun", firstSeen: 1000 });
+  await theirs.conversation.set("lpm.session.theirs", { pickle: "T" });
+  await theirs.messages.append("chanT", { dir: "in", text: "heidän", firstSeen: 1000 });
+
+  const outcome = await mine.endSession();
+
+  equal("this identity's session state is gone", String(await mine.conversation.get("lpm.session.mine")), "null");
+  equal("and its message history", String((await mine.messages.list("chanM")).length), "0");
+
+  check("⭐⭐⭐ THE OTHER IDENTITY'S SESSION STATE IS STILL THERE",
+    (await theirs.conversation.get("lpm.session.theirs"))?.pickle === "T");
+  const survivors = await theirs.messages.list("chanT");
+  equal("⭐⭐⭐ AND SO IS ITS MESSAGE HISTORY, which nothing could have recovered",
+    survivors.map((m) => m.text).join(), "heidän");
+
+  equal("the ending reports how much was not its own to delete", String(outcome.left), "2");
+
+  // ⚠️ AND THE THOROUGH ENDING STILL REACHES EVERYTHING. That is not an oversight
+  // in the other direction: §7.8 step 5 is the control that says so and warns.
+  await theirs.clearEverything();
+  equal("⭐ the thorough ending is still total", String((await theirs.messages.list("chanT")).length), "0");
+}
+
+{
+  /*
+    ⚠️⚠️ AND IT IS STILL **ONE TRANSACTION**, which is the fix this one could have
+    undone. `db.clear`'s own comment records why: a browser killed between two
+    transactions leaves a HALF-ENDED identity, whose message rows become readable
+    again under the re-derived `local_key` on a device whose owner was told they were
+    gone. A loop of `delete()` calls would have scoped the ending correctly and
+    reintroduced exactly that. ➡️ **A FIX THAT SATISFIES THE NEW REQUIREMENT BY
+    DISCARDING THE OLD ONE IS NOT A FIX.**
+  */
+  const calls = [];
+  const one = db.memoryDatabase();
+  const counted = new Proxy(one, {
+    get(target, prop) {
+      const v = target[prop];
+      if (typeof v !== "function") return v;
+      return (...args) => (calls.push(prop), v.apply(target, args));
+    },
+  });
+  const v = vault.openVault({ db: counted, localKey });
+  await v.conversation.set("a", { x: 1 });
+  await v.messages.append("c", { dir: "in", text: "t", firstSeen: 1 });
+  calls.length = 0;
+  await v.endSession();
+
+  equal("⭐⭐ the ordinary ending issues ONE batched delete across the stores",
+    String(calls.filter((c) => c === "deleteAll").length), "1");
+  equal("⭐⭐ and never `clear`, which is the whole-store reach it just gave up",
+    String(calls.filter((c) => c === "clear").length), "0");
+  equal("⭐ nor a delete per row, which would drop the atomicity",
+    String(calls.filter((c) => c === "delete").length), "0");
+
+  calls.length = 0;
+  await v.clearEverything();
+  equal("⚠️ while the THOROUGH ending still uses `clear`, deliberately",
+    String(calls.filter((c) => c === "clear").length), "1");
+}
+
+{
   // The list is in one place and both endings read it, so "clear conversation
   // state" cannot drift from what §7.8 enumerates.
   check("the ordinary ending names two of the three stores", db.ENDING_CLEARS.length === db.STORES.length - 1);

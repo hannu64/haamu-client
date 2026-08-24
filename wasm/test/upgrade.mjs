@@ -94,7 +94,7 @@ check("T_0 is still not the base key", wire.ratchetKey !== wire.baseKey);
 // inside the wrapper would still pass.
 let accepted = null;
 try {
-  accepted = LpmSession.accept(ROOT, SESSION_ID, v.prekey_message);
+  accepted = LpmSession.accept(ROOT, SESSION_ID, v.prekey_message, "J");
 } catch (e) {
   console.log(`  (accept threw: ${String(e?.message ?? e).split("\n")[0]})`);
 }
@@ -114,5 +114,50 @@ try {
 check("PERSISTENCE: a session pickled before the upgrade still restores", restored !== null);
 check("PERSISTENCE: and the restored session still decrypts its next message",
   restored !== null && text(restored.decrypt(v.normal_message)) === v.normal_plaintext);
+
+// --- 5. The OTHER direction: a session the pairing JOINER opened. ----------
+//
+// ⚠️⚠️ ADDED 2026-08-24, AND THE REASON IS THAT THIS DIRECTION HAD NO VECTOR AND
+// TURNED OUT TO HAVE THE DEFECT. Until that date `initiate` used `idk_I` whoever
+// called it, so a role-J device addressed its pre-key message from the wrong
+// identity key — §6.2 says each party "uses only its own role's identity key", and
+// the role there is §3's PAIRING role, fixed for the life of the channel, not
+// "whoever is starting this session". §6.3 has either party open a session whenever
+// it has no usable state, so role J does it routinely.
+//
+// ⭐⭐ NOTHING COULD SEE IT, AND THE REASON IS WORTH KEEPING. §6.2 gives both parties
+// both private keys — that is its deniability property — so two copies of this
+// wrapper talk perfectly with the roles swapped, every session opens, every message
+// decrypts, and 25 of 25 checks pass. What breaks is a SECOND implementation built
+// from PROTOCOL.md, which is exactly the reader this file exists to protect and
+// exactly the one no test can be.
+//
+// ➡️ **WHEN BOTH SIDES ARE THE SAME IMPLEMENTATION, A SHARED MISREADING IS
+// INDISTINGUISHABLE FROM THE SPECIFICATION.** The only witness that is not a party
+// to it is `derive.mjs`, computing §6.2 from the document with Node's own primitives.
+const J_SESSION_ID = Buffer.from(v.j_session_id_b64u, "base64url");
+const jDerived = derivePublicKeys(ROOT, J_SESSION_ID);
+
+for (const name of ["idk_I", "idk_J", "otk"]) {
+  check(`§6.2 ${name} for the J session, recomputed by Node`,
+    jDerived[name] === v.j_derived_public_keys[name]);
+}
+
+const jWire = JSON.parse(prekeyPublicKeys(v.j_prekey_message));
+check("⭐⭐ the frozen role-J pre-key message is addressed FROM idk_J",
+  jWire.identityKey === jDerived.idk_J,
+  jWire.identityKey === jDerived.idk_J ? jWire.identityKey.slice(0, 12) + "…"
+    : `wire ${jWire.identityKey.slice(0, 12)}… but idk_J is ${jDerived.idk_J.slice(0, 12)}…`);
+check("⭐⭐ and NOT from idk_I — that was the defect frozen out on 2026-08-24",
+  jWire.identityKey !== jDerived.idk_I);
+
+let jAccepted = null;
+try {
+  jAccepted = LpmSession.accept(ROOT, J_SESSION_ID, v.j_prekey_message, "I");
+} catch (e) {
+  console.log(`  (role-I accept threw: ${String(e?.message ?? e).split("\n")[0]})`);
+}
+check("KEY INJECTION, other direction: a role-I device opens the joiner's message",
+  jAccepted !== null && text(jAccepted.plaintext) === v.j_prekey_plaintext);
 
 done();

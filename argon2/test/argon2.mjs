@@ -104,6 +104,64 @@ section("§7.2 — a refusal is a code, not a poisoned instance");
   equal("and the next derivation is unaffected", hex(after).slice(0, 8), "282e246c");
 }
 
+section("§7.7's exception on the paths that FAIL, which is where it was missing");
+
+/**
+ * ⚠️⚠️ THE TWO FAILURES A CALLER CAN PROVOKE WERE THE TWO THAT KEPT THE PASSPHRASE.
+ * `lpm_argon2id` wiped its inputs on the way out, and the wipe sat below a parameter
+ * check and a fallible allocation that both returned above it — so on the low-memory
+ * device the `try_reserve_exact` path exists to serve, the phrase JavaScript had just
+ * copied in stayed in linear memory until the engine reclaimed it. Found by the
+ * outside review of 2026-08-24 and fixed with a `Drop` guard.
+ *
+ * ⭐ THIS TEST GOES THROUGH THE RAW ABI AND READS THE MEMORY ITSELF. The wrapper in
+ * `src/crypto/argon2.js` cannot see this: it throws on a non-zero code and drops the
+ * instance, which is exactly the behaviour that made the bytes invisible. The only
+ * way to check a buffer was overwritten is to look at the buffer.
+ */
+{
+  const raw = async () => {
+    const inst = await WebAssembly.instantiate(new WebAssembly.Module(bytes), {});
+    return inst.exports;
+  };
+
+  const cases = [
+    // §7.2 fixes p=1; p=0 is rejected by `Params::new` — the first early return.
+    ["an impossible parameter", { m: 32 * 1024, t: 3, p: 0 }],
+    // Beyond anything wasm32 can reserve — the `try_reserve_exact` return, and the
+    // one that happens on a real device rather than only on a wrong call.
+    ["a heap this device cannot give", { m: 3 * 1024 * 1024, t: 3, p: 1 }],
+  ];
+
+  for (const [what, { m, t, p }] of cases) {
+    const ex = await raw();
+    const pwPtr = ex.lpm_alloc(P.length);
+    const saPtr = ex.lpm_alloc(SALT.length);
+    const outPtr = ex.lpm_alloc(32);
+    // ⚠️ The views are taken AFTER every allocation: a `lpm_alloc` that grows the
+    // heap detaches the old ArrayBuffer, and a stale view reads zeroes for the wrong
+    // reason — which would pass this test while proving nothing.
+    new Uint8Array(ex.memory.buffer).set(P, pwPtr);
+    new Uint8Array(ex.memory.buffer).set(SALT, saPtr);
+
+    // The bytes really are there before the call, so a pass below is a wipe and not
+    // an argument that never arrived.
+    const before = new Uint8Array(ex.memory.buffer, pwPtr, P.length);
+    check(`⚠️ ${what}: the phrase is in linear memory before the call`, before.some((b) => b !== 0));
+
+    const rc = ex.lpm_argon2id(pwPtr, P.length, saPtr, SALT.length, m, t, p, outPtr);
+    check(`⚠️ ${what}: refused with a code, not a trap`, rc !== 0, `rc=${rc}`);
+
+    const pwAfter = new Uint8Array(ex.memory.buffer, pwPtr, P.length);
+    const saAfter = new Uint8Array(ex.memory.buffer, saPtr, SALT.length);
+    check(
+      `⭐⭐⭐ ${what}: and the phrase is gone from linear memory anyway`,
+      pwAfter.every((b) => b === 0)
+    );
+    check(`⭐⭐ ${what}: and so is the salt`, saAfter.every((b) => b === 0));
+  }
+}
+
 section("the instance — one derivation costs what ten do");
 
 {
