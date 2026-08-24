@@ -33,6 +33,15 @@ echo "=== binding.mjs — §6.7.2, over a hostile mailbox with no server ==="
 node test/binding.mjs
 
 echo
+echo "=== relay.mjs — I2, the property no single review slice could see ==="
+# ⚠️⚠️ I2 came back "UNPROVEN IN THIS SLICE" from all three reviewers of 2026-08-24,
+# each blind to a different quarter of it. The pass that followed found the property
+# WAS tested — in `e2e-pair.mjs`, which needs ../server and is skipped in the
+# published tree. haamu's strongest claim was guarded only where a stranger who
+# clones the public repository never runs it. This is that proof, as arithmetic.
+node test/relay.mjs
+
+echo
 echo "=== inflight.mjs — §3.4.1b, when the browser refuses to save the record ==="
 # ⚠️ Same reason as `binding.mjs` above: the real `initiate` runs against a fake api,
 # so the property — that a device which could not save its half of a pairing SAYS so
