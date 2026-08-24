@@ -1467,7 +1467,8 @@ async function endHere({ thorough = false } = {}) {
     stopDelivery: async () => {
       await stopEverything();
     },
-    clearStorage: () => clearFor(going, { thorough }),
+    prepareStorage: () => planFor(going, { thorough }),
+    clearStorage: (prepared) => clearFor(going, { thorough, prepared }),
     // §7.8.1's wording follows the census, and `flow/ending.js` puts the answer in
     // the fragment for the ending page to read. Nothing to compute here.
     navigate: (to) => location.replace(to),
@@ -1502,7 +1503,8 @@ async function endBecauseAnotherTabDid() {
     stopDelivery: async () => {
       await stopEverything();
     },
-    clearStorage: () => clearFor(going, { thorough: false }),
+    prepareStorage: () => planFor(going, { thorough: false }),
+    clearStorage: (prepared) => clearFor(going, { thorough: false, prepared }),
     navigate: (to) => location.replace(to),
   });
 }
@@ -1516,7 +1518,21 @@ async function endBecauseAnotherTabDid() {
  * census lock, which is what tells an ending tab that this document is gone, and
  * NOT opening or closing a database that was deliberately never opened.
  */
-async function clearFor(going, { thorough }) {
+/**
+ * §7.8 step 2a's half of the ending: the deletion plan, built while `local_key` is
+ * still live (D-162).
+ *
+ * ⚠️ Ghost mode has no `local_key` and nothing sealed to select, and the THOROUGH
+ * ending empties whole object stores rather than choosing rows — so both correctly
+ * plan nothing. Only the ordinary Kept ending needs the key, and it is the only one
+ * that was silently deleting nothing without this.
+ */
+async function planFor(going, { thorough }) {
+  if (going.mode === "ghost" || thorough) return null;
+  return going.vault.planEnding();
+}
+
+async function clearFor(going, { thorough, prepared = null }) {
   if (going.mode === "ghost") {
     going.tabs.close();
     return;
@@ -1539,7 +1555,7 @@ async function clearFor(going, { thorough }) {
     // has used haamu* rather than a secret, and the thorough ending's own control
     // promises to take the whole origin.
     langs.forget();
-  } else await going.vault.endSession();
+  } else await going.vault.endSession(prepared);
   going.tabs.close(); // releases the census lock — this document is done
   going.db.close();
 }
@@ -3795,7 +3811,8 @@ $("dup-end").addEventListener("click", async () => {
     stopDelivery: async () => {
       await stopEverything();
     },
-    clearStorage: () => clearFor(going, { thorough: false }),
+    prepareStorage: () => planFor(going, { thorough: false }),
+    clearStorage: (prepared) => clearFor(going, { thorough: false, prepared }),
     navigate: (to) => location.replace(to),
   });
 });

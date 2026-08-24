@@ -5546,6 +5546,79 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-162. ⛔⛔⛔⛔⛔ The ordinary ending deleted nothing, and the repair that broke it was hours old
+
+**2026-08-24, from the second pass of review slice B — which is the only reason it was
+found.** The slices were re-run against the repaired tree with the brief, the model and
+the effort held constant, so the single thing that differed from the first pass was the
+code. ⭐⭐⭐ **THE RE-RUN CAUGHT A REGRESSION THE SAME DAY'S REPAIR HAD INTRODUCED**, which
+is the argument for re-reading after a fix rather than only before one.
+
+**The defect.** §7.8 step 2 fills `local_key` with zeros. Step 3 then calls
+`vault.endSession()`, which decides which stored records belong to this identity by
+**opening them** — `opens(local_key, …)` on every row. Every open failed, the deletion
+plan came back empty, `db.deleteAll([])` ran, and the ending page said it was done. A
+Kept identity that ended ordinarily left its messages, its roster and its Olm pickles in
+IndexedDB, and re-entering the eight words derived the same `local_key` and read them
+all back.
+
+**Measured rather than argued**, against the real vault and the real ending:
+
+```
+control  (key intact)   -> {"deleted":2,"left":0}
+real order (key zeroed) -> {"deleted":0,"left":2}
+```
+
+⚠️⚠️ **AND IT WAS HOURS OLD.** Until this same day step 3 was `db.clear(ENDING_CLEARS)`,
+which empties whole object stores and **needs no key** — so step 2's position was
+harmless. The change that made deletion key-filtered was itself a correct repair: a
+browser holding two identities lost BOTH when either one ended, which §7.8 forbids and
+§7.2 makes possible. That repair is what made step 2 fatal. ➡️ **A STEP'S ORDER IS ONLY
+SAFE RELATIVE TO WHAT THE OTHER STEPS NEED, AND THE STEP THAT CHANGED WAS NOT THIS ONE.**
+
+⚠️⚠️ **AND THE DEVICE ROUND COULD NOT HAVE SEEN IT.** Hannu tested the ending the day
+before and it worked: the control responded, the census ran, the ending page appeared,
+`db.deleteAll` executed. All of that is true of an empty plan. **Nothing on screen
+differs between deleting everything and deleting nothing** — the difference is only
+visible in IndexedDB, or by unlocking again afterwards and finding the conversations
+still there.
+
+**Decided: plan, then wipe, then execute.** `vault.planEnding()` builds the list while
+the key is live; §7.8 step 2a hands it across the overwrite; `endSession(prepared)`
+spends it. ⭐ **Swapping steps 2 and 3 was rejected**: step 2 is deliberately before the
+clear so that a clear which throws cannot leave the keys live, and buying deletion by
+giving that up trades a silent failure for a louder one. Deferring only `local_key` was
+rejected for the same reason — a clear that *hangs* would leave it live indefinitely.
+The plan is record identifiers and no key material, so carrying it across the wipe hands
+nothing to the interval, and §7.8 step 1 already stopped every writer, so the two local
+operations now standing between selection and execution add no window.
+
+⭐ **The bfcache repeat replays the prepared plan rather than building a new one.** It
+runs by design after the keys are gone; a fresh plan there would be empty for exactly
+the same reason, and its own comment already said the keys "may already be zeroed"
+without drawing the consequence.
+
+**Two guards, because one of them could not see the other's failure.** `test/ending.mjs`
+now asserts an END STATE — the rows are actually gone — and `test/app-document.mjs`
+asserts that all three `endings.endSession` call sites in `app/app.js` pass a
+`prepareStorage`, since the flow test supplies its own and would pass while the
+application handed step 3 a dead key. Four mutations, each watched failing: the plan
+moved back after the wipe (3 failures), the vault ignoring the plan it was handed (3),
+one call site reverted (2), and the pattern canary.
+
+⛔⛔⛔ **AND THE LESSON IS AIMED AT THIS FILE'S OWN TEST.** `test/ending.mjs` opens by
+saying the ORDER is the subject, that each individual step is easy to check and none of
+them was where the defect was, and that the checks therefore **record the sequence and
+assert on that**. That was right, and it is why the 0.8.13 defect cannot come back. It
+is also why this one sailed through: **the sequence was correct.** Step 1 stopped the
+writers, step 2 wiped, step 3 cleared, in that order, every time. ➡️ **A SEQUENCE
+ASSERTION PROVES THE STEPS HAPPEN IN ORDER. IT CANNOT PROVE THAT A STEP STILL HAS WHAT
+IT NEEDS WHEN ITS TURN ARRIVES** — and only the end state can say so.
+
+**PROTOCOL 0.9.23** writes the constraint into §7.8 step 3, which had stated both halves
+in different places and never in the same sentence.
+
+
 ### D-161. ⭐⭐⭐⭐ The guard met its first stranger the same day — and read his disk
 
 **2026-08-24, hours after D-160 and the visibility flip.** D-160 closed with *"a guard meets its

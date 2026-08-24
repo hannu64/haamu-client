@@ -10,6 +10,9 @@
 import * as endings from "../src/flow/ending.js";
 import * as lock from "../src/flow/lock.js";
 import * as tabs from "../src/flow/tabs.js";
+import * as db from "../src/storage/db.js";
+import * as vault from "../src/storage/vault.js";
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { check, equal, section, done } from "./harness.mjs";
@@ -468,6 +471,58 @@ section("§4.3 — when a session locks, and why the reason is shown");
   watcher.evaluate();
   equal("which then expires on its own schedule", locked.join(","), lock.IDLE);
   watcher.stop();
+}
+
+// ================================== §7.8 step 2a, the plan and the key it needs
+
+section("§7.8 step 2a — the plan is built before the key that builds it is destroyed");
+
+{
+  /* ⛔⛔ THE ONLY CHECK IN THIS FILE THAT ASSERTS AN END STATE, AND IT IS HERE
+   * BECAUSE THIS FILE'S OWN HEADER IS HALF THE STORY. Recording the sequence
+   * proves the steps happen in §7.8's order. It cannot prove that a step still
+   * HAS what it needs when its turn arrives — and that is exactly what went
+   * wrong (D-162): the order was right, every recorded step fired in its place,
+   * and the ordinary ending deleted nothing. Step 3 selects this identity's rows
+   * by opening them; step 2 had already filled `local_key` with zeros. No
+   * sequence assertion can see that. Only the rows can.
+   *
+   * ⚠️ The wiring below is `app/app.js`'s wiring, deliberately: `prepareStorage`
+   * is the vault's plan and `clearStorage` executes it. A test that inlined the
+   * deletion instead would pass while the application still handed step 3 a dead
+   * key.
+   */
+  const keys = { localKey: randomBytes(32) };
+  const handle = db.memoryDatabase();
+  const v = vault.openVault({ db: handle, localKey: keys.localKey });
+  await v.conversation.set("roster", { generation: 1 });
+  await v.conversation.set("channel:abc", { name: "a friend" });
+
+  let result = null;
+  await endings.endSession({
+    client: null,
+    keys,
+    mode: "kept",
+    sessionStorage: { clear() {} },
+    navigate: () => {},
+    prepareStorage: () => v.planEnding(),
+    clearStorage: async (prepared) => {
+      result = await v.endSession(prepared);
+    },
+  });
+
+  equal(
+    "⛔⛔ the ordinary ending REMOVES this identity's records, and not merely reports that it did",
+    (await handle.list("conversation", undefined)).length,
+    0
+  );
+  equal("⭐ and the count is the rows it found, not an empty plan read as success", result.deleted, 2);
+  equal("⚠️ nothing of another identity's was counted as left behind", result.left, 0);
+  check(
+    "⚠️⚠️ and §7.7's overwrite still happened — the repair is not bought by keeping the key alive",
+    keys.localKey.every((b) => b === 0),
+    "local_key is all zero once the ending returns"
+  );
 }
 
 done();

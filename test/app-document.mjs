@@ -244,4 +244,57 @@ section("§3.5 — the tripwire is recorded on the channel, not held on a screen
   check("⚠️ and it starts hidden, like every other banner", /\bhidden\b/.test(el));
 }
 
+// ============================= §7.8 step 2a, and the wiring the flow test cannot see
+
+section("§7.8 step 2a — every ending in `app/app.js` hands the plan across the wipe (D-162)");
+
+{
+  /* ⚠️⚠️ THE FLOW SUITE PROVES THE ORDER AND CANNOT PROVE THE WIRING. `test/ending.mjs`
+   * passes `prepareStorage` itself, so it goes on passing while `app/app.js` quietly
+   * stops passing one — and then step 3 receives no plan, rebuilds it from a key step 2
+   * has already zeroed, and deletes nothing. That is the defect D-162 fixed, arriving
+   * by the one route the flow test is blind to. The rule is therefore stated where the
+   * call sites live: an ending that clears storage must also prepare it.
+   */
+  const app = read("../app/app.js");
+  const CALL = "endings.endSession({";
+  const sites = app.split(CALL).slice(1).map((rest) => rest.split("\n  });")[0]);
+
+  // ⭐ The guard on the guard, first: a split that stopped matching would leave an
+  // empty list, and `every()` on nothing is true — the check would pass by finding
+  // no call sites at all, which is precisely how this file's §2.1 rule once failed.
+  equal("⚠️ the ending call sites are found at all, and there are three of them", sites.length, 3);
+
+  equal(
+    "⛔⛔ every ending that clears storage also prepares it while the key is still live",
+    sites.filter((b) => !/\bprepareStorage\s*:/.test(b)).length,
+    0
+  );
+  check(
+    "⭐ and each one hands what it prepared to the clear, rather than dropping it",
+    sites.every((b) => /clearStorage\s*:\s*\(?\s*prepared/.test(b)),
+    `${sites.length} call sites pass the prepared plan through`
+  );
+  check(
+    "⚠️ `clearFor` spends the prepared plan on the ordinary ending",
+    /vault\.endSession\(prepared\)/.test(app),
+    "the ordinary branch consumes it"
+  );
+  check(
+    "⚠️ and `planFor` is what builds it, from the vault rather than by hand",
+    /async function planFor\b[^]*?vault\.planEnding\(\)/.test(app),
+    "planFor delegates to the vault"
+  );
+
+  // ⭐ The guard on the guard, second: every pattern above must still recognise the
+  // thing it forbids, or a rename turns all four into checks that nothing matches.
+  check(
+    "⚠️⚠️ each pattern still matches the construct it is written about",
+    /\bprepareStorage\s*:/.test("prepareStorage: () => planFor(x, {})") &&
+      /clearStorage\s*:\s*\(?\s*prepared/.test("clearStorage: (prepared) => clearFor(x, {})") &&
+      !/clearStorage\s*:\s*\(?\s*prepared/.test("clearStorage: () => clearFor(x, {})"),
+    "and refuses the pre-D-162 form of the same line"
+  );
+}
+
 done();

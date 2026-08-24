@@ -155,6 +155,7 @@ export async function endSession({
   client,
   keys,
   stopDelivery = async () => {},
+  prepareStorage = async () => null,
   clearStorage = async () => {},
   sessionStorage: session = globalThis.sessionStorage,
   navigate = defaultNavigate,
@@ -172,6 +173,27 @@ export async function endSession({
   await stopDelivery();
   client?.announceEnd();
 
+  // 2a. ⛔⛔ THE PLAN IS BUILT WHILE THE KEY IS STILL LIVE, AND THAT IS THE WHOLE
+  //     REASON THIS STEP EXISTS (D-162). §7.8 step 3 selects THIS identity's records
+  //     by opening them — `vault.endSession()` asks `opens(local_key, …)` of every
+  //     row — and step 2 below is about to fill that key with zeros. Ordered the
+  //     other way round, every row fails to open, the deletion plan comes back
+  //     empty, and an ordinary ending deletes NOTHING while reporting success. That
+  //     is not hypothetical: it shipped, and it is what this step repairs.
+  //
+  //     ⚠️ It was harmless until 2026-08-24 because the clear was `db.clear()`, which
+  //     needs no key. The key-filtered delete that replaced it — so that one identity
+  //     ending does not destroy another's records — is what made step 2's position
+  //     fatal. ➡️ **A STEP'S ORDER IS ONLY SAFE RELATIVE TO WHAT THE OTHER STEPS NEED**,
+  //     and the step that changed was not this one.
+  //
+  //     ⚠️ The plan is record KEYS and no secret, so carrying it across the wipe
+  //     hands nothing to the interval between. And §7.8 step 1 still bounds the race
+  //     the listing runs in: the writers were stopped above, so the two local
+  //     operations now standing between the plan and its execution add no window a
+  //     writer could use.
+  const prepared = await prepareStorage();
+
   // 2. §7.7's exception. Before the storage clear rather than after it, because a
   //    clear that throws must not leave the keys live.
   const wiped = overwriteKeys(keys);
@@ -183,7 +205,7 @@ export async function endSession({
     // A browser that refuses `sessionStorage` must not stop the ending. There is
     // nothing to report to the user that they could act on.
   }
-  await clearStorage();
+  await clearStorage(prepared);
 
   // 4. Now wait. Everything of this device's own is already gone, so the time this
   //    takes is spent with nothing left to lose — which is precisely why it can
@@ -234,12 +256,15 @@ export async function endSession({
       } catch {
         // Same as step 3: a browser refusing `sessionStorage` must not stop an ending.
       }
-      // ⚠️ FIRE AND FORGET, WITH THE REJECTION SWALLOWED ON PURPOSE. The keys this
-      // needs may already be zeroed by the line above, so it can reject — and an
-      // unhandled rejection during a restore is a console error on the one page that
-      // must not look broken.
+      // ⚠️ FIRE AND FORGET, WITH THE REJECTION SWALLOWED ON PURPOSE: an unhandled
+      // rejection during a restore is a console error on the one page that must not
+      // look broken.
+      // ⭐ IT REPLAYS THE PREPARED PLAN RATHER THAN BUILDING A NEW ONE (D-162). The
+      // key is zeroed by the line above, so a fresh plan would be empty and this
+      // repeat would delete nothing at all — the same defect as step 2a's, arriving
+      // by the one path that runs after the wipe by design.
       Promise.resolve()
-        .then(() => clearStorage())
+        .then(() => clearStorage(prepared))
         .catch(() => {});
     },
   };

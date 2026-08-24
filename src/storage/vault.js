@@ -239,6 +239,26 @@ export function openVault({ db, localKey }) {
   if (!(localKey instanceof Uint8Array) || localKey.length !== 32) {
     throw new RangeError("vault: local_key must be 32 bytes — see PROTOCOL.md §7.2");
   }
+  /**
+   * §7.8 step 3's deletion plan: which rows in `ENDING_CLEARS` open under THIS
+   * `local_key`. ⚠️ A plain closure and not a method, so that neither caller
+   * depends on `this` — a destructured `endSession` would otherwise throw at the
+   * exact moment §7.8 has already stopped every writer.
+   */
+  const planEnding = async () => {
+    const plan = [];
+    let left = 0;
+    for (const store of ENDING_CLEARS) {
+      const mine = [];
+      for (const [key, blob] of await db.list(store, undefined)) {
+        if (await opens(localKey, store, key, blob)) mine.push(key);
+        else left++;
+      }
+      plan.push([store, mine]);
+    }
+    return { plan, left };
+  };
+
   return {
     db,
     conversation: records(db, CONVERSATION, localKey),
@@ -277,17 +297,23 @@ export function openVault({ db, localKey }) {
      * that window survives. Step 1 stops the things that write BEFORE this runs,
      * which is what makes the window empty rather than merely small.
      */
-    async endSession() {
-      const plan = [];
-      let left = 0;
-      for (const store of ENDING_CLEARS) {
-        const mine = [];
-        for (const [key, blob] of await db.list(store, undefined)) {
-          if (await opens(localKey, store, key, blob)) mine.push(key);
-          else left++;
-        }
-        plan.push([store, mine]);
-      }
+    planEnding,
+
+    /**
+     * ⛔⛔ THE HALF THAT NEEDS THE KEY IS `planEnding()`, AND IT MUST RUN BEFORE §7.8
+     * STEP 2 ZEROES IT (D-162). Deciding which rows are ours means OPENING them, so a
+     * plan built after the wipe is empty and this deletes nothing while returning a
+     * shape that reads like success. `flow/ending.js` therefore prepares the plan at
+     * its step 2a and hands it here.
+     *
+     * ⚠️ The argument is optional so that a caller with a live key can still say
+     * `endSession()` and mean both halves — `test/storage.mjs` does, and so does any
+     * path that is not §7.8's ordered ending. It is NOT a fallback for the ordered
+     * one: called there without a plan it would build an empty one and say nothing
+     * was wrong. `deleted: 0` with `left` counting every row is what that looks like.
+     */
+    async endSession(prepared) {
+      const { plan, left } = prepared ?? (await planEnding());
       await db.deleteAll(plan);
       return { deleted: plan.reduce((n, [, keys]) => n + keys.length, 0), left };
     },
