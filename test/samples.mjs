@@ -43,10 +43,27 @@ export const SAMPLES = {
   "chat.reconnect.some": [[1], [3]],
   "deletion.confirmOne": [["Maija"]],
   "deletion.suspect": [[1], [3]],
-  "list.unnamedOn": [["Pixel 6"]],
+  // ⛔⛔⛔ D-164 — THESE TWO WERE `"Pixel 6"`, AND BOTH CALL SITES PASS A DATE.
+  // `app.js` renders them with `new Date(…).toLocaleDateString()`. The sheet the
+  // translators worked from was built from THIS table, so twenty-seven rounds of
+  // review — and every prose rule in `copy.mjs` — read *"No name yet · started
+  // Pixel 6"*, which is not a sentence this product can produce.
+  //
+  // ⭐⭐⭐ AND THE FINNISH WAS THEN CORRECT FOR WHAT IT WAS SHOWN. A translator
+  // reading *"started Pixel 6"* has to add a preposition to make it grammatical,
+  // and the right one for a device is *laitteella* — so the list said *"started
+  // WITH THE DEVICE 25.8.2026"* on a live screen for as long as the sentence has
+  // existed. The English was right, the Finnish was right for the sample, and the
+  // sample was wrong.
+  //
+  // ➡️ **THIS FILE'S OWN HEADER SAYS A BRANCH NO SAMPLE REACHES HAS NO HOME TO BE
+  // REVIEWED IN. THE NEXT DEFECT IN IS A SAMPLE OF THE WRONG KIND: the sentence is
+  // reviewable, everybody reviews it, and what they review is a fiction.** A sample
+  // argument is not an example — it is a claim about what the call site passes.
+  "list.unnamedOn": [["25.8.2026"]],
   "list.noHistory": [
-    ["Pixel 6", 1],
-    ["Pixel 6", 4],
+    ["25.8.2026", 1],
+    ["25.8.2026", 4],
   ],
   "list.nameUnresolved": [["Maija"]],
   "list.unexplained": [[1], [2]],

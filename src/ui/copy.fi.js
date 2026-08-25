@@ -111,8 +111,12 @@ export const FI = {
   // the sentence Hannu's device test produced and the one the old Finnish never said.
   "ending.confirm": "Tämä poistaa viestisi tästä selaimesta nyt ja unohtaa AVAIMESI täältä.\n\nAVAIMESI ei tuo niitä viestejä takaisin tänne, eivätkä muut laitteesi voi lähettää niitä. Muille osapuolille jäävät heidän omat kopionsa.\n\nYhtään keskustelua ei lopeteta eikä kenellekään kerrota mitään. Ne pysyvät auki toisille osapuolille ja muilla laitteillasi. Kun kirjoitat AVAIMESI tänne uudelleen, keskustelulistasi palaa, mutta jokainen keskustelu siinä on tyhjä.\n\nSelaimesi on kirjoittanut jälkiä laitteellesi. Tämä ei ylety niihin — saat ne pois tyhjentämällä tämän sivuston tiedot selaimen asetuksista.",
   "ending.needsPhrase": "Tarvitset 8 sanaasi avataksesi ne uudelleen.",
-  "ending.thoroughControl": "Unohda AVAIMENI ja tyhjennä tämän sivuston tiedot",
-  "ending.thoroughConfirm": "Tämä tyhjentää kaiken, mitä tämä sivusto on tallentanut tähän selaimeen — ei pelkästään tätä keskustelua.\n\nSe nollaa myös tarkistuksen, joka huomaisi vanhentuneen keskustelulistan. Itse listasi on turvassa AVAIMESI takana ja palaa, kun kirjoitat sen.",
+  "ending.thoroughControl": "Poista viestini ja kaikki muu, mitä haamu on tallentanut tänne",
+  // ⚠️ D-164. The old first paragraph said WHAT the mechanism does — *"clears everything this
+  // site has stored"* — which reads as "deletes even harder" beside a button that has just
+  // said it deletes the messages. It now names what this one takes AND THE OTHER ONE LEAVES,
+  // which is the only thing a person choosing between them needs.
+  "ending.thoroughConfirm": "Tämä ottaa myös sen, minkä viereinen painike jättää tänne: väri- ja kielivalintasi, kaiken minkä toinen AVAIN on tallentanut tähän selaimeen, ja kaiken minkä vanhempi versio on jättänyt jälkeensä.\n\nSe nollaa myös tarkistuksen, joka huomaisi vanhentuneen keskustelulistan. Itse listasi on turvassa AVAIMESI takana ja palaa, kun kirjoitat sen.",
 
   // ── ghost
   "ghost.title": "Haamu-tila",
@@ -503,10 +507,18 @@ export const FI_BUILT = {
   "deletion.suspect": (n) => `${count(n, "keskustelu", "keskustelua")} poistettiin toiselta laitteelta.`,
 
   // ── list
-  "list.unnamedOn": (when) => `Ei vielä nimeä · aloitettu laitteella ${when}`,
+  // ⚠️⚠️ D-164 — `laitteella` MEANT "ON THE DEVICE" AND THE ARGUMENT IS A DATE. The English
+  // is *"No name yet · started 25.8.2026"* and has no preposition at all; the Finnish put one
+  // in and picked the wrong noun, so the list read *"started WITH THE DEVICE 25.8.2026"*.
+  // ⭐ `laitteella` is correct in eleven other Finnish sentences in this file, where it really
+  // does mean "on this device". It is wrong in exactly the two that interpolate a DATE —
+  // D-158's class, and it survived 27 review rounds because both of these are FUNCTIONS,
+  // read as templates and never once read with a date substituted in. Hannu confirmed the
+  // repair on his own screen, 2026-08-25.
+  "list.unnamedOn": (when) => `Ei vielä nimeä · aloitettu ${when}`,
 
   "list.noHistory": (writtenAt, channels) =>
-    `Tämä laite ei ole nähnyt tätä listaa aiemmin. Sen mukaan se tallennettiin viimeksi laitteella ${writtenAt}, ` +
+    `Tämä laite ei ole nähnyt tätä listaa aiemmin. Sen mukaan se tallennettiin viimeksi ${writtenAt}, ` +
     `ja siinä on ${count(channels, "keskustelu", "keskustelua")}.`,
 
   // ⚠️ The 2 is fixed in both languages — §7.3.1 rule 4 is about two devices whose clocks

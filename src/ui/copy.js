@@ -1696,7 +1696,21 @@ export const ending = {
   // clears the device unlock state too.
   needsPhrase: `You will need your ${PHRASE_WORDS} words to open them again.`,
 
-  thoroughControl: "Forget my KEY, and clear this site's data",
+  // ⚠️⚠️ D-164 — THE LABEL NAMED THE MECHANISM AND NOT THE PURPOSE, AND A DEVICE TEST
+  // FOUND IT EMPTY. Hannu ran both endings and reported: *"Seems to be only that the later
+  // removes the choice whether light or dark mode. … That is not a very big and needed
+  // difference."* He was very nearly right. Measured against the live site: every file is
+  // served `no-store` and the origin sets no cookies, so two of `Clear-Site-Data`'s three
+  // words reach nothing at all. What is genuinely left is the colour and language choices,
+  // any SECOND identity's records, anything an older schema left behind — and §7.3.2's
+  // high-water mark, which this control DESTROYS and the one beside it deliberately keeps.
+  //
+  // ⭐⭐ SO THE PURPOSE IS NOT "DELETE MORE" — the other button already took every message.
+  // It is *everything else*, and saying "clear this site's data" made it read as a stronger
+  // version of its neighbour rather than as a different job. ➡️ **A control that names its
+  // mechanism is compared with its neighbour on the mechanism.** D-163's defect one button
+  // to the right, found the same way: by a person pressing both.
+  thoroughControl: `Delete my messages, and everything else ${product.name} has stored here`,
 
   // ⚠️⚠️ §7.8 step 5 AND §7.3.2 rule 4. `Clear-Site-Data` takes the whole origin —
   // which includes §7.3.2's high-water mark, the one piece the ordinary ending
@@ -1709,8 +1723,16 @@ export const ending = {
   // this control exists to make, because the most thorough ending is the one that
   // manufactures §7.3.2's rollback precondition. Shortening a true sentence is safe;
   // deleting the only true sentence about a security downgrade is not.
+  // ⚠️ D-164 rewrites the FIRST paragraph only. The second is D-150's and must not be
+  // shortened away: **shortening a true sentence is safe; deleting the only true sentence
+  // about a security downgrade is not.** The most thorough ending is the one that
+  // manufactures §7.3.2's rollback precondition, and this control exists to disclose it.
+  // ⚠️ The first paragraph now names what THIS one takes and the other one LEAVES — the
+  // colour and language choices are the half a person can actually observe, which is what
+  // makes the two controls tellable apart at all.
   thoroughConfirm:
-    "This clears everything this site has stored in this browser, not only this conversation.\n\n" +
+    "This also takes what the button beside it leaves here: your colour and language choices, " +
+    "anything a second KEY has stored in this browser, and anything an older version left behind.\n\n" +
     "It also resets the check that would notice an out-of-date conversation list. Your list itself " +
     "is safe under your KEY and comes back when you type it.",
 };

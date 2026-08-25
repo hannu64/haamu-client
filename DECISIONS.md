@@ -5546,6 +5546,77 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-164. ⛔⛔⛔⛔ The review sample was a fiction, so twenty-seven rounds reviewed a sentence the product cannot produce
+
+**2026-08-25, from Hannu pressing both endings on his device and reading the screen.** Two
+findings from one test, and the second one is the deeper.
+
+**(a) The two endings looked the same.** He ran both and reported: *"Seems to be only that
+the later removes the choice whether light or dark mode. … That is not a very big and needed
+difference."* Measured against the live site he was nearly right. Every file is served
+`no-store` and the origin sets **no cookies**, so two of `Clear-Site-Data`'s three words —
+`"cache"` and `"cookies"` — reach nothing at all on haamu.app. What the thorough ending
+genuinely takes beyond the ordinary one is: the colour and language choices, **any second
+identity's records**, anything an older schema left behind, and §7.3.2's high-water mark —
+which it **destroys** and the ordinary one deliberately keeps.
+
+➡️ **A CONTROL THAT NAMES ITS MECHANISM IS COMPARED WITH ITS NEIGHBOUR ON THE MECHANISM.**
+*"Clear this site's data"* read as a stronger version of the button beside it rather than as
+a different job, so a person who had just deleted every message could see no reason for it.
+The label now names the relationship — *"Delete my messages, and everything else haamu has
+stored here"* — and the confirmation names what this one takes **and the other one leaves**.
+⚠️ D-150's disclosure sentence about the rollback check is untouched and now has a test:
+**shortening a true sentence is safe; deleting the only true sentence about a security
+downgrade is not.**
+
+**(b) And the notice he read it off was itself wrong, in Finnish, live.** After the thorough
+ending his next unlock correctly showed §7.3.2's weak-freshness line — the high-water mark
+was gone, exactly as designed — and it said:
+
+> *"Sen mukaan se tallennettiin viimeksi **laitteella** 8/24/2026"* — *"it was last saved
+> **on the device** 8/24/2026"*.
+
+The slot holds a **date**. `list.unnamedOn` had the same fault: *"aloitettu laitteella
+25.8.2026"*, *"started with the device 25.8.2026"*.
+
+⭐⭐⭐⭐ **AND THE TRANSLATION WAS FAITHFUL. THE SAMPLE WAS THE DEFECT.**
+`test/samples.mjs` gave both sentences the argument `"Pixel 6"`. The bilingual review sheet
+is generated from that same table, so what twenty-seven rounds of Finnish review, both
+translators, Hannu's own reading pass and **every prose rule in `test/copy.mjs`** actually
+read was *"No name yet · started Pixel 6"* — a sentence this product cannot produce. A
+translator handed that must supply a preposition to make it grammatical, and the correct one
+for a device is *laitteella*. **The English was right, the Finnish was right for the sample,
+and the sample was wrong.** It is the only wrong-kind sample in the table: all sixteen others
+were swept and match their call sites.
+
+➡️ `samples.mjs` exists because **a branch no sample argument reaches has no home to be
+reviewed in** (D-156). ⭐⭐ **The next defect in is a sample of the WRONG KIND: the sentence
+is reviewable, everybody reviews it, and what they review is a fiction.** ➡️ **A SAMPLE
+ARGUMENT IS NOT AN EXAMPLE — IT IS A CLAIM ABOUT WHAT THE CALL SITE PASSES**, and until this
+round nothing checked it against one.
+
+**Pinned at three sides**, because either end alone stayed self-consistent for as long as the
+defect existed: `test/copy.mjs` requires the samples for both paths to be date-shaped (canary:
+`"Pixel 6"` is refused); `test/app-document.mjs` requires both call sites to pass
+`toLocaleDateString()` (canary: a device-shaped argument is refused); `test/copy-fi.mjs`
+requires that **no Finnish built sentence announces its slot as a device** — a rule about
+POSITION, not a search for `laite`, which would report the eleven sentences where the word is
+correct and is exactly how D-158's class keeps recurring.
+
+⚠️ Hannu confirmed the repair as the native speaker: *"Both are good finnish. Exact
+translation to english would be 'started on 25.8.2026' / 'saved last time on 25.8.2026'."*
+
+⚠️ **One more thing my own patterns did wrong, twice now:** `[^)]*` cannot span a nested
+paren, and both call sites contain one — `new Date((entry.created ?? 0) * 1000)`. The first
+version of the call-site guard matched nothing and would have passed forever. The canary is
+what found it.
+
+📌 **Left open, deliberately, for Hannu:** the date itself is rendered with
+`toLocaleDateString()` and no locale, so it follows the DEVICE's language rather than the
+app's — his screen showed *8/24/2026* inside a Finnish sentence. That is a real
+inconsistency in a product with its own language switch, but choosing a locale for English
+readers is his call, not a bug fix.
+
 ### D-163. ⭐⭐⭐⭐ The gentle control had no button, and the destructive one promised to remove something never stored
 
 **2026-08-25, from Hannu reading his own device test back to me.** D-162's fix worked: he

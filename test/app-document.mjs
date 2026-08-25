@@ -380,4 +380,45 @@ section("§4.3 — the lock is reachable, and locking still deletes nothing (D-1
   );
 }
 
+// ═══════════════ D-164 — the other end of the sample contract: what is really passed
+
+section("the two sentences that print a date are really given one (D-164)");
+
+{
+  /* ⛔⛔ THE SAMPLE TABLE CLAIMS `list.unnamedOn` AND `list.noHistory` ARE HANDED A DATE, and
+   * `test/copy.mjs` now enforces that the samples ARE dates. That is one end of a contract
+   * with two ends: a sample table is a claim about the CALL SITE, and a claim about a call
+   * site is worth nothing unless the call site is read.
+   *
+   * ⭐ The defect it closes is not hypothetical — it is the one that happened backwards.
+   * `SAMPLES` said "Pixel 6", the call site said `toLocaleDateString()`, and for as long as
+   * both stood apart the Finnish translated a device name that no user has ever been shown.
+   * Either end alone would have gone on being self-consistent.
+   */
+  const app = code("../app/app.js");
+  // ⚠️ `[^)]*` CANNOT SPAN A NESTED PAREN, and both call sites contain one —
+  // `new Date((entry.created ?? 0) * 1000)`. A pattern written with it matches nothing here
+  // and passes the day somebody deletes the call. `[\s\S]{0,80}?` is lazy and paren-blind,
+  // which is what this needs; the canary below is what proves it did not become permissive.
+  const CALLS = [
+    ["list.unnamedOn", /copy\.list\.unnamedOn\(\s*new Date\([\s\S]{0,80}?\.toLocaleDateString\(\)/],
+    ["list.noHistory", /const when = new Date\([\s\S]{0,80}?\.toLocaleDateString\(\);[\s\S]{0,200}?copy\.list\.noHistory\(when,/],
+  ];
+  for (const [path, pattern] of CALLS)
+    check(
+      `⭐⭐ \`${path}\` is rendered with a formatted date, which is what its sample must be`,
+      pattern.test(app),
+      pattern.source.slice(0, 60)
+    );
+
+  // ⚠️ The guard on the guard: a pattern this specific rots into a check that matches
+  // nothing the moment somebody reformats the line, and then it passes forever.
+  check(
+    "⚠️⚠️ and the patterns still refuse a call site that passes something else",
+    !CALLS[0][1].test("copy.list.unnamedOn(entry.deviceName)") &&
+      !CALLS[1][1].test("const when = entry.device; text('home-note', copy.list.noHistory(when, 2));"),
+    "a device-shaped argument is not accepted at either call site"
+  );
+}
+
 done();

@@ -309,6 +309,60 @@ section("the Finnish has the same shape as the English it replaces");
   );
 }
 
+/**
+ * ⛔⛔⛔ D-164 — NO FINNISH BUILT SENTENCE INTRODUCES ITS ARGUMENT WITH A WORD MEANING
+ * "DEVICE".
+ *
+ * `list.unnamedOn` read *"aloitettu **laitteella** ${when}"* and `when` is a DATE, so the
+ * conversation list said *"started WITH THE DEVICE 25.8.2026"* on a live screen. Hannu read
+ * the other one off his own device after a thorough ending and reported it.
+ *
+ * ⭐⭐ The Finnish was not careless — `laitteella` is correct in eleven other sentences in
+ * `copy.fi.js`, where it really does mean "on this device". It was wrong only where the slot
+ * holds a date, and the translator put it there because `test/samples.mjs` rendered the
+ * English as *"started Pixel 6"*, which needs a preposition to be a sentence at all. **The
+ * sample was the defect; the translation was faithful to it.** `test/copy.mjs` now pins the
+ * sample and `test/app-document.mjs` pins the call site — this is the third side: whatever
+ * the sample says, no Finnish sentence may announce its slot as a device.
+ *
+ * ⚠️ NOT A SEARCH FOR `laite`. That would report the eleven correct sentences, which is
+ * D-158's trap and the reason this whole class keeps recurring. The rule is about POSITION:
+ * the word immediately before an interpolated slot.
+ */
+{
+  const SENTINEL = "«ARG»";
+  const DEVICE_BEFORE_SLOT = /\b(laite|laitteen|laitteella|laitteelta|laitteelle|laitteessa|laitteesta|laitteet|laitteita)$/i;
+  const offenders = [];
+  for (const [path, fn] of Object.entries(FI_BUILT)) {
+    let rendered;
+    try {
+      rendered = String(fn(...Array.from({ length: Math.max(fn.length, 1) }, () => SENTINEL)));
+    } catch {
+      continue;
+    }
+    for (const before of rendered.split(SENTINEL).slice(0, -1))
+      if (DEVICE_BEFORE_SLOT.test(before.trimEnd())) offenders.push(path);
+  }
+  equal(
+    "⛔⛔⛔ no Finnish built sentence announces its slot as a device (D-164)",
+    [...new Set(offenders)].join(", "),
+    "",
+    "`laitteella ${when}` says *with the device <a date>*. Check what the CALL SITE passes — " +
+      "`test/samples.mjs` is a claim about that, not an example."
+  );
+
+  // ⚠️⚠️ THE CANARY, and it is the sentence that shipped. An absence check with no proof
+  // that it still recognises the thing it forbids is a check that passes by matching nothing.
+  check(
+    "⚠️⚠️ and the rule still catches the sentence it was written for",
+    DEVICE_BEFORE_SLOT.test("Ei vielä nimeä · aloitettu laitteella") &&
+      DEVICE_BEFORE_SLOT.test("Sen mukaan se tallennettiin viimeksi laitteella") &&
+      !DEVICE_BEFORE_SLOT.test("Sen mukaan se tallennettiin viimeksi") &&
+      !DEVICE_BEFORE_SLOT.test("Tämä keskustelu on vain tällä laitteella. Se ei ole listassasi"),
+    "both pre-D-164 sentences caught; the repaired one and a correct `laitteella` are not"
+  );
+}
+
 // ============================================== the claims the specification forbids
 
 section("§7.7, §7.8, §6.6 and §11 forbid the same claims in Finnish");

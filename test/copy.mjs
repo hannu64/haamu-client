@@ -31,7 +31,7 @@ import { BLUR_MS, IDLE_MS } from "../src/flow/lock.js";
 import { USER_CHECK_INTERVAL_S } from "../src/flow/roster.js";
 import { segments, plain, hasBalancedEmphasis, markedTerms, hasUnconsumedMarks } from "../src/ui/emphasis.js";
 import { check, equal, section, done } from "./harness.mjs";
-import { coverage } from "./samples.mjs";
+import { SAMPLES, coverage } from "./samples.mjs";
 
 /**
  * Every sentence the module can produce. Functions are called with a sample
@@ -1349,6 +1349,87 @@ for (const [name, html] of pages) {
 // The plural is computed for the same reason the number is: "one minute" would
 // have survived the change to five silently.
 
+/**
+ * ⛔⛔⛔ D-164 — A SAMPLE ARGUMENT IS A CLAIM ABOUT WHAT THE CALL SITE PASSES.
+ *
+ * `SAMPLES["list.unnamedOn"]` was `["Pixel 6"]` and `app.js` passes
+ * `new Date(…).toLocaleDateString()`. The bilingual review sheet is built from this same
+ * table, so twenty-seven rounds of translation review — and every prose rule in this file
+ * — read *"No name yet · started Pixel 6"*, a sentence the product cannot produce.
+ *
+ * ⭐⭐⭐ **AND THE FINNISH WAS THEN CORRECT FOR WHAT IT WAS SHOWN.** A translator reading
+ * *"started Pixel 6"* must supply a preposition, and the right one for a device is
+ * *laitteella* — so the live list said *"started WITH THE DEVICE 25.8.2026"*. The English
+ * was right, the Finnish was right for the sample, and the sample was wrong. Hannu found
+ * it by reading his own screen after a thorough ending.
+ *
+ * ➡️ `samples.mjs` exists because *a branch no sample reaches has no home to be reviewed
+ * in*. **The next defect in is a sample of the WRONG KIND: the sentence is reviewable,
+ * everybody reviews it, and what they review is a fiction.**
+ *
+ * ⚠️ Pinned at BOTH ENDS. `test/app-document.mjs` asserts the two call sites really do pass
+ * a formatted date, so neither side can drift alone.
+ */
+{
+  const DATE_LIKE = /^\d{1,4}[./-]\d{1,2}[./-]\d{1,4}$/;
+  const dated = { "list.unnamedOn": [0], "list.noHistory": [0] };
+  const wrong = [];
+  for (const [path, slots] of Object.entries(dated))
+    for (const args of SAMPLES[path] ?? [["<<NO SAMPLE>>"]])
+      for (const i of slots) if (!DATE_LIKE.test(String(args[i]))) wrong.push(`${path}[${i}]=${JSON.stringify(args[i])}`);
+
+  equal(
+    "⛔⛔⛔ every sentence that renders a DATE is sampled with a date, not with a device name",
+    wrong.join(", "),
+    "",
+    "`app.js` passes `new Date(…).toLocaleDateString()` to both. A sample of another kind is " +
+      "reviewed by everybody and describes nothing. See D-164."
+  );
+
+  // ⚠️⚠️ THE CANARY. This is an absence check, and the pattern has to still refuse the
+  // argument that caused the defect, or the rule passes by matching nothing.
+  check(
+    "⚠️⚠️ and the pattern still refuses the sample that caused it",
+    DATE_LIKE.test("25.8.2026") && DATE_LIKE.test("8/25/2026") && !DATE_LIKE.test("Pixel 6"),
+    "dates accepted, `Pixel 6` refused"
+  );
+}
+
+/**
+ * ⭐⭐ D-164 — THE THOROUGH ENDING SAYS WHAT IT IS FOR, NOT WHAT IT CALLS.
+ *
+ * Hannu ran both endings on his device: *"Seems to be only that the later removes the
+ * choice whether light or dark mode. … That is not a very big and needed difference."*
+ * Measured against the live site he was nearly right — every file is served `no-store` and
+ * the origin sets no cookies, so two of `Clear-Site-Data`'s three words reach nothing.
+ * ➡️ **A control that names its mechanism is compared with its neighbour on the mechanism**,
+ * and *"clear this site's data"* read as a stronger version of the button beside it rather
+ * than as a different job.
+ */
+{
+  check(
+    "⭐⭐ it names the half a person can actually observe, which is what tells the two apart",
+    /colour and language/i.test(copy.ending.thoroughConfirm),
+    copy.ending.thoroughConfirm
+  );
+
+  // ⚠️⚠️ D-150's sentence, and it is the one thing here that MUST NOT be shortened away:
+  // shortening a true sentence is safe; deleting the only true sentence about a security
+  // downgrade is not. The most thorough ending manufactures §7.3.2's rollback precondition.
+  check(
+    "⛔⛔ and it still discloses the check it destroys — §7.8 requires the warning",
+    /out-of-date conversation list/i.test(copy.ending.thoroughConfirm),
+    copy.ending.thoroughConfirm
+  );
+
+  check(
+    "⚠️ the two endings are not near-duplicates of each other's label",
+    copy.ending.control !== copy.ending.thoroughControl &&
+      copy.ending.thoroughControl.includes("everything else"),
+    `${copy.ending.control}  ‖  ${copy.ending.thoroughControl}`
+  );
+}
+
 section("§4.3 — the thresholds, and the sentences that carry them");
 
 {
@@ -1882,7 +1963,10 @@ section("§7.3 — every failure reason the roster flow can raise has a sentence
     ["deletion.suspect", copy.deletion.suspect(3)],
     ["deletion.quarantineWindow", copy.deletion.quarantineWindow],
     ["list.unexplained", copy.list.unexplained(2)],
-    ["list.noHistory", copy.list.noHistory(Date.now() / 1000, 4)],
+    // ⚠️ D-164: a DATE, because that is what `app.js` passes. It used to be `Date.now()/1000`
+    // — raw epoch seconds — which is neither what the call site sends nor anything a person
+    // could read, and this check was counting its digits.
+    ["list.noHistory", copy.list.noHistory("25.8.2026", 4)],
     ["panic.told", copy.panic.told(3, 5)],
     ["phrase.longPhraseNote", copy.phrase.longPhraseNote],
     ["phrase.setsLeft", copy.phrase.setsLeft(4)],
