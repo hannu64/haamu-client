@@ -1597,8 +1597,30 @@ async function lockNow(reason) {
   locked.tabs.close(); // a locked tab must not hold the connections for the others
   locked.db.close();
   $("phrase-in").value = "";
-  text("enter-note", reason === lockFlow.BLURRED ? copy.lock.blurred : copy.lock.idle);
+  text("enter-note", lockSaid(reason));
   only("enter");
+}
+
+/**
+ * Which sentence the lock screen carries, by the reason it locked.
+ *
+ * ⚠️⚠️ IT WAS A TERNARY, AND A TERNARY OVER TWO VALUES IS AN EXHAUSTIVE MATCH THAT STOPS
+ * BEING ONE WITHOUT CHANGING. `reason === BLURRED ? blurred : idle` was correct for as
+ * long as there were exactly two reasons; D-163's third would have inherited the `else`
+ * and told somebody who pressed a button one second earlier that they had been idle for
+ * 30 minutes. ➡️ **A default is a promise about a set that nobody re-reads when the set
+ * grows.** `test/ending.mjs` now asserts every exported reason has its own sentence.
+ *
+ * ⚠️ BUILT AT CALL TIME, NOT AT MODULE LOAD. `setLanguage` overwrites the strings inside
+ * `copy.js` in place (D-154), so a lookup captured at import would be frozen in English
+ * for the whole life of the document.
+ */
+function lockSaid(reason) {
+  return {
+    [lockFlow.IDLE]: copy.lock.idle,
+    [lockFlow.BLURRED]: copy.lock.blurred,
+    [lockFlow.MANUAL]: copy.lock.manual,
+  }[reason];
 }
 
 /**
@@ -3714,6 +3736,18 @@ async function runResume() {
 // the whole origin, which takes §7.3.2's high-water mark with it — the most
 // thorough ending manufactures the precondition for the roster rollback, and the
 // control MUST say so.
+// ⚠️⚠️ D-163 — THE GENTLE CONTROL, AND IT IS DELIBERATELY NOT BEHIND A CONFIRMATION.
+// The two below ask because they destroy something. This one drops the keys and touches
+// no store, so the worst it can cost is one Argon2id — and a dialog in front of it would
+// make the three controls look like three degrees of the same act, which is exactly the
+// reading D-163 exists to break.
+//
+// ⚠️ NO GHOST GUARD HERE, and it is structural rather than forgotten: this button lives
+// inside `#home`, and Ghost mode has no list, so the screen it sits on never appears in
+// that mode. `test/app-document.mjs` asserts that placement, because the day it moves is
+// the day `lockNow` starts covering with a sentence about idleness.
+$("lock-now").addEventListener("click", () => void lockNow(lockFlow.MANUAL));
+
 $("end-here").addEventListener("click", async () => {
   if (!confirm(`${copy.ending.confirm}\n\n${copy.ending.needsPhrase}`)) return;
   await endHere({ thorough: false });
@@ -4262,6 +4296,8 @@ function paintCopy() {
   text("check", copy.nav.checkForChanges);
   text("back-home", copy.nav.toConversations);
   text("delete", copy.nav.delete);
+  text("lock-now", copy.lock.control);
+  text("lock-note", copy.lock.controlNote);
   text("end-here", copy.ending.control);
   text("end-clear", copy.ending.thoroughControl);
 

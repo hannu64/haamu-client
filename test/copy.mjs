@@ -1361,6 +1361,119 @@ section("§4.3 — the thresholds, and the sentences that carry them");
   check(`§4.3's idle threshold is ${IDLE_MS / 60000} minutes`, copy.lock.idle.includes(String(IDLE_MS / 60000)), copy.lock.idle);
 }
 
+/**
+ * ⭐⭐⭐ D-163 — §4.3's LOCK IS OFFERED, AND WHAT IT PROMISES IS THE OPPOSITE OF THE TWO
+ * CONTROLS BENEATH IT.
+ *
+ * The lock had no button for the whole life of the product. It ran on a timer, was
+ * specified, implemented, tested and honestly worded — and there was no way to ask for
+ * it, so the only control on the list screen that named the KEY was the one that deletes
+ * the messages. Hannu found it from the user's side: *"I personally would want to remove
+ * my KEY from browser without loosing the messages."*
+ *
+ * ⚠️ These check the PROPERTY each sentence carries, not its wording. A lock that stopped
+ * promising the messages survive would be a lock nobody could tell from an ending.
+ */
+{
+  check(
+    "⭐⭐ the lock is offered as a control, not only reached by waiting",
+    typeof copy.lock.control === "string" && copy.lock.control.trim().length > 0,
+    copy.lock.control
+  );
+
+  check(
+    "⛔⛔ and its note carries the one fact that separates it from the two endings",
+    /Nothing is deleted/i.test(copy.lock.controlNote) && /messages/i.test(copy.lock.controlNote),
+    copy.lock.controlNote
+  );
+
+  check(
+    "⚠️ the note promises the KEY brings them back, which is what a lock costs and an ending does not",
+    /\bKEY\b/.test(copy.lock.controlNote),
+    copy.lock.controlNote
+  );
+
+  // ⚠️⚠️ THE BUG THE TERNARY WOULD HAVE SHIPPED, ASSERTED AS AN ABSENCE. `lockNow` used to
+  // read `reason === BLURRED ? blurred : idle`, so a third reason inherited the `else` —
+  // and a person who pressed a button one second ago would have been told they had been
+  // idle for 30 minutes. A duration in this sentence is that defect, whatever its number.
+  check(
+    "⛔ the manual lock explains no elapsed time, because none elapsed",
+    !/\d/.test(copy.lock.manual) && !/minute|without use|background/i.test(copy.lock.manual),
+    copy.lock.manual
+  );
+
+  equal(
+    "⚠️ and the three reasons are three different sentences",
+    new Set([copy.lock.idle, copy.lock.blurred, copy.lock.manual]).size,
+    3
+  );
+}
+
+/**
+ * ⭐⭐⭐ D-163 — A PROMISE THAT SOMETHING COMES BACK CARRIES ITS LIMIT IN THE SAME SENTENCE.
+ *
+ * The old confirmation said *"…and they come back on this one when you type the KEY"* and
+ * then, a paragraph later, *"Conversations come back, but without messages."* Both true.
+ * The second was added as D-133 after Hannu forgot a KEY and reported what he saw; he met
+ * the same dialog again on 2026-08-24 and reported the same surprise with the correction in
+ * front of him — *"the casual reader might think messages and conversations are the same
+ * thing."*
+ *
+ * ➡️ **A TRUE SENTENCE CANNOT REPAIR A SENTENCE THE READER HAS ALREADY UNDERSTOOD
+ * DIFFERENTLY.** By the time the limit arrives the reader has a picture, and a correction
+ * reads as a contradiction rather than as a qualification. So this is a rule about WHERE
+ * the limit sits, and it is the only form of it a test can hold.
+ */
+{
+  const sentences = (s) => s.split(/(?<=[.!?])\s+/).filter((x) => x.trim());
+  const unqualified = (s) => sentences(s).filter((x) => /comes? back/i.test(x) && !/empty/i.test(x));
+
+  equal(
+    "⛔⛔⛔ every sentence promising the list comes back says in the same breath that it is empty",
+    unqualified(copy.ending.confirm).join(" | "),
+    "",
+    "A limit in a later paragraph arrives after the reader has already understood the promise. " +
+      "See D-163 — this exact sentence was corrected twice, a paragraph apart, and reported twice."
+  );
+
+  check(
+    "⚠️ the confirmation does say the list comes back, or the rule above holds vacuously",
+    /comes? back/i.test(copy.ending.confirm) && /empty/i.test(copy.ending.confirm),
+    copy.ending.confirm
+  );
+
+  // ⚠️⚠️ THE CANARY. The rule is an absence, and an absence passes just as happily when the
+  // pattern has stopped matching anything. This is the sentence D-163 removed: it must still
+  // be caught, or the check above is testing nothing.
+  // ⭐ It catches BOTH halves of the old pair, which is the finding stated precisely: the
+  // repair sentence was itself an unqualified promise, so adding it moved the problem
+  // rather than closing it.
+  equal(
+    "⚠️⚠️ and the rule still catches the two sentences it was written for",
+    unqualified("They come back on this one when you type the KEY.\n\nConversations come back, but without messages.").length,
+    2
+  );
+
+  check(
+    "⭐⭐ the control names what is lost — §7.8 requires it, and what is lost is the messages",
+    /messages/i.test(copy.ending.control),
+    copy.ending.control
+  );
+
+  check(
+    "⭐ and the ending page's confirmed sentence reports the same noun",
+    /messages/i.test(copy.tabs.endConfirmed),
+    copy.tabs.endConfirmed
+  );
+
+  check(
+    "⭐ as does the sentence a second tab shows when the first one ended",
+    /messages/i.test(copy.tabs.endedElsewhere),
+    copy.tabs.endedElsewhere
+  );
+}
+
 // ============================ §5.1.1 and §5.4.1 — what the server holds, said out loud
 
 // ⚠️ FEEDBACK 3, 4, 5 AND 7 WERE ONE HOLE FOUND FROM FOUR DIRECTIONS: the product
@@ -2052,7 +2165,11 @@ section("what the third round changed");
     ["chat.ttl", "messages"],
     // D-150: "the browser where they first arrived" — the old messages. Read and ruled.
     ["chat.reconnect.why", "old messages"],
-    ["ending.confirm", "conversations"],
+    // D-163: two plurals in one string now — *"they stay open for the other people"* is the
+    // conversations, *"your other devices cannot send them"* is the deleted messages. Both
+    // read and ruled. ⚠️ The value is the note a human leaves for the next human; a path
+    // whose pronouns have changed meaning is worth re-reading even though the check passes.
+    ["ending.confirm", "conversations, and the deleted messages"],
     ["ending.needsPhrase", "conversations"],
     // D-151: "They are not shown on any screen" — the deletion dates. Read and ruled.
     ["panic.keeps", "the dates the conversations were deleted"],

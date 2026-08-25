@@ -5546,6 +5546,78 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-163. ⭐⭐⭐⭐ The gentle control had no button, and the destructive one promised to remove something never stored
+
+**2026-08-25, from Hannu reading his own device test back to me.** D-162's fix worked: he
+kept two conversations, pressed *"Forget my KEY on this browser"*, unlocked with the same
+KEY, and the names came back with every message gone. He then said what nobody had said in
+eighteen rounds of copy review:
+
+> *"I actually could have expected that when I press 'Forget my KEY on this browser' that
+> the messages come back when I put the key back. I would not have expected the messages go
+> away because they are protected by the KEY. … I personally would want to remove my KEY
+> from browser without loosing the messages, so that when I put the KEY back the messages
+> are there. But if that is unsafe then not."*
+
+**It is not unsafe. It already existed, and it had no button.** §4.3's lock (`flow/lock.js`,
+`lockNow` in `app/app.js`) drops the derived key set, closes the database and **touches no
+store** — put the KEY back and everything is there, messages included. It could be reached
+only by leaving the tab idle for 30 minutes or backgrounded for 5. So the product ran the
+gentle action on a timer and offered, as buttons, only the two that delete.
+
+⭐⭐⭐ **THE CLASS IS "A MECHANISM WITH NO CONTROL", AND NO REVIEW THAT READS CODE CAN FIND
+IT.** The lock was specified, implemented, unit-tested, honestly worded, and correct.
+Nothing was wrong with it. **An absent button has no string to review, no branch to cover
+and no line to read** — it is D-151's missing sentence one level up, and the three outside
+slices of 2026-08-24 walked past it because a reviewer is given files. ➡️ **The question
+that finds it is not "is this correct?" but "how does a person ASK for this?"**, put to
+every mechanism a design offers, including the ones that work.
+
+**And the second half, which is the same defect wearing the other face.** The control was
+labelled *"Forget my KEY on this browser"*. §7.5's PRF record is the only thing that would
+let a browser hold a KEY between sessions, and this client has **no `navigator.credentials`
+call anywhere** — every unlock is the phrase and a full Argon2id. There was no KEY here to
+forget. ➡️ **The half of the label a person reads first named the half that costs nothing,
+and the deletion of every message on the device was not named at all.** PROTOCOL 0.9.24
+turns that into a rule: a control must name what it DESTROYS before what it DROPS, and
+"what the person loses" is read against the client's own storage rather than against §7.8's
+list of what a client MAY store.
+
+**And the confirmation had already been repaired once, for this, by this reader.** D-133
+added *"Conversations come back, but without messages."* after Hannu forgot a KEY, typed it
+back and reported what he saw. He met the same dialog again with that sentence in front of
+him and reported the same surprise: *"the casual reader might think messages and
+conversations are the same thing."* The paragraph above it was doing the damage — *"they
+come back on this one when you type the KEY"* is true of conversations and false of
+messages, and to a reader for whom a conversation CONTAINS its messages it says everything
+comes back. ➡️ ⭐⭐ **A TRUE SENTENCE CANNOT REPAIR A SENTENCE THE READER HAS ALREADY
+UNDERSTOOD DIFFERENTLY.** By the time the limit arrives the reader has a picture, and the
+correction reads as a contradiction rather than as a qualification. The fix is not another
+qualifier: it is to stop using the word that means both, and `test/copy.mjs` now holds the
+rule as a rule — **every sentence promising the list comes back says in the same breath
+that it is empty** — with the old pair as its canary, because both halves of it fail.
+
+**Shipped.** A lock control above the two endings in its own group, with its note on the
+screen rather than in a dialog (the choice is made before any dialog opens); a third lock
+reason `MANUAL` that `dueToLock` may never return; the ending relabelled *"Delete my
+messages from this browser, and forget my KEY"*; the confirmation rewritten loss-first; and
+the two tab sentences swept with it, because they reported the half that costs nothing too.
+
+⚠️⚠️ **`lockNow`'s ternary was one reason away from lying.** `reason === BLURRED ? blurred :
+idle` is an exhaustive match over two values that **stops being one without changing** — the
+manual reason would have inherited the `else` and told somebody who pressed a button one
+second earlier that they had been idle for thirty minutes. It is now a lookup, built at call
+time because `setLanguage` overwrites the strings in place.
+
+⛔⛔ **AND ONE MUTATION SURVIVED, WHICH IS WHY THEY ARE RUN.** The new Finnish guard was
+`/tyhj/i` — "does the Finnish confirmation still say the conversation comes back *tyhjä*?"
+Deleting that sentence outright did not fail the build: `tyhj-` also opens *tyhjentämällä*
+("by clearing"), which stands in the fourth paragraph of the same string, so the rule read
+the sentence about clearing browser data and reported the empty-conversation sentence
+present. ⭐⭐ **That is D-158's own lesson — a Finnish stem is not a word — arriving inside
+the check whose comment cites D-158.** ➡️ **Citing a rule is not applying it.** What caught
+it was not the reasoning; it was deleting the sentence and watching the suite stay green.
+
 ### D-162. ⛔⛔⛔⛔⛔ The ordinary ending deleted nothing, and the repair that broke it was hours old
 
 **2026-08-24, from the second pass of review slice B — which is the only reason it was

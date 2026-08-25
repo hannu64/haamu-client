@@ -256,6 +256,59 @@ section("the Finnish has the same shape as the English it replaces");
   );
 }
 
+/**
+ * ⭐⭐ D-163 IN FINNISH, CHECKED AGAINST THE OBJECT AND NOT AGAINST THE VERB.
+ *
+ * The English rule is *"a sentence promising the list comes back says in the same breath
+ * that it is empty"*, and porting it here by its verb would find whatever Finnish sentences
+ * happen to contain *palaa* — `feedback_legal_text_drift`'s D-158 class, where a rule ported
+ * by its verb lands on a sentence that says something else. So the Finnish is held to the
+ * one WORD that carries the fact: *tyhjä*. If the Finnish confirmation stops saying a
+ * conversation comes back empty, it has lost the repair whatever else it says.
+ *
+ * ⚠️ The paragraph-shape check above already guarantees the Finnish has the same number of
+ * paragraphs as the English, so this cannot be satisfied by a sentence bolted on the end of
+ * a differently-shaped text.
+ */
+{
+  /* ⛔⛔⛔ AND THE FIRST VERSION OF THIS CHECK WAS `/tyhj/i`, WHICH PASSED THE MUTATION.
+   *
+   * `tyhj-` collects *tyhjä* ("empty") and *tyhjentää* ("to clear") alike, and the fourth
+   * paragraph of this very string ends *"saat ne pois tyhjentämällä tämän sivuston
+   * tiedot"*. So the rule read the sentence about clearing browser data and reported that
+   * the sentence about an empty conversation was present. Deleting the empty-conversation
+   * sentence outright did not fail the build.
+   *
+   * ⭐⭐ THIS IS D-158's OWN LESSON — *a Finnish stem is not a word* — arriving inside the
+   * check whose comment cites D-158. ➡️ **Citing a rule is not applying it.** The thing
+   * that caught it was not the reasoning; it was deleting the sentence and watching the
+   * suite stay green.
+   *
+   * ⚠️ `\b` is no use here: JavaScript's word boundary is ASCII, so `ä` is already a
+   * non-word character and `\btyhjä\b` would match inside longer words. The guard is an
+   * explicit "not followed by another Finnish letter".
+   */
+  const EMPTY_FI = /tyhjä(?![a-zåäö])/i;
+  check(
+    "⚠️⚠️ the pattern matches the ADJECTIVE and not the verb that clears a browser",
+    EMPTY_FI.test("jokainen keskustelu siinä on tyhjä.") && !EMPTY_FI.test("saat ne pois tyhjentämällä tämän sivuston tiedot"),
+    "tyhjä matched, tyhjentämällä not"
+  );
+
+  const fi = SUOMI.get("ending.confirm") ?? "";
+  check("⭐⭐ the Finnish ending says the conversation comes back EMPTY (D-163)", EMPTY_FI.test(fi), fi);
+  check(
+    "⚠️ and it names the messages, which is what the English control now names",
+    /viesti/i.test(fi) && /viesti/i.test(SUOMI.get("ending.control") ?? ""),
+    `${SUOMI.get("ending.control")}  ‖  ${fi.slice(0, 60)}…`
+  );
+  check(
+    "⚠️ the lock's Finnish note promises the opposite, in the same two words",
+    /ei poisteta/i.test(SUOMI.get("lock.controlNote") ?? "") && /viesti/i.test(SUOMI.get("lock.controlNote") ?? ""),
+    SUOMI.get("lock.controlNote")
+  );
+}
+
 // ============================================== the claims the specification forbids
 
 section("§7.7, §7.8, §6.6 and §11 forbid the same claims in Finnish");

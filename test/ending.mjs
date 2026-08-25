@@ -401,6 +401,38 @@ section("§4.3 — when a session locks, and why the reason is shown");
   );
 }
 
+/**
+ * ⭐⭐ D-163's third reason, and the property that keeps it out of the pure function.
+ *
+ * `IDLE` and `BLURRED` are conclusions this module DRAWS from a clock. `MANUAL` is an
+ * argument the interface PASSES IN, and the day `dueToLock` can return it is the day
+ * somebody is told they asked for a lock they did not ask for. So it is asserted as an
+ * absence — over the whole grid of inputs that produce a reason at all, rather than at
+ * one point, because a single sample proves nothing about a function with two thresholds.
+ */
+{
+  const t0 = 1_000_000;
+  const grid = [];
+  for (const hidden of [null, t0, t0 - 10 * 60_000])
+    for (const dt of [0, 1000, lock.BLUR_MS, lock.BLUR_MS + 1, lock.IDLE_MS, lock.IDLE_MS * 3])
+      grid.push(lock.dueToLock({ lastActivity: t0, hiddenSince: hidden, now: t0 + dt }));
+
+  check("⚠️ the three reasons are three different values", new Set([lock.IDLE, lock.BLURRED, lock.MANUAL]).size === 3);
+  equal(
+    "⛔ `dueToLock` never returns MANUAL — a clock cannot conclude that a person asked",
+    grid.filter((r) => r === lock.MANUAL).length,
+    0,
+    `${grid.length} clock states tried`
+  );
+  // ⚠️ THE CANARY. The grid above proves nothing if the grid never produces a reason at
+  // all — an `undefined` in every slot would pass the check it is written to fail.
+  check(
+    "⚠️ and the grid does reach the reasons a clock CAN conclude, or it proves nothing",
+    grid.includes(lock.IDLE) && grid.includes(lock.BLURRED),
+    `${grid.filter(Boolean).length} of ${grid.length} states locked`
+  );
+}
+
 {
   // ⭐⭐ THE PATH THAT MATTERS IS THE DEVICE BEING PICKED UP, and that is an EVENT.
   // A hidden tab's timers are throttled to about one a minute — exactly the state

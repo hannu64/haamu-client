@@ -1522,7 +1522,11 @@ export const tabs = {
 
   // §7.8 step 3, at the receiving end. ⚠️ The noun follows `ending.control`: in Kept
   // mode nothing was ended, this browser was emptied (feedback 5).
-  endedElsewhere: "Another tab of this browser forgot the KEY, so this one has too.",
+  // ⚠️ D-163 — IT REPORTED THE HALF THAT COSTS NOTHING. "Forgot the KEY" is true and was
+  // the whole sentence, so a person watching a second tab empty itself was told about a
+  // sign-out and not about the deletion that had just happened to their messages. Same
+  // defect as the control's own label, one screen over, and it had to be swept with it.
+  endedElsewhere: "Another tab of this browser deleted your messages and forgot the KEY, so this one has too.",
 
   // ⚠️⚠️ THE TWO ENDINGS, AND THE DIFFERENCE BETWEEN THEM IS NOT PRESENTATIONAL.
   // §7.8 permits "removes it from this browser now" — a claim about the BROWSER,
@@ -1530,7 +1534,10 @@ export const tabs = {
   // reached and confirmed gone, which needs the Web Locks census in `flow/tabs.js`.
   // Where that is unavailable, §4.2 still permits a second client this app cannot
   // enumerate, so the claim cannot be made and the wording must not make it.
-  endConfirmed: "Done. Your conversations have been removed from every tab of this browser.",
+  // ⚠️ THE NOUN IS D-163's. "Your conversations have been removed" is the sentence the
+  // person reads immediately before typing the KEY and finding the list back — which
+  // makes it read as a failure. What was removed from every tab is the messages.
+  endConfirmed: "Done. Your messages have been removed from every tab of this browser.",
 
   endUnconfirmed:
     "Ended in this tab. This browser could not confirm that every other tab of this app has done " +
@@ -1613,7 +1620,26 @@ export const tabs = {
  * hold on this browser — and never a conversation, because none is ended.
  */
 export const ending = {
-  control: "Forget my KEY on this browser",
+  // ⚠️⚠️⚠️ D-163 — AND THE LABEL BEFORE THIS ONE PROMISED TO REMOVE SOMETHING THIS
+  // CLIENT HAS NEVER STORED. It read *"Forget my KEY on this browser"*. §7.5's PRF
+  // record is the only thing that would let a browser hold a KEY between sessions,
+  // and this client has no `navigator.credentials` call anywhere — every unlock is
+  // the phrase and a full Argon2id. So between sessions there is no KEY here to
+  // forget, the half of the label a person reads first named the half that costs
+  // nothing, and the half that deletes their messages was not named at all.
+  //
+  // ⭐⭐ HANNU READ IT EXACTLY AS WRITTEN AND WAS RIGHT TO: *"I would not have
+  // expected the messages go away because they are protected by the KEY."* They are
+  // protected by it — `local_key` is derived from `K_master`, which is memory-only —
+  // which is precisely why "forget the KEY" reads as putting them beyond reach
+  // rather than as deleting them.
+  //
+  // ➡️ §7.8 requires this control to NAME WHAT THE PERSON LOSES. What they lose is
+  // the messages, so the messages go first, and the scope goes with them: "from this
+  // browser" attached to "forget my KEY" would have left the deletion unscoped, which
+  // is the more dangerous misreading of the two.
+  // ⚠️ It still may not name a conversation (§7.8, feedback 5) — none is ended.
+  control: "Delete my messages from this browser, and forget my KEY",
 
   /** The one link on §7.8's landing page. It named the protocol until D-083. */
   openAgain: `Open ${product.name} again`,
@@ -1637,11 +1663,32 @@ export const ending = {
   // (a conversation reconnects itself when it is opened); the history never comes back and
   // nothing can make it, so the sentence has to say so. Found because Hannu forgot a KEY,
   // typed it back, and reported what he saw.
+  // ⚠️⚠️⚠️ D-163 — THE THIRD PARAGRAPH WAS TRUE, WAS READ, AND DID NOT WORK. It said
+  // *"Conversations come back, but without messages."* — added as D-133 because Hannu
+  // forgot a KEY, typed it back, and reported what he saw. He met the same dialog again
+  // on 2026-08-24 and reported the same surprise, this time with the sentence in front
+  // of him: *"the casual reader might think messages and conversations are the same
+  // thing."*
+  //
+  // ⭐⭐ THE SENTENCE ABOVE IT WAS DOING THE DAMAGE. *"They come back on this one when
+  // you type the KEY"* is true of conversations and false of messages — and to a reader
+  // for whom a conversation CONTAINS its messages, it says everything comes back, after
+  // which a correction reads like a contradiction rather than a limit. ➡️ **A true
+  // sentence cannot repair a sentence the reader has already understood differently.**
+  // The fix is not another qualifier: it is to stop using the word that means both and
+  // name the two things — the messages, and the list.
+  //
+  // ⚠️ THE ORDER IS THE LOSS FIRST. Everything reassuring in here is true, and a person
+  // who stops reading after two paragraphs must have read the cost by then.
+  // ⚠️ Shared by BOTH endings — `thoroughConfirm` is appended for the stronger one — so
+  // every sentence has to hold for the thorough ending too.
   confirm:
-    "Forget your KEY here — removes your conversations from this browser now.\n\n" +
-    "No conversation is ended and nobody is told anything. They stay open for the other people, they " +
-    "stay on your other devices, and they come back on this one when you type the KEY.\n\n" +
-    "Conversations come back, but without messages.\n\n" +
+    "This removes your messages from this browser now, and forgets your KEY here.\n\n" +
+    "Your KEY does not bring those messages back here, and your other devices cannot send them. " +
+    "The other people keep their own copies.\n\n" +
+    "No conversation is ended and nobody is told anything. They stay open for the other people and " +
+    "on your other devices. Type your KEY here again and your list of conversations comes back, " +
+    "with every conversation in it empty.\n\n" +
     "Your browser has written traces to this device. This does not reach them — to remove them, " +
     "clear this site's data in your browser settings.",
 
@@ -1671,6 +1718,29 @@ export const ending = {
 // ------------------------------------------------------ §4.3 — the idle lock
 
 export const lock = {
+  // ⚠️⚠️ D-163 — §4.3's LOCK HAD NO BUTTON, AND THE ONLY CONTROL THAT NAMED THE KEY
+  // DELETED THE MESSAGES. Hannu, after the D-162 device test: *"I personally would
+  // want to remove my KEY from browser without loosing the messages, so that when I
+  // put the KEY back the messages are there."* That is `lockNow()` exactly — it drops
+  // the derived keys, closes the database and touches no store — and it could only be
+  // reached by waiting 30 minutes or backgrounding the tab for 5. So the product ran
+  // the gentle action on a timer and offered only the destructive one.
+  //
+  // ⭐ THE CLASS IS "A MECHANISM WITH NO CONTROL", and it is invisible to every guard
+  // this suite has: the lock was implemented, specified, tested and honestly worded.
+  // Nothing was wrong with it. What was missing was a way to ASK for it — and an
+  // absent control has no string to review, no branch to cover and no line to read.
+  // Same shape as D-151's missing sentence: the defect is the absence.
+  control: "Lock, and ask for my KEY again",
+
+  // ⚠️ THE ONE FACT THAT SEPARATES THIS CONTROL FROM THE TWO BELOW IT ON THE SAME
+  // SCREEN, and it has to be on screen rather than in a confirmation, because a person
+  // choosing between three buttons is choosing before any of them opens a dialog.
+  // ⚠️ It says what is NOT done. §4.3's own honesty rule still applies to what IS —
+  // `idle` and `blurred` below carry that, and this one must not grow into a claim
+  // about what a lock defends against.
+  controlNote: "Nothing is deleted. Your messages stay on this browser and open again when you type your KEY.",
+
   // ⚠️ §4.3, and it must not be sold as more than it is: while the keys are in
   // memory a lock is a UI overlay that does not resist devtools or an XSS
   // foothold (§11). What it defends against is somebody picking up the device.
@@ -1688,6 +1758,13 @@ export const lock = {
   // cost is explained, and this line sits under a lock, not under a first sign-in. It
   // now matches `unlock.working`, which D-149 shortened to the same shape.
   cost: "Opening again takes a moment.",
+
+  // ⚠️ THE THIRD REASON, AND IT IS THE ONE THAT NEEDS NO EXPLANATION. `idle` and
+  // `blurred` exist because something happened TO the person and they are owed the
+  // reason; this one happened because they pressed a button one second ago. Saying
+  // "locked after 30 minutes without use" here would be false, and explaining a
+  // deliberate act back to the person who performed it is noise.
+  manual: "Locked. Type your KEY to carry on.",
 
   // ⚠️⚠️ §4.3 IN GHOST MODE IS NOT THE SAME PROPERTY UNDER THE SAME NAME (0.8.14,
   // D-073). §4.3 requires a lock after ten idle minutes and says unlocking "requires

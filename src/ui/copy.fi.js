@@ -103,9 +103,13 @@ export const FI = {
   "diagnostics.notDerived": "ei vielä johdettu",
 
   // ── ending
-  "ending.control": "Unohda AVAIMENI tästä selaimesta",
+  "ending.control": "Poista viestini tästä selaimesta ja unohda AVAIMENI",
   "ending.openAgain": "Avaa haamu uudelleen",
-  "ending.confirm": "Unohda AVAIMESI täältä — poistaa keskustelusi tästä selaimesta nyt.\n\nYhtään keskustelua ei lopeteta eikä kenellekään kerrota mitään. Ne pysyvät auki toisille osapuolille, ne pysyvät muilla laitteillasi, ja ne palaavat tähän, kun kirjoitat AVAIMEN.\n\nKeskustelut tulevat takaisin, mutta ilman viestejä.\n\nSelaimesi on kirjoittanut jälkiä laitteellesi. Tämä ei ylety niihin — saat ne pois tyhjentämällä tämän sivuston tiedot selaimen asetuksista.",
+  // ⚠️⚠️ D-163. The English stopped saying *keskustelut* where it means *viestit*, and the
+  // Finnish has to make the same split or the repair does not reach the reader who found it.
+  // ⚠️ *"jokainen keskustelu siinä on tyhjä"* — the conversation is EMPTY, not gone. That is
+  // the sentence Hannu's device test produced and the one the old Finnish never said.
+  "ending.confirm": "Tämä poistaa viestisi tästä selaimesta nyt ja unohtaa AVAIMESI täältä.\n\nAVAIMESI ei tuo niitä viestejä takaisin tänne, eivätkä muut laitteesi voi lähettää niitä. Muille osapuolille jäävät heidän omat kopionsa.\n\nYhtään keskustelua ei lopeteta eikä kenellekään kerrota mitään. Ne pysyvät auki toisille osapuolille ja muilla laitteillasi. Kun kirjoitat AVAIMESI tänne uudelleen, keskustelulistasi palaa, mutta jokainen keskustelu siinä on tyhjä.\n\nSelaimesi on kirjoittanut jälkiä laitteellesi. Tämä ei ylety niihin — saat ne pois tyhjentämällä tämän sivuston tiedot selaimen asetuksista.",
   "ending.needsPhrase": "Tarvitset 8 sanaasi avataksesi ne uudelleen.",
   "ending.thoroughControl": "Unohda AVAIMENI ja tyhjennä tämän sivuston tiedot",
   "ending.thoroughConfirm": "Tämä tyhjentää kaiken, mitä tämä sivusto on tallentanut tähän selaimeen — ei pelkästään tätä keskustelua.\n\nSe nollaa myös tarkistuksen, joka huomaisi vanhentuneen keskustelulistan. Itse listasi on turvassa AVAIMESI takana ja palaa, kun kirjoitat sen.",
@@ -141,9 +145,14 @@ export const FI = {
   "list.localOnly": "vain tällä laitteella",
 
   // ── lock
+  // ⚠️ D-163's control. "kysy AVAINTANI" is what a Finnish program does — *ohjelma kysyy
+  // salasanaa* — rather than *pyydä*, which is a person asking a person.
+  "lock.control": "Lukitse ja kysy AVAINTANI uudelleen",
+  "lock.controlNote": "Mitään ei poisteta. Viestisi säilyvät tässä selaimessa ja aukeavat uudelleen, kun kirjoitat AVAIMESI.",
   "lock.idle": "Lukittu 30 minuutin käyttämättömyyden jälkeen. Kirjoita AVAIMESI jatkaaksesi.",
   "lock.blurred": "Lukittu, koska tämä oli taustalla yli 5 minuuttia. Kirjoita AVAIMESI jatkaaksesi.",
   "lock.cost": "Uudelleen avaaminen vie hetken.",
+  "lock.manual": "Lukittu. Kirjoita AVAIMESI jatkaaksesi.",
   "lock.coveredIdle": "Peitetty 30 minuutin käyttämättömyyden jälkeen.",
   "lock.coveredBlurred": "Peitetty, koska tämä oli taustalla yli 5 minuuttia.",
   "lock.coveredWhat": "Tämä vain piilottaa sen. Kuka tahansa tätä laitetta käyttävä voi näyttää sen uudelleen — tässä tilassa ei ole AVAINTA suojaamassa keskustelua.",
@@ -330,8 +339,8 @@ export const FI = {
   // ── tabs
   "tabs.blocked": "Tämän sovelluksen toinen välilehti on auki ja pitää hallussaan vanhempaa versiota paikallisesta tallennustilastasi. Sulje muut välilehdet ja lataa tämä uudelleen.",
   "tabs.upgraded": "Tästä sovelluksesta avattiin uudempi versio toisella välilehdellä, ja se tarvitsee tämän päästämään irti paikallisesta tallennustilastasi. Lataa sivu uudelleen jatkaaksesi.",
-  "tabs.endedElsewhere": "Tämän selaimen toinen välilehti unohti AVAIMEN, joten tämäkin unohti.",
-  "tabs.endConfirmed": "Valmis. Keskustelusi on poistettu tämän selaimen jokaiselta välilehdeltä.",
+  "tabs.endedElsewhere": "Tämän selaimen toinen välilehti poisti viestisi ja unohti AVAIMEN, joten tämäkin unohti.",
+  "tabs.endConfirmed": "Valmis. Viestisi on poistettu tämän selaimen jokaiselta välilehdeltä.",
   "tabs.endUnconfirmed": "Lopetettu tällä välilehdellä. Tämä selain ei pystynyt varmistamaan, että jokainen muu tämän sovelluksen välilehti olisi tehnyt saman — jos niitä on auki, sulje ne.",
   "tabs.dormantTitle": "Tämä on jo auki",
   "tabs.dormantBody.0": "Tämä on jo auki tämän selaimen toisella välilehdellä. Kaikki viestit saapuvat sinne.",

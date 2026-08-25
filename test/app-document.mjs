@@ -297,4 +297,87 @@ section("§7.8 step 2a — every ending in `app/app.js` hands the plan across th
   );
 }
 
+// ═══════════════════════════ §4.3 — the lock, as a control that keeps what it locks
+
+section("§4.3 — the lock is reachable, and locking still deletes nothing (D-163)");
+
+{
+  /* ⚠️⚠️ THE MECHANISM WAS NEVER THE PROBLEM. `lockNow` has always dropped the derived
+   * keys and touched no store — it was specified, implemented, tested and honestly
+   * worded, and it could only be reached by leaving the tab alone for 30 minutes. So
+   * every guard in this suite was satisfied while the product offered a person exactly
+   * two ways to put their KEY away, both of which delete their messages.
+   *
+   * ⭐ THE CLASS IS "A MECHANISM WITH NO CONTROL", and it is invisible to a review that
+   * reads code: an absent button has no string to check, no branch to cover and no line
+   * to read. It is D-151's missing sentence one level up — **the defect is the absence**
+   * — and the only place it can be caught is a rule that asks whether the thing is
+   * REACHABLE, which is a question about the document.
+   */
+  const html = read("../app/index.html");
+  const app = read("../app/app.js");
+  const appCode = code("../app/app.js");
+
+  const home = html.split('<section id="home"')[1]?.split("</section>")[0] ?? "";
+  check("⚠️ the home section is found at all, or nothing below means anything", home.length > 500, `${home.length} characters`);
+
+  check(
+    "⭐⭐⭐ §4.3's lock has a control, and it is on the screen the endings are on",
+    /id="lock-now"/.test(home) && /id="lock-note"/.test(home),
+    "both the button and its note are inside #home"
+  );
+
+  // ⚠️ Kept mode only, and it is the PLACEMENT that guarantees it rather than a check in
+  // the handler: Ghost mode has no list, so `#home` never appears in it. The day this
+  // button moves to a screen Ghost can reach, `lockNow` starts covering with a sentence
+  // about idleness that nobody's clock produced.
+  check(
+    "⚠️⚠️ and it is inside `#home` rather than loose in the document, which is what keeps it out of Ghost mode",
+    html.includes('id="lock-now"') && home.includes('id="lock-now"'),
+    "the only occurrence is the one inside #home"
+  );
+
+  check(
+    "⭐ it is wired to the lock, and it says the person asked",
+    /\$\("lock-now"\)\.addEventListener\([^]*?lockNow\(lockFlow\.MANUAL\)/.test(appCode),
+    "lock-now → lockNow(lockFlow.MANUAL)"
+  );
+
+  check(
+    "⚠️ and both its sentences come from `ui/copy.js`, like every other sentence on the screen",
+    /text\("lock-now", copy\.lock\.control\)/.test(appCode) && /text\("lock-note", copy\.lock\.controlNote\)/.test(appCode),
+    "label and note are painted from copy"
+  );
+
+  /* ⛔⛔⛔ THE PROPERTY THE CONTROL PROMISES, ASSERTED AGAINST THE CODE THAT KEEPS IT.
+   *
+   * `copy.lock.controlNote` says *"Nothing is deleted. Your messages stay on this browser
+   * and open again when you type your KEY."* That is true because `lockNow` drops keys and
+   * closes handles and never reaches a store — and it is one line away from being false.
+   * A future ending-shaped refactor that routed the lock through `clearFor` would leave the
+   * note on screen, still rendered, still reviewed, and lying.
+   *
+   * ⚠️ `db.close()` is deliberately NOT forbidden. Closing a database is not clearing one,
+   * and a pattern that could not tell them apart would ban the correct line.
+   */
+  const CLEARS = /endSession|clearEverything|clearFor\(|endHere\(|deleteAll|\.clear\(/;
+  const body = app.split("async function lockNow(reason) {")[1]?.split("\n}")[0] ?? "";
+  check("⚠️ `lockNow`'s body is found, and it is the whole function", body.includes('only("enter")'), `${body.length} characters`);
+  equal(
+    "⛔⛔⛔ locking clears no store — this is the whole difference between a lock and an ending",
+    (body.match(CLEARS) ?? []).join(""),
+    "",
+    "`copy.lock.controlNote` promises nothing is deleted. If a lock ever clears a store, " +
+      "that sentence becomes a lie on a screen nobody re-reads. See D-163."
+  );
+
+  // ⭐ The guard on the guard: the pattern has to still recognise a clear, or the check
+  // above is an absence that passes because it can no longer match anything.
+  check(
+    "⚠️⚠️ and the pattern still recognises a clear where one really happens",
+    CLEARS.test(app.split("async function clearFor(")[1]?.split("\n}")[0] ?? "") && !CLEARS.test("locked.db.close();"),
+    "`clearFor` matches; `db.close()` correctly does not"
+  );
+}
+
 done();

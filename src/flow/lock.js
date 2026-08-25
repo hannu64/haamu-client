@@ -70,6 +70,20 @@ export const IDLE = "idle";
 export const BLURRED = "blurred";
 
 /**
+ * D-163 — the person asked.
+ *
+ * ⚠️ `dueToLock` NEVER RETURNS THIS AND MUST NOT. The two above are conclusions this
+ * module draws from a clock; this one is an argument the interface passes in, and
+ * keeping it out of the pure function is what stops a future condition being added
+ * here and locking somebody "because they asked" when they did not.
+ *
+ * ⭐ It exists at all because the reason is what `app.js` puts on the lock screen, and
+ * *"locked after 30 minutes without use"* under a button pressed one second ago is a
+ * false sentence — see `copy.lock.manual`.
+ */
+export const MANUAL = "manual";
+
+/**
  * Pure: should this session be locked, and why?
  *
  * `hiddenSince` is null when the tab is visible. Returns null, or the reason —

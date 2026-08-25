@@ -502,6 +502,30 @@
         </div>
 
         <!--
+          §4.3's lock, AS A CONTROL — D-163.
+
+          ⚠️⚠️ THE MECHANISM SHIPPED WITHOUT A WAY TO ASK FOR IT. `lockNow()` has always
+          dropped the derived keys and touched no store, and it could only be reached by
+          leaving the tab alone for 30 minutes. So the only button on this screen that
+          named the KEY was the one that deletes the messages, and a person who wanted to
+          put the KEY away had to choose between waiting and losing their history.
+
+          ⚠️ IT SITS ABOVE THE ENDINGS AND IN ITS OWN GROUP, because the three controls are
+          not three strengths of one action — this one keeps everything and the two below
+          it do not, and that is the difference a person is choosing between. Its note is
+          on the screen rather than in a confirmation for the same reason: the choice is
+          made before any dialog opens.
+
+          ⚠️ Kept mode only, and that is `#home`'s doing rather than a check here — Ghost
+          mode has no list, so this screen never appears in it. In Ghost `lockNow` covers
+          instead of locking, which is a different promise and has its own control.
+        -->
+        <div class="row sep">
+          <button id="lock-now" class="secondary"></button>
+        </div>
+        <p class="note mt-s" id="lock-note"></p>
+
+        <!--
           §7.8's ending, and §7.8 step 5's separate control beside it.
 
           ⚠️⚠️ THEY ARE TWO CONTROLS AND MUST STAY TWO. The ordinary ending leaves
