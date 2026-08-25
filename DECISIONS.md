@@ -5611,11 +5611,18 @@ paren, and both call sites contain one — `new Date((entry.created ?? 0) * 1000
 version of the call-site guard matched nothing and would have passed forever. The canary is
 what found it.
 
-📌 **Left open, deliberately, for Hannu:** the date itself is rendered with
-`toLocaleDateString()` and no locale, so it follows the DEVICE's language rather than the
-app's — his screen showed *8/24/2026* inside a Finnish sentence. That is a real
-inconsistency in a product with its own language switch, but choosing a locale for English
-readers is his call, not a bug fix.
+✅ **RAISED AND CLOSED THE SAME DAY, BY HIM.** Two things were put to him and both come back
+*leave it*: the date is rendered with `toLocaleDateString()` and no locale, so it follows the
+DEVICE's language rather than the app's — his screen showed *8/24/2026* inside a Finnish
+sentence — and the thorough ending resets the theme and language choices. His ruling:
+*"The language and dark/light are fine like they are now. I just commented that I notice the
+change after pressing the button to remove data from haamu."*
+
+⭐ Worth keeping, because it is the second time this week an observation has been read as a
+complaint: **a user reporting what they NOTICED is not a user reporting a fault.** He named
+the visible difference between the two endings in order to ask what the invisible ones were —
+which is the question that produced (a) above. The reply that was owed was an explanation, and
+the change that was owed was to the LABEL, not to the behaviour he described.
 
 ### D-163. ⭐⭐⭐⭐ The gentle control had no button, and the destructive one promised to remove something never stored
 
