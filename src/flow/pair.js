@@ -243,8 +243,25 @@ async function saveInFlight(storage, { role, linkSecret, privateKey, expiresAt }
  * thing that leaves a claimable secret at rest — so its life is bounded on the
  * device that stores it, by a check that runs before anything is sent. The server
  * refusing expired sessions is a second line, not this one.
+ *
+ * ⚠️⚠️ AND RULE 6 NAMES RULE 4 IN THE SAME BREATH, WHICH THIS FUNCTION DID NOT
+ * (D-165, outside review slice B #5). *"A client MUST send it … when it discards a
+ * record under rule 4, rule 5 or rule 10"* — and this cleared the record and returned,
+ * owing a `DELETE` it had just destroyed the only input to. The comment above cited
+ * rule 4 and stopped there. ➡️ **Citing a rule is not applying it, and the rule beside
+ * the one you cited is the one you are most likely to miss.**
+ *
+ * ⚠️⚠️ THE WINDOW IS REAL AND IT IS THE INITIATOR'S OWN ARITHMETIC. `initiate` stamps
+ * `expires_at` BEFORE §9.1's proof-of-work and before the `POST` that creates the
+ * session — round 5 measured a thirty-second search on a slow phone — so the local
+ * record dies that far AHEAD of the server's. In that gap the link is live, claimable,
+ * and completable by nobody, which is precisely the hazard §3.4.1a named.
+ *
+ * ⚠️ `api` IS OPTIONAL BECAUSE THE STORE IS READ IN PLACES THAT HAVE NO SERVER — the
+ * suites, and `join`'s own "have I been here before?" check. Without it the record is
+ * still discarded, because rule 4's MUST does not wait for a network.
  */
-export async function loadInFlight(storage) {
+export async function loadInFlight(storage, { api = null } = {}) {
   const s = recordStore(storage);
   if (!s) return null;
   let rec;
@@ -257,7 +274,7 @@ export async function loadInFlight(storage) {
   try {
     if (rec?.v !== 1) return null;
     if (typeof rec.expires_at !== "number" || rec.expires_at <= Date.now()) {
-      await clearInFlight(storage);
+      await discardExpired(storage, rec, api);
       return null;
     }
     return {
@@ -267,8 +284,52 @@ export async function loadInFlight(storage) {
       expiresAt: rec.expires_at,
     };
   } catch {
+    // ⚠️ NO `DELETE` IS OWED HERE AND NONE CAN BE BUILT. Reaching this means `L` itself
+    // would not decode, so there is no `pairing_id` to address — an unreadable record
+    // is not a session this device can prove anything about.
     await clearInFlight(storage);
     return null;
+  }
+}
+
+/**
+ * §3.4.1b rule 4's discard, with rule 6's `DELETE` PREPARED BEFORE IT.
+ *
+ * ⚠️⚠️ THE DERIVATION HAPPENS ABOVE THE CLEAR AND MUST. Rule 6: *"`pairing_id` derives
+ * from `L`, and `L` is in the record being discarded. The `DELETE` MUST therefore be
+ * prepared before the record is cleared, not after — an implementation that clears
+ * first has thrown away the only input to the request it now owes."* `concludePairing`
+ * takes its `pairingId` as an argument for exactly this reason; this is the second
+ * discard path and it had no such argument to take.
+ *
+ * ⚠️⚠️ THE INITIATOR'S ALONE, AND THAT IS NARROWER THAN RULE 6 AS WRITTEN. Rule 6
+ * restricts only its rule 10 occasion to role I. But the reason it gives applies here
+ * unchanged: a joiner's expired record belongs to somebody else's session, which is
+ * either already claimed — carrying §3.5's evidence the initiator is entitled to read —
+ * or one this device is not a party to at all. *"Deleting either destroys another
+ * party's state on a guess."* ⚠️ **Raised with PROTOCOL.md rather than assumed: rule 6
+ * may want the same ⚠️ extended to rule 4.**
+ */
+async function discardExpired(storage, rec, api) {
+  let pairingId = null;
+  if (api && rec.role === pairing.ROLE_INITIATOR) {
+    try {
+      const l = b64uDecodeExact(rec.l, pairing.LINK_SECRET_BYTES, "stored L");
+      ({ pairingId } = await pairing.derivePairing(l));
+    } catch {
+      pairingId = null; // unreadable: there is nothing to address
+    }
+  }
+  await clearInFlight(storage);
+  if (!pairingId) return;
+  // Rule 6 SHOULDs a retry at the next unlock — and the record that would have carried
+  // one is now gone by rule 4's MUST, so the memo is the only thing `abandon` has left.
+  lastPairingId = pairingId;
+  try {
+    await api.del(idPathFor(pairingId));
+    lastPairingId = null;
+  } catch {
+    // Kept in the memo above, which is what `abandon` retries from.
   }
 }
 
@@ -554,11 +615,33 @@ function hiddenNow() {
  */
 export function visibleClock({ doc = theDocument(), now = () => Date.now() } = {}) {
   let total = 0;
-  let since = doc?.visibilityState === "hidden" ? null : now();
-  const onChange = () => {
-    if (doc.visibilityState === "hidden") {
-      // ⚠️ Guarded, because `visibilitychange` can fire twice for one departure and a
-      // second `total +=` would bill the same milliseconds again.
+  const away = () => doc?.visibilityState === "hidden";
+  let since = away() ? null : now();
+
+  /**
+   * ⭐⭐⭐ D-165 — THE STATE IS THE TRUTH AND THE EVENT IS ONLY A HINT THAT IT CHANGED.
+   * That is D-144's own sentence, written for `whenVisible` eighty lines above this
+   * one, and this clock went on trusting the event that sentence is about. Android
+   * restores a frozen tab without delivering the transition to a listener registered
+   * before the freeze: `since` then stays `null` for the life of the pairing, the
+   * budget never advances, and rule 11's ten minutes never expire.
+   *
+   * ⚠⚠ MEASURED, on a driven document: eleven minutes of real attention billed as
+   * SIXTY SECONDS. The poll then runs to the 24-hour deadline instead of stopping and
+   * offering to carry on — 86400 / 0.75 = **115,200 requests**, on a phone.
+   *
+   * ⭐ AND IT COSTS NO TIMER, WHICH IS WHY THE OTHER FIX'S SHAPE DID NOT COPY ACROSS.
+   * `whenVisible` needs an interval because it is asleep; this is asked for its answer
+   * at the bottom of every poll, so re-reading the truth AT THAT MOMENT is the same
+   * fix for nothing. A missed event now costs one poll interval rather than a day.
+   *
+   * ⚠ Guarded in both directions, because `visibilitychange` can fire twice for one
+   * departure and a second `total +=` would bill the same milliseconds again — and
+   * that same guard is what makes it safe for `elapsed()` to call this as often as it
+   * likes.
+   */
+  const sync = () => {
+    if (away()) {
       if (since !== null) {
         total += now() - since;
         since = null;
@@ -567,10 +650,14 @@ export function visibleClock({ doc = theDocument(), now = () => Date.now() } = {
       since = now();
     }
   };
-  doc?.addEventListener("visibilitychange", onChange);
+
+  doc?.addEventListener("visibilitychange", sync);
   return {
-    elapsed: () => total + (since === null ? 0 : now() - since),
-    stop: () => doc?.removeEventListener("visibilitychange", onChange),
+    elapsed: () => {
+      sync();
+      return total + (since === null ? 0 : now() - since);
+    },
+    stop: () => doc?.removeEventListener("visibilitychange", sync),
   };
 }
 
@@ -1064,7 +1151,7 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
   // A record for THIS link — same `L`, joiner's role, not expired — means this
   // browser already claimed and was interrupted. Every `already_claimed` below is
   // then a report of THIS DEVICE'S OWN claim, which is not §3.5's alarm.
-  const held = await loadInFlight(storage);
+  const held = await loadInFlight(storage, { api }); // D-165: rule 6 follows rule 4 everywhere
   const heldHere =
     held && held.role === pairing.ROLE_JOINER && bytes.timingSafeEqual(held.linkSecret, linkSecret)
       ? held
@@ -1302,7 +1389,7 @@ async function describeExistingClaim(api, idPath, macKey, commit, signal) {
  * §3.6's digits is a different question and this function does not answer it.
  */
 export async function resume({ api, storage, signal, onEvent = () => {} } = {}) {
-  const rec = await loadInFlight(storage);
+  const rec = await loadInFlight(storage, { api }); // D-165: rule 6 follows rule 4 everywhere
   if (!rec) return null;
   if (rec.role !== pairing.ROLE_INITIATOR && rec.role !== pairing.ROLE_JOINER) {
     await clearInFlight(storage);
@@ -1406,7 +1493,12 @@ export async function resume({ api, storage, signal, onEvent = () => {} } = {}) 
 let lastPairingId = null;
 
 export async function abandon({ api, storage, signal } = {}) {
-  const rec = await loadInFlight(storage);
+  // ⚠️ `api` IS PASSED IN, AND WITHOUT IT THIS FUNCTION DEFEATED ITSELF (D-165). This
+  // is rule 6's "retry at the next unlock" — and its first act was a read that silently
+  // destroyed the expired record it needed, leaving `lastPairingId` (null after a
+  // reload) as the only fallback. The retry could not fire for the one case it exists
+  // for. `discardExpired` now sends it, and leaves the memo behind if it failed.
+  const rec = await loadInFlight(storage, { api });
   await clearInFlight(storage);
   // The record is the truth when it is there; the memo covers only the race.
   let pairingId = lastPairingId;

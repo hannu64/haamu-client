@@ -13,6 +13,8 @@
 // whole of the behaviour under test.
 
 import * as flow from "../src/flow/pair.js";
+import * as pairing from "../src/protocol/pairing.js";
+import { b64uDecode, b64uEncode } from "../src/crypto/b64u.js";
 import { check, equal, section, done } from "./harness.mjs";
 
 /** An api that gets no further than §9.1's challenge. The write under test precedes it. */
@@ -99,6 +101,81 @@ section("§3.4.1b — a pairing record that could not be written is reported");
     "⭐⭐ a device with no usable store at all is reported the same way",
     events.some((e) => e.type === "not_durable")
   );
+}
+
+// ═════════════════════ §3.4.1b rules 4 AND 6 — the discard that owes a `DELETE`
+//
+// ⚠️⚠️ THE RULE-4 CHECK ALREADY EXISTED AND WAS SILENT ABOUT RULE 6. `e2e-pair.mjs`
+// asserts *"an expired record is refused"* and asked nothing about the request the
+// discard owes — the same shape as the comment above `loadInFlight`, which cited rule 4
+// and stopped there. ⭐ AND IT LIVES HERE RATHER THAN THERE ON PURPOSE: the e2e suites
+// need a server and are exempted in the published tree (D-160), so a guard placed
+// beside the old check would not run for somebody who clones the repository.
+
+/** An api that records the abandonment `DELETE`s and nothing else. */
+const watchingApi = () => {
+  const deleted = [];
+  return {
+    deleted,
+    async powChallenge() { throw new Error("no network in this test"); },
+    async del(path) { deleted.push(path); },
+  };
+};
+
+/** A real record for role I, aged past its expiry. Returns the store and `L`. */
+async function expiredRecord({ role = pairing.ROLE_INITIATOR } = {}) {
+  const store = mapStore();
+  await eventsFrom(store); // the real `initiate` writes the real record
+  const rec = await store.get(flow.INFLIGHT_KEY);
+  await store.set(flow.INFLIGHT_KEY, { ...rec, role, expires_at: Date.now() - 1 });
+  return { store, linkSecret: b64uDecode(rec.l, "stored L") };
+}
+
+section("⛔⛔ D-165 — rule 4 discards the record, rule 6 sends the `DELETE` first");
+
+{
+  const api = watchingApi();
+  const { store, linkSecret } = await expiredRecord();
+  const held = await flow.loadInFlight(store, { api });
+
+  check("⚠️ rule 4 still holds: the expired record is refused", held === null);
+  equal("⚠️ and it really is gone from the store", store.size(), 0);
+  equal("⭐⭐⭐ rule 6's abandonment `DELETE` went out", api.deleted.length, 1);
+
+  // ⭐ THE CANARY. A `DELETE` to the wrong path is worse than none: it would look
+  // right here for ever while the claimable link stayed live. `pairing_id` derives
+  // from `L` (§2.3), so the address is checkable rather than merely present.
+  const { pairingId } = await pairing.derivePairing(linkSecret);
+  equal(
+    "⭐ addressed to the `pairing_id` that derives from the stored `L`",
+    api.deleted[0],
+    `/api/pair/${b64uEncode(pairingId)}`
+  );
+}
+
+{
+  // ⚠️⚠️ AND NOT FOR THE JOINER. Rule 6's own reason: a joiner's session is either
+  // claimed — carrying §3.5's evidence the initiator is entitled to read — or one this
+  // device is not a party to. "Deleting either destroys another party's state on a
+  // guess." The record still goes; only the request does not.
+  const api = watchingApi();
+  const { store } = await expiredRecord({ role: pairing.ROLE_JOINER });
+  const held = await flow.loadInFlight(store, { api });
+  check("⚠️ a joiner's expired record is discarded too", held === null && store.size() === 0);
+  equal("⭐⭐ but sends no `DELETE` — it is not this device's session to end", api.deleted.length, 0);
+}
+
+{
+  // ⚠️ THE OTHER DIRECTION, AND IT IS THE HALF THAT ROTS. A `loadInFlight` that
+  // deleted unconditionally would pass both checks above and quietly end every live
+  // pairing the moment the app asked whether one existed.
+  const api = watchingApi();
+  const store = mapStore();
+  await eventsFrom(store);
+  const held = await flow.loadInFlight(store, { api });
+  check("⭐⭐ a record that has NOT expired is returned", Boolean(held?.privateKey));
+  equal("⭐⭐ and nothing is deleted, on the server or in the store", api.deleted.length, 0);
+  equal("⚠️ the record is still there to be resumed from", store.size(), 1);
 }
 
 done();

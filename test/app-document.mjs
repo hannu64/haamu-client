@@ -421,4 +421,208 @@ section("the two sentences that print a date are really given one (D-164)");
   );
 }
 
+// ═══════════════ the 2026-08-24 outside review, second pass — slices B and C (D-165)
+//
+// ⭐⭐ FIVE OF THESE SEVEN FIXES WERE A RULE ALREADY WRITTEN IN A COMMENT AND APPLIED
+// ONE BRANCH, ONE FUNCTION OR ONE SCREEN TOO LATE. `paste-go` carried the words *"out
+// of the field before anything else happens"* below the return that skipped it;
+// `stopEverything` cleared six references and not the map holding every channel root;
+// one `failcode` in seventeen put a browser's own prose on screen. ➡️ **A rule that
+// lives in a comment is enforced only where somebody remembered it.** So each one
+// leaves here as an executable rule instead.
+
+/** Everything between a header and the first terminator at column 0. */
+const bodyAfter = (src, header, terminator) => {
+  const i = src.indexOf(header);
+  if (i < 0) return "";
+  const rest = src.slice(i + header.length);
+  const j = rest.indexOf(terminator);
+  return j < 0 ? "" : rest.slice(0, j);
+};
+
+section("§3.6.2 — the three answers are offered only once there is something to answer about (C #2)");
+
+{
+  const src = code("../app/app.js");
+  const body = bodyAfter(src, "async function succeed(result) {", "\n}\n");
+
+  // ⭐ The guard on the guard first: a rename would otherwise leave every index at -1
+  // and the comparisons below true by vacancy.
+  check(
+    "⚠️ `succeed` is found and is the function that shows the digits",
+    body.includes("showSas(result.sas)") && body.includes('only("verify")'),
+    `${body.length} characters of body`
+  );
+
+  /**
+   * ⛔⛔ THE RULE: `paired` IS ASSIGNED BEFORE THE SCREEN IS OFFERED. All three of
+   * §3.6.2's answers begin `const entry = paired ?? revisiting; if (!entry) return
+   * backToStart()`, so a decision screen shown before the write resolves is a screen
+   * whose every button is a no-op — including *"this is not the person"*, which then
+   * deletes nothing while the write lands the attacker's channel in the roster.
+   */
+  const decides = body.indexOf('only("verify")');
+  check(
+    "⛔⛔ the channel is persisted and `paired` assigned before the digits are offered",
+    body.lastIndexOf("paired = ") < decides,
+    "the last `paired =` precedes the screen change"
+  );
+  check(
+    "⚠️ and that holds for the roster write itself, not merely the assignment",
+    body.indexOf("addChannel") < decides && body.indexOf("setChannel") < decides,
+    "both modes write before the screen"
+  );
+
+  // ⭐ And the guard still refuses the order it was written about.
+  const before = `clearPairingSurface(); showSas(x); only("verify"); await addChannel(); paired = { };`;
+  check(
+    "⚠️⚠️ the rule still catches the pre-D-165 ordering",
+    !(before.lastIndexOf("paired = ") < before.indexOf('only("verify")')),
+    "a screen-first `succeed` fails this check"
+  );
+}
+
+section("§7.8 step 2 — a lock drops the references that carry a channel root (C #3)");
+
+{
+  const src = code("../app/app.js");
+  const body = bodyAfter(src, "async function stopEverything() {", "\n}\n");
+
+  check(
+    "⚠️ `stopEverything` is found and is the one that stops the streams",
+    body.includes("streams.clear()"),
+    `${body.length} characters of body`
+  );
+
+  /**
+   * ⛔ THE ENDING NAVIGATES AND THE LOCK DOES NOT. `endHere` calls `location.replace`,
+   * so a new document takes the heap with it; `lockNow` keeps this one alive behind the
+   * enter screen. Anything still referenced there is still on the device — and `hashed`
+   * holds one roster entry per conversation, each carrying its channel root, while
+   * `paired` holds the raw `rootBytes` of a channel whose digits were never answered.
+   */
+  for (const name of ["hashed.clear()", "paired = null", "revisiting = null"]) {
+    check(`⛔ it drops \`${name.split(/[ .]/)[0]}\``, body.includes(name), name);
+  }
+
+  // ⭐ The other direction: these must be things that really do hold a root, or the
+  // rule is three arbitrary names. `hashed` is filled from roster entries; `paired`
+  // from `rootBytes` itself.
+  check(
+    "⚠️ `hashed` really is filled with roster entries, and `paired` with raw root bytes",
+    /hashed\.set\([^;]*entry\)/.test(src) && /paired = \{ \.\.\.entry, rootBytes:/.test(src),
+    "both named bindings carry channel roots"
+  );
+
+  const before = `streams.clear(); elsewhere.clear(); seen.clear(); const stopped = session;`;
+  check(
+    "⚠️⚠️ the rule still catches the pre-D-165 body",
+    !before.includes("hashed.clear()"),
+    "a `stopEverything` without the map fails this check"
+  );
+}
+
+section("§6.7.1 rule 8 — only a message that was READ clears the closing marker (C #4)");
+
+{
+  const src = code("../app/app.js");
+
+  /**
+   * ⛔ RULE 8 SAYS *"A LATER MESSAGE FROM THAT PEER"*. An item with no payload is one
+   * this device refused — a stale generation, a replay, a tampered envelope — and a
+   * refusal is not evidence the peer sent anything. Unguarded, a hostile server
+   * un-closes a closed conversation by requeueing an old ciphertext under a fresh
+   * `msg_id`, and the person types into a mailbox nobody will ever drain again.
+   */
+  check(
+    "⛔⛔ the marker is cleared only for a message that produced a payload",
+    /if \(m\.payload\) closes = false;/.test(src),
+    "the assignment is guarded"
+  );
+  equal(
+    "⚠️ and there is no unguarded `closes = false` anywhere in the file",
+    (src.match(/^\s*closes = false;/gm) ?? []).length,
+    0
+  );
+  check(
+    "⚠️⚠️ the detector still recognises the unguarded form it forbids",
+    /^\s*closes = false;/m.test("    closes = false;\n"),
+    "a bare assignment on its own line is what fails"
+  );
+}
+
+section("§2.1.1 — the pasted field is cleared as soon as it is read, not once accepted (C #7)");
+
+{
+  const src = code("../app/app.js");
+  const body = bodyAfter(src, '$("paste-go").addEventListener("click", async () => {', "\n});");
+
+  check(
+    "⚠️ the handler is found and is the one that reads the field",
+    body.includes('$("paste-link").value.trim()'),
+    `${body.length} characters of body`
+  );
+
+  /**
+   * ⛔ §2.1.1: *"It MUST clear the field as soon as the value is read."* The clear used
+   * to sit below the rejection's `return`, so the one case the same section spends its
+   * other bullet on — a valid link belonging to a DIFFERENT deployment — left a real
+   * `L` in a live `<input>` for the life of the document.
+   */
+  check(
+    "⛔⛔ the field is cleared before the rejection can return",
+    body.indexOf('$("paste-link").value = ""') < body.indexOf('text("paste-note"'),
+    "clear, then report"
+  );
+
+  /**
+   * ⭐ THE ONE EXCEPTION IS DELIBERATE AND IS THE ONLY ONE. A code SHORTER than §2.2's
+   * sixteen characters cannot be a complete secret and is the only case where the person
+   * is mid-typing — losing it means asking a friend on a telephone to read sixteen
+   * characters out again. Everything else goes, including a code that is too long.
+   */
+  check(
+    "⚠️ and `keep` is granted to the short code alone",
+    /no\(copy\.openLink\.codeShort\(chars\), true\)/.test(src) &&
+      (src.match(/, true\)/g) ?? []).length === 1,
+    "exactly one `keep`"
+  );
+
+  const before = `const typed = v.trim(); const problem = f(typed); if (problem) { text("paste-note", p); return; } $("paste-link").value = "";`;
+  check(
+    "⚠️⚠️ the rule still catches the pre-D-165 order",
+    !(before.indexOf('$("paste-link").value = ""') < before.indexOf('text("paste-note"')),
+    "a clear-after-return handler fails this check"
+  );
+}
+
+section("§12 — no exception reaches the screen as its own message (C #11)");
+
+{
+  const src = code("../app/app.js");
+
+  /**
+   * ⚠️⚠️ SEVENTEEN CALL SITES AND ONE OF THEM WAS DIFFERENT. `failWith` had its
+   * fallback-to-`err.message` removed for feedback 13 — *"429 rate_limited"*, on screen,
+   * under "Pairing did not complete" — and this sweep missed the Ghost failure path,
+   * which went on printing a browser's own `DOMException` prose in English underneath a
+   * Finnish sentence. The rule is about the DETAIL LINE, which is the one place an
+   * exception is allowed anywhere near a person, and only through `detailOf`.
+   */
+  const args = [...src.matchAll(/text\("failcode",\s*([^;]*?)\);/g)].map((m) => m[1]);
+  check("⚠️ the `failcode` call sites are found at all", args.length >= 3, `${args.length} sites`);
+
+  // ⭐ `detailOf` IS THE ONE DOOR AND IT IS PUNCHED OUT BEFORE THE SCAN. It renders a
+  // reason code or an HTTP status and nothing else — a bounded string of ours — so an
+  // exception passing through it is not an exception reaching the screen. Anything
+  // else mentioning `err` is.
+  const reaches = (a) => /\berr\b|String\(/.test(a.replace(/detailOf\([^()]*\)/g, "·"));
+  equal("⛔⛔ no exception reaches the screen except through `detailOf`", args.filter(reaches).length, 0);
+  check(
+    "⚠️⚠️ the detector still tells the two apart",
+    reaches("err?.message ?? String(err)") && !reaches("detailOf(err)"),
+    "refuses the pre-D-165 argument, admits the sanctioned one"
+  );
+}
+
 done();

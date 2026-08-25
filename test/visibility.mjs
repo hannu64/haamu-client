@@ -28,7 +28,7 @@
  * `~/lpm-probes/probe-visible-budget.mjs` — both ways, unfixed and fixed.
  */
 import { check, equal, section, done } from "./harness.mjs";
-import { visibleClock, whenVisible, POLL_ACTIVE_BUDGET_MS } from "../src/flow/pair.js";
+import { visibleClock, whenVisible, POLL_ACTIVE_BUDGET_MS, POLL_INTERVAL_MS } from "../src/flow/pair.js";
 
 /** A `document` that only has a visibility state, with a hand-driven event. */
 function fakeDoc(initial = "visible") {
@@ -100,6 +100,68 @@ section("⭐⭐ and the budget therefore survives the absence that used to spend
     "⭐ and it still runs out when the watching really is ten minutes",
     w.elapsed() >= POLL_ACTIVE_BUDGET_MS,
     `${Math.round(w.elapsed() / 1000)} s`
+  );
+}
+
+section("⛔⛔ D-165 — the restore that arrives without its event (outside review, slice B #4)");
+{
+  /*
+   * ⚠️⚠️ THE `silently` HELPER WAS ALREADY IN THIS FILE AND HAD NEVER BEEN POINTED AT
+   * THIS CLOCK. It was built for `whenVisible`, whose whole subject is that Android
+   * restores a frozen tab without delivering the transition — and `visibleClock`, in
+   * the next function of the same source file, went on trusting that event.
+   *
+   * ⭐ THE ASSERTION IS "ADVANCING AGAIN", NOT A TOTAL, AND THAT IS DELIBERATE. The
+   * fix works by re-reading `visibilityState` whenever the clock is ASKED, so a test
+   * that asks once cannot see it — the first version of the probe asked once and
+   * reported the fix as no fix. What is guaranteed is that the clock cannot stay stuck
+   * for longer than the gap between two reads, and `pollStatus` reads it once per
+   * iteration.
+   */
+  const doc = fakeDoc();
+  const c = fakeNow();
+  const w = visibleClock({ doc, now: c.now });
+  c.tick(60_000); // a minute of genuine watching
+  doc.go("hidden"); // Android does deliver this one
+  c.tick(60 * 60 * 1000); // an hour frozen
+  doc.silently("visible"); // ⚠️ and does not reliably deliver this one
+
+  c.tick(POLL_INTERVAL_MS);
+  const first = w.elapsed();
+  c.tick(POLL_INTERVAL_MS);
+  const second = w.elapsed();
+  check(
+    "⭐ the clock is advancing again after a restore nobody announced",
+    second > first,
+    `${first} ms then ${second} ms — the old code read ${first} ms for ever`
+  );
+}
+{
+  // ⭐ AND WHAT THAT COSTS WHEN IT DOES NOT HOLD. Rule 11's budget is the only thing
+  // that stops the poll before the session's own 24-hour deadline; a clock stuck at a
+  // minute never spends it, and 86400 s at one request per 750 ms is 115,200 requests
+  // on somebody's phone. Measured on the unfixed source, both arms, before this landed.
+  const doc = fakeDoc();
+  const c = fakeNow();
+  const w = visibleClock({ doc, now: c.now });
+  c.tick(60_000);
+  doc.go("hidden");
+  c.tick(60 * 60 * 1000);
+  doc.silently("visible");
+  const CAP = 24 * 60 * 60 * 1000; // the session's own deadline, the only other backstop
+  let watched = 0;
+  while (w.elapsed() < POLL_ACTIVE_BUDGET_MS && watched < CAP) {
+    c.tick(POLL_INTERVAL_MS);
+    watched += POLL_INTERVAL_MS; // exactly what `pollStatus` does per iteration
+  }
+  // ⭐ NINE MINUTES AND ONE POLL, AND THE ODD INTERVAL IS THE POINT. The read that
+  // notices the restore is the one that restarts the stopwatch, so its own interval is
+  // not billed: a missed event costs ONE POLL, where it used to cost the whole day.
+  check(
+    "⭐ the budget runs out after the nine minutes still owed, plus one poll",
+    watched <= 9 * 60 * 1000 + POLL_INTERVAL_MS,
+    `${(watched / 60000).toFixed(2)} min of watching — unfixed, this ran to the ` +
+      `${CAP / POLL_INTERVAL_MS} requests of the 24-hour deadline`
   );
 }
 

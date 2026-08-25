@@ -22,6 +22,8 @@ import * as mailboxFlow from "../src/flow/mailbox.js";
 import * as messageFlow from "../src/flow/message.js";
 import * as mailboxes from "../src/protocol/mailbox.js";
 import * as sessionRules from "../src/protocol/session.js";
+import * as payloads from "../src/protocol/payload.js";
+import * as envelopes from "../src/protocol/envelope.js";
 import * as store from "../src/storage/sessions.js";
 import * as db from "../src/storage/db.js";
 import * as vaults from "../src/storage/vault.js";
@@ -181,15 +183,78 @@ section("§6 — the reply, and the ratchet that follows it");
 
 section("§6.5 — what the server can measure");
 
+/**
+ * ⛔⛔ THIS CHECK WAS RED FOR A DAY AND NOTHING SAID SO (found 2026-08-25, verifying
+ * the second review pass). It sent 180 characters against §6.5's first bucket, and
+ * `cdc2058` — §6.7.2's payload binding, 2026-08-24 18:19 — added `session_id` and
+ * `generation` to every payload. **The first bucket's text capacity fell from about
+ * 250 characters to 147**, so 180 crossed into the second bucket and the two messages
+ * stopped matching. The property is intact; the constant in the test was not.
+ *
+ * ⭐⭐ AND THE REASON NOBODY SAW IT IS THE SAME SHAPE AS D-160. This file is in
+ * `e2e.sh`, not `test.sh`; it needs a Postgres that dies with the editor. A suite that
+ * is only run deliberately is a suite that is red between the times somebody decides
+ * to look.
+ *
+ * ⭐ SO THE CHECK NOW PINS THE BOUNDARY RATHER THAN GUESSING A LENGTH BELOW IT. A
+ * payload that grows again does not silently halve the band in which every ordinary
+ * message looks alike — it fails here, with the new capacity in the message.
+ */
 {
+  // What the first bucket can actually carry, computed from the code rather than
+  // remembered: the longest run of text whose encoded payload still fits 256 bytes.
+  const fits = (n) =>
+    payloads.encodePayload(
+      payloads.buildPayload({
+        text: "y".repeat(n),
+        sentAt: 1_756_000_000,
+        kind: payloads.KIND_TEXT,
+        sessionId: new Uint8Array(envelopes.SESSION_ID_BYTES),
+        generation: 0,
+      })
+    ).length +
+      4 <=
+    envelopes.PAD_BUCKETS[0];
+  let capacity = 0;
+  while (fits(capacity + 1)) capacity++;
+
+  check(
+    "⚠️⚠️ §6.5's first bucket still holds an ordinary message — 100 characters at least",
+    capacity >= 100,
+    `${capacity} characters of text fit the ${envelopes.PAD_BUCKETS[0]}-byte bucket ` +
+      `(it was ~250 before §6.7.2's binding, and this check exists because that fell silently)`
+  );
+
   const short = await messageFlow.send(I, "ok");
-  const long = await messageFlow.send(I, "y".repeat(180));
+  const long = await messageFlow.send(I, "y".repeat(capacity));
   const raw = await peek(J);
   const sizes = raw.map((m) => m.body.length);
   equal("two messages of very different lengths", String(raw.length), "2");
   equal("⭐ are the same size on the wire — §6.5's first bucket", String(sizes[0]), String(sizes[1]));
   check("and the id the sender was given matches one of them",
     raw.some((m) => m.msgId === short.msgId) && raw.some((m) => m.msgId === long.msgId));
+  const batch = await messageFlow.receive(J);
+  await batch.settle();
+}
+
+section("§6.5 — and one character past the bucket is a different size, which is the honest half");
+
+{
+  // ⚠️ THE OTHER DIRECTION, AND IT IS WHAT MAKES THE CHECK ABOVE MEAN ANYTHING. If
+  // every message were the same size regardless, the equality above would pass on a
+  // client that had stopped padding at all. Bucketing hides the length WITHIN a
+  // bucket and does not pretend to hide which bucket — §6.5 says so, and so does this.
+  const one = await messageFlow.send(I, "ok");
+  const over = await messageFlow.send(I, "y".repeat(600)); // comfortably into 1 KiB
+  const raw = await peek(J);
+  equal("two messages, one either side of the boundary", String(raw.length), "2");
+  check(
+    "⭐ they are NOT the same size, and §6.5 never claimed they would be",
+    raw[0].body.length !== raw[1].body.length,
+    `${raw[0].body.length} and ${raw[1].body.length} bytes`
+  );
+  check("both ids are accounted for",
+    raw.some((m) => m.msgId === one.msgId) && raw.some((m) => m.msgId === over.msgId));
   const batch = await messageFlow.receive(J);
   await batch.settle();
 }

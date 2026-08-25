@@ -5546,6 +5546,111 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-165. ⭐⭐⭐⭐ Seven fixes, and five of them were a rule already written in a comment one branch above
+
+**2026-08-25, verifying the second pass of the 2026-08-24 outside review.** Slice B's findings
+2–5 and all eleven of slice C had been read and none had been proved. Against the code:
+**twelve stand, two fall, and one has the right hazard behind the wrong fix.**
+
+#### What was fixed
+
+| | | |
+|---|---|---|
+| **B #4** | `flow/pair.js` | `visibleClock` trusted `visibilitychange`. **D-144 taught `whenVisible`, eighty lines above it, not to** — *"the fix is not a better event, it is not trusting one"* — and the clock beside it never learned. Android restores a frozen tab without delivering the transition to a listener registered before the freeze, so `since` stayed `null` for the life of the pairing. ⚠️ **Measured: eleven minutes of real attention billed as sixty seconds**, rule 11's budget never spent, and the poll running to the session's 24-hour deadline — 86400 / 0.75 = **115,200 requests** on somebody's phone. The fix costs no timer: the clock is asked at the bottom of every poll, so re-reading the state *when asked* is the same repair for nothing, and a missed event now costs one poll interval. |
+| **B #5** | `flow/pair.js` | §3.4.1b rule 6: *"A client MUST send it … when it discards a record under **rule 4**"*, and its ⚠️: *"the `DELETE` MUST be prepared before the record is cleared, not after."* `loadInFlight` cleared first. The comment above it cited rule 4 and stopped there. ⭐ **And `abandon()` — rule 6's own retry-at-the-next-unlock — defeated itself**: its first act was that same read, which destroyed the record the retry needed. The window is the initiator's own arithmetic: `expires_at` is stamped **before** §9.1's search and before the `POST`, so the local record dies tens of seconds ahead of the server's. |
+| **C #2** | `app/app.js` | `succeed()` showed §3.6.2's digits **before** awaiting the roster write that assigns `paired`. All three answers begin `if (!entry) return backToStart()`. ⛔ So a person who compared the digits, saw a mismatch and pressed *"this is not the person"* in that window deleted **nothing**, and the write then put the channel in the roster anyway. The window is a round trip, and the only scenario in which that button is pressed is one where the server is not on their side and can hold the response open as long as it likes. |
+| **C #3** | `app/app.js` | `stopEverything()` cleared six references and not `hashed`, which holds one roster entry — and therefore one channel root — per conversation, nor `paired`, which holds raw `rootBytes`. The **ending** was never the path that mattered: it calls `location.replace` and a new document takes the heap. **The lock is**, and D-163 gave it a button the day before. |
+| **C #4** | `app/app.js` | §6.7.1 rule 8 says *"a later message **from that peer**"*; the code read "a later anything" and cleared the closing marker for envelopes it had **refused** — a stale generation, a replay, a tampered payload. ⛔ A hostile server could therefore un-close a closed conversation by requeueing an old ciphertext under a fresh `msg_id`, putting the person back to typing into a mailbox nobody will drain — **§6.7.1's founding defect, reinstated by the party the section assumes is hostile.** |
+| **C #7** | `app/app.js` | §2.1.1: *"It MUST clear the field as soon as the value is read."* The clear sat below the rejection's `return`, under a comment reading *"out of the field before anything else happens"*. The case that kept a real `L` is the one §2.1.1 spends its **other** bullet on — a valid link belonging to a different deployment. ⭐ One exception is kept and is deliberate: a code **shorter** than §2.2's sixteen characters cannot be a complete secret and is the only string a person is still typing — losing it means asking a friend on a telephone to read sixteen characters out again. |
+| **C #11** | `app/app.js` | One `failcode` in five passed `err?.message ?? String(err)` where every sibling used `detailOf(err)`, so a browser's own `DOMException` prose reached the screen in English under a Finnish sentence. `failWith` had its fallback-to-`err.message` removed for feedback 13; this call site was not part of that sweep. |
+
+Every one has a test, and every test was **watched failing** against the unfixed source: two in
+`test/visibility.mjs`, two in `test/inflight.mjs`, ten in `test/app-document.mjs`. Then a real
+two-browser pairing (`~/lpm-probes/probe-d165-review-fixes.mjs`): matching six digits after the
+reorder, the rejection really deleting, *"not yet"* really opening the conversation, both
+languages booting clean.
+
+#### ➡️ The lesson
+
+**A rule that lives in a comment is enforced only where somebody remembered it.** Five of the
+seven were not missing knowledge. The rule was written down, correctly, *in the same file* —
+sometimes in the same function — and applied one branch, one function or one screen too late.
+D-163 already said *"citing a rule is not applying it"*; this adds where the failure lands: **the
+rule most likely to be missed is the one adjacent to the rule you did apply.** `loadInFlight`
+cited rule 4 and missed rule 6, which names rule 4. So each of these leaves as an executable
+rule instead of a sentence.
+
+#### The two that fell, and why they were still worth the reading
+
+**B #3 — dismissed.** It claimed duplicated Ghost tabs could reuse an Olm ratchet, citing
+`anotherClientIsLive`, which is Kept-mode code that Ghost never calls. Ghost's answer is a
+**census** taken after joining the register, `showDuplicate()` inertness, and promotion through
+`becameLeader` — and `flow/ghost.js` keeps the session id in `sessionStorage`, so only a *copy*
+shares the scope. The comment there names the reviewer's failure exactly: *"every duplicate
+would be a separate session that happened to share an Olm ratchet."* ⭐ `app/app.js` was not in
+slice B, and the reviewer said so in the finding. **The instrument's blind spot is shaped like
+itself**, again.
+
+**C #1 — dismissed as filed, and it caught something else.** It asked for the automatic
+reconnect to be removed. That is Hannu's design of 2026-08-18, deliberate, with its own screen.
+But its citation is accurate: §6.7.1 is *titled* **"`kind: "closed"` — the one message the
+product sends by itself"**, and `PROTOCOL.md` contains **no mention of the reconnect at all**.
+The product grew a second self-sent message and only `DECISIONS.md` heard about it.
+
+#### B #2 — the right hazard, and a fix that would close nothing
+
+The claim: a same-origin `EventSource` bypasses `net/api.js`'s `credentials: "omit"`, letting a
+hostile server plant a durable cookie — a trace outside the one store I6 allows Ghost mode.
+**Measured in Chrome, and the mechanism is exactly real:**
+
+```
+/api/stream    cookie: (none)      ← the server plants an HttpOnly cookie here
+/api/ordinary  cookie: (none)      ← fetch credentials:"omit" — ignored, correctly
+/api/stream    cookie: tracking=…  ← replayed
+document.cookie: ""                ← invisible to the page, so no ending can remove it
+```
+
+⭐⭐ **But the prescribed fix — replace `EventSource` with a credential-omitting `fetch` — closes
+nothing.** A second measurement: a hostile origin plants the cookie **on the navigation itself**,
+and the stylesheet, the module and the favicon all replay it. ➡️ **I6 as written —
+*"nothing reaches … a cookie"* — is not a property client code can hold, because a page cannot
+load itself without credentials.** What holds the line is the deployment (nothing in this tree
+sets a cookie, swept) and `Clear-Site-Data` — which makes the `"cookies"` directive D-164 called
+inert the *answer* to this rather than dead weight. **Raised, not repaired: the invariant's
+wording is Hannu's to settle.**
+
+#### ⛔ And a check that had been red for a day
+
+Running `e2e.sh` to verify the above: `§6.5 — are the same size on the wire` was failing, on the
+**unfixed** source too. Not this work. `cdc2058` — §6.7.2's payload binding, 2026-08-24 18:19 —
+added `session_id` and `generation` to every payload, and **the first bucket's text capacity fell
+from about 250 characters to 147.** The test had sent 180 since Phase 1 step 5. §6.5's property
+is intact; the constant in the test was not.
+
+⭐⭐ **Nobody saw it because the suite that holds it is not the suite anybody runs.** `e2e.sh` is
+not `test.sh` and needs a Postgres that dies with the editor — **D-160's shape again: a guard
+that does not run is not a guard.** The check now computes the boundary from the code and fails
+loudly if a payload grows into it again, with a second check that a message one bucket up is
+*not* the same size, because bucketing hides length within a bucket and never claimed otherwise.
+
+#### ⏳ Open — four rulings, none invented
+
+1. **`ARCHITECTURE.md` §3.2.1's Caddy fix** (C #9). `server.ghostAdds` says the server *"holds
+   nothing tying this conversation to any identity of yours"*, and §3.2.1 records the proxy
+   logging `remote_ip` beside a real `mailbox_id`, **measured at 215 lines in seven days**, kept
+   about five weeks. ⭐ `copy.js` already knows: the comment on the *metadata* paragraph forbids
+   exactly this kind of whole-machine claim, twenty lines away. The fix is designed and unapplied
+   and touches a config shared with a live privsend, so it needs its own authorization.
+2. **I6's wording** (B #2, above).
+3. **§3.4.1b rule 6 and rule 4.** The fix sends the `DELETE` for the **initiator only**, which is
+   narrower than rule 6 as written — rule 6 restricts only its *rule 10* occasion to role I. The
+   reason it gives applies here unchanged (*"deleting either destroys another party's state on a
+   guess"*), but the section should say so rather than leave it to be re-derived.
+4. **Copy that overclaims** (C #5, #8, #9, #10), in both languages: *"only for the person you
+   send it to"*, *"the mailbox number goes at the same time"* (§5.1.1 gives it 14 days from
+   creation regardless), and *"nothing got through"* for a send whose response was merely lost —
+   the same correction already applied to the success sentence two lines above it.
+
 ### D-164. ⛔⛔⛔⛔ The review sample was a fiction, so twenty-seven rounds reviewed a sentence the product cannot produce
 
 **2026-08-25, from Hannu pressing both endings on his device and reading the screen.** Two

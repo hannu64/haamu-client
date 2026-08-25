@@ -1440,6 +1440,29 @@ async function stopEverything() {
   openEntry = null;
   channel = null;
   seen.clear();
+
+  /**
+   * ⚠️⚠️ §7.8 STEP 2 IS *"DROP EVERY REFERENCE"*, AND THIS WAS A LIST OF SIX WITH A
+   * SEVENTH MISSING (D-165, outside review slice C #3). `hashed` holds one roster entry
+   * per conversation and every one of them carries its channel root — so a LOCK, which
+   * keeps this document alive, overwrote the derived key set and left `R` for every
+   * channel sitting in the heap behind the enter screen. `paired` is worse in kind: it
+   * holds `rootBytes`, the raw bytes, for a channel whose digits were never answered.
+   *
+   * ⭐ THE ENDING WAS NEVER THE PATH THAT MATTERED. It calls `location.replace`, and a
+   * new document takes the whole heap with it. The lock is the one that stays — and
+   * D-163 has just given it a button, so it went from a thirty-minute timer to
+   * something a person reaches on purpose.
+   *
+   * ⚠️ Nothing here can be overwritten the way `endings.overwriteKeys` overwrites a
+   * key: `entry.root` is a base64 STRING and strings are immutable in JavaScript.
+   * Dropping the reference is the whole of what is available, which is why §7.8 step 2
+   * asks for exactly that and not for a wipe.
+   */
+  hashed.clear();
+  paired = null;
+  revisiting = null;
+
   const stopped = session;
   session = null;
   $("log").replaceChildren();
@@ -2500,7 +2523,23 @@ async function storeIncoming(hash, entry, messages) {
       stored++;
       continue;
     }
-    closes = false;
+
+    /**
+     * ⚠️⚠️ *"A LATER MESSAGE **FROM THAT PEER**"*, AND THIS READ "A LATER ANYTHING"
+     * (D-165, outside review slice C #4). Rule 8 clears the marker because content is
+     * arriving and *"showing 'they have left' over a screen that is receiving messages
+     * would be the client lying about what is in front of it"* — a premise that needs
+     * the message to have been READ. An item with no payload is one this device refused:
+     * §5.4.2's stale generation, a replay, a tampered envelope. Nothing about it is
+     * evidence the peer sent anything.
+     *
+     * ⛔ SO THE SERVER COULD UN-CLOSE A CLOSED CONVERSATION. Requeue an old ciphertext
+     * under a fresh `msg_id`, the refusal stages, the marker is cleared, the composer
+     * comes back — and the person types into a mailbox nobody will ever drain again.
+     * That is §6.7.1's founding defect, reinstated by the one party the section assumes
+     * is hostile. The red line is still drawn below; only the marker is left alone.
+     */
+    if (m.payload) closes = false;
 
     await session.messages.append(hash, {
       dir: "in",
@@ -2866,8 +2905,6 @@ const markStep = (active) =>
 async function succeed(result) {
   // §2.1.2 rule 4, and D-124: the link and its symbol are spent the moment this runs.
   clearPairingSurface();
-  showSas(result.sas);
-  only("verify");
 
   // ⚠️ Only a VERIFIED tripwire is an alarm. The server sets its flag whenever a
   // second claim arrives, and it cannot do better — it has no key with which to
@@ -2881,10 +2918,6 @@ async function succeed(result) {
   // including "not yet", which §3.6.2 expressly permits. It travels into the
   // channel write below and is merged by §7.3.1 rule 7 thereafter.
   const tripwire = Boolean(result.tripwire?.verified);
-  if (tripwire) {
-    text("tripwire-body", copy.pairing.tripwire);
-    show("tripwire");
-  }
 
   /**
    * ⚠️ NO AUTOMATIC NAME, AND THAT IS FEEDBACK 14's REAL SUBJECT. Every channel
@@ -2914,13 +2947,37 @@ async function succeed(result) {
       tripwire,
     });
     paired = { ...entry, rootBytes: result.channelRoot };
-    return;
+  } else {
+    await session.roster.addChannel({ root: result.channelRoot, name, role: result.role, tripwire });
+    const entry = session.roster.channel(result.channelRoot);
+    paired = { ...entry, rootBytes: result.channelRoot };
+    session.tabs.announce("roster", { id: TAB_ID });
   }
 
-  await session.roster.addChannel({ root: result.channelRoot, name, role: result.role, tripwire });
-  const entry = session.roster.channel(result.channelRoot);
-  paired = { ...entry, rootBytes: result.channelRoot };
-  session.tabs.announce("roster", { id: TAB_ID });
+  /**
+   * ⚠️⚠️ THE SCREEN COMES LAST, AND IT USED TO COME FIRST (D-165, outside review slice
+   * C #2). §3.6.2's three answers all begin `const entry = paired ?? revisiting; if
+   * (!entry) return backToStart()` — and `paired` is not assigned until the write
+   * above resolves. So between the digits appearing and the roster write landing, all
+   * three answers were no-ops against `null`.
+   *
+   * ⛔ THE ONE THAT MATTERS IS *"THIS IS NOT THE PERSON"*. A user who compares the
+   * digits, sees a mismatch and presses it in that window gets `backToStart()` with no
+   * deletion — and the write then completes and puts the channel in the roster anyway.
+   * The window is a round trip, and the scenario in which somebody presses that button
+   * is by construction one where the server is not on their side and can hold the
+   * response open for as long as it likes.
+   *
+   * ⭐ AND A FAILED WRITE NOW NEVER SHOWS THE SCREEN AT ALL. `addChannel` throwing
+   * lands in the caller's `failWith`, which is the honest place for it: a decision
+   * screen offered over a channel that was not stored is a decision about nothing.
+   */
+  showSas(result.sas);
+  if (tripwire) {
+    text("tripwire-body", copy.pairing.tripwire);
+    show("tripwire");
+  }
+  only("verify");
 }
 
 /**
@@ -3445,8 +3502,23 @@ $("paste-back").addEventListener("click", () => (pasteReturn === "home" ? openHo
  * who is holding a telephone rather than a screen. The origin check does not apply
  * to a code and cannot: a code names no host, which is the point of it.
  */
+/**
+ * What is wrong with what was pasted, or `null` if nothing is.
+ *
+ * ⚠️⚠️ IT RETURNS `keep` AS WELL AS A SENTENCE, AND THAT SECOND FIELD IS §2.1.1's MUST
+ * MEETING §2.2's TELEPHONE (D-165). The rule is *"it MUST clear the field as soon as
+ * the value is read"*, and its reason is stated: *"an `<input>` value is a live copy of
+ * `L` that survives every screen change."* The one string in this function that is
+ * provably NOT a live copy of anything is a code SHORTER than §2.2's sixteen
+ * characters — it cannot be a complete secret, and it is the only case where the
+ * person is still mid-typing. Losing that to a typo would mean asking a friend on a
+ * telephone to read sixteen characters out again, which is the failure this route
+ * exists to avoid. Everything else goes, including a code that is too LONG: a superset
+ * of a secret is a secret.
+ */
 function linkProblem(typed) {
-  if (!typed) return copy.openLink.notALink;
+  const no = (note, keep = false) => ({ note, keep });
+  if (!typed) return no(copy.openLink.notALink);
   if (typed.includes("/") || typed.includes(":")) {
     let url = null;
     try {
@@ -3459,32 +3531,38 @@ function linkProblem(typed) {
         url = null;
       }
     }
-    if (!url) return copy.openLink.notALink;
-    if (url.origin !== location.origin) return copy.openLink.wrongSite;
-    if (!url.hash.slice(1)) return copy.openLink.noSecret;
+    if (!url) return no(copy.openLink.notALink);
+    if (url.origin !== location.origin) return no(copy.openLink.wrongSite);
+    if (!url.hash.slice(1)) return no(copy.openLink.noSecret);
     return null;
   }
-  if (typed.startsWith("#")) return typed.slice(1) ? null : copy.openLink.noSecret;
+  if (typed.startsWith("#")) return typed.slice(1) ? null : no(copy.openLink.noSecret);
 
   // §2.2. The count comes from `normalise`, so dashes, spaces and lower case are
   // already gone and never reach the arithmetic the person is shown.
   const chars = codes.normalise(typed).length;
   if (chars === codes.CODE_CHARS) return null;
-  return chars < codes.CODE_CHARS ? copy.openLink.codeShort(chars) : copy.openLink.codeLong(chars);
+  return chars < codes.CODE_CHARS
+    ? no(copy.openLink.codeShort(chars), true)
+    : no(copy.openLink.codeLong(chars));
 }
 
 $("paste-go").addEventListener("click", async () => {
   const typed = $("paste-link").value.trim();
   const problem = linkProblem(typed);
+  // ⚠️⚠️ OUT OF THE FIELD BEFORE ANYTHING ELSE HAPPENS — AND FOR TWO YEARS THAT MEANT
+  // "BEFORE ANYTHING ELSE ON THE PATH THAT WORKED" (D-165, outside review slice C #7).
+  // §2.1.1 says the field MUST be cleared as soon as the value is READ, and the value
+  // is read on the line above. The rejection returned first, so a link kept its `L` in
+  // a live `<input>` for the rest of the document's life — and the rejection §2.1.1
+  // spends its OTHER bullet on, a valid link belonging to a different deployment, is
+  // exactly the one that left a real secret sitting there. ⭐ The comment stating the
+  // rule was already here; it was one branch below the branch that broke it.
+  if (!problem?.keep) $("paste-link").value = "";
   if (problem) {
-    text("paste-note", problem);
+    text("paste-note", problem.note);
     return;
   }
-  // ⚠️ OUT OF THE FIELD BEFORE ANYTHING ELSE HAPPENS. `L` is a secret and an
-  // `<input>` value is a live copy of it that survives every screen change; the
-  // whole reason to prefer this route over the address bar is that the secret does
-  // not linger anywhere, and leaving it here would give that back.
-  $("paste-link").value = "";
   await followLink(typed);
 });
 
@@ -3601,7 +3679,8 @@ $("to-code").addEventListener("click", async () => {
 // silently otherwise, and the person who receives it gets §3.4.1's "there is no
 // pairing session at this link any more" for a reload they may not remember doing.
 async function offerToAbandon() {
-  const held = await flow.loadInFlight(pairingStore());
+  // D-165: §3.4.1b rule 6 follows rule 4 — an expired record owes a `DELETE` before it goes.
+  const held = await flow.loadInFlight(pairingStore(), { api });
   if (!held) return;
 
   // ⚠️⚠️ THE SENTENCE WAS WRITTEN FOR ONE ROLE AND SHOWN TO BOTH (feedback 16). It
@@ -3648,7 +3727,8 @@ async function offerToAbandon() {
 async function offerToResume({ interrupted = false, body = null } = {}) {
   const storage = pairingStore();
   if (!storage) return;
-  const held = await flow.loadInFlight(storage);
+  // D-165: §3.4.1b rule 6 follows rule 4 — an expired record owes a `DELETE` before it goes.
+  const held = await flow.loadInFlight(storage, { api });
   if (!held) return;
 
   const initiator = held.role === pairings.ROLE_INITIATOR;
@@ -3772,7 +3852,12 @@ $("go-ghost").addEventListener("click", async () => {
   } catch (err) {
     session = null;
     await haltWith(copy.ghost.noStore);
-    text("failcode", err?.message ?? String(err));
+    // ⚠️ `detailOf`, NOT `err.message` (D-165, outside review slice C #11). §12 keeps
+    // exceptions off the screen, and every other `failcode` on this page already used
+    // it — this one path put a browser's own `DOMException` prose there, in English,
+    // underneath a Finnish sentence. See `failWith`: the fallback to the exception was
+    // removed there for feedback 13 and this call site was never part of that sweep.
+    text("failcode", detailOf(err));
   }
 });
 
