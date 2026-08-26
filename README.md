@@ -76,7 +76,7 @@ from it, improve it — but a service built on it should be as checkable as this
 | | |
 |---|---|
 | **here** | the entire browser client — crypto, protocol, storage, interface, and its test suites |
-| **here** | `DECISIONS.md` — 165 numbered decisions with the argument for each, including the ones that were rejected |
+| **here** | `DECISIONS.md` — 166 numbered decisions with the argument for each, including the ones that were rejected |
 | **not here** | the server (Go), its database migrations, and the deployment configuration |
 
 **The server is deliberately closed, and this concedes no security claim.** It

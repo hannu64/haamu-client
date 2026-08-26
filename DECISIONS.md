@@ -5546,6 +5546,90 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-166. ⭐⭐⭐ Four sentences that claimed more than the product does — and the guards had memorised the words instead of the fact
+
+**2026-08-26, Hannu ruling on the last of D-165's four open questions.** The 2026-08-24 review's
+C #5, #8, #9 and #10 were all one shape: *the interface states something the design does not do.*
+He ruled on all four at once. **Both languages moved in the same commit** — a claim corrected in
+English and left standing in Finnish is worse than either, because now the product disagrees with
+itself and only one of the two readers can tell.
+
+#### The four findings, five sentences, ten strings
+
+| screen | said | why it was wrong | says now |
+|---|---|---|---|
+| the invite link (`pairing.linkIsOnce`) | *"works once, and **only for the person you send it to**"* | §2 binds the link to whoever presents it **first**, and it cannot know who that is | *"works once, for one person — whoever opens it first"* |
+| the code (`pairing.code.isOnce`) | *"only for the person you read it to"* | the same claim, on the other screen | *"for one person — whoever types it in first"* |
+| what the server keeps (`terms.metadata`) | *"The mailbox number goes at the same time"* | §5.1.1 fixes `expires_at = created_at + 2 × EPOCH_SECONDS` when the mailbox is **made**; collecting a message does not move it | *"The mailbox number itself lasts those 14 days either way"* |
+| Ghost mode (`server.ghostAdds`) | *"the **server** holds nothing tying this conversation to any identity of yours"* | true of the database, false of the machine — ARCHITECTURE.md §3.2.1's proxy records a client IP beside a real mailbox id, **measured** | *"nothing in the server's **database** ties…"* |
+| the closing notice (`closing.notSent`) | *"the other person could not be told — **nothing got through**"* | a request that arrived and lost its response is indistinguishable from here from one that never left | *"there is no confirmation that the other person was told"* |
+
+⚠️ The first sentence is the one that matters most, because the product had built the answer to it
+and then told people they did not need it: **the six digits exist for exactly the gap between "the
+person I sent this to" and "whoever opened it".** A reader who believed the link was addressed had
+been told, in the sentence before, that the digits were a formality.
+
+#### ⭐⭐⭐ Two of the five were contradicted by this product, on another screen and twenty lines up
+
+- **§2.1.2's QR panel has said the true version all along**: *"The invite link works once: if
+  somebody else opens it first, your friend will not be able to."* One product, two screens, two
+  incompatible accounts of what a link is — which is what makes this a correction rather than a
+  matter of taste.
+- **`copy.js`'s comment on `terms.metadata`'s "how long" paragraph forbids exactly the claim
+  `ghostAdds` made**, in capitals, *twenty lines above it*: **the claim is deliberately about the
+  database and not about the whole machine**, with the reason and the date the whole-machine
+  version became false. ➡️ **D-165's finding again, and the third instance in two days: a rule that
+  lives in a comment is enforced only where somebody remembered it.**
+
+#### ⛔⛔ AND THE GUARDS FAILED ON THE CORRECTED SENTENCES
+
+Two checks in `test/copy.mjs` went red — not because a fix was wrong, but because they had
+memorised the strings. The worse of the two carries this comment, written at D-153:
+
+> *"D-153 SPLIT THE SENTENCE THIS CHECK WAS READING, and the check moved with the fact rather than
+> with the words. What testers got wrong is ONCE and ONE PERSON, and both must still lead."*
+
+…above a regex that quoted the leading clause **entire**, false claim included:
+`/^This invite link works once, and only for the person you send it to\./`.
+
+➡️ **A guard that quotes the sentence cannot tell a repair from a regression — it detects only
+change.** It will go red for the fix and green for any rewrite that keeps the words, which is the
+exact opposite of what its comment claims for it. Both now assert the fact:
+
+- the **leading clause** of `linkIsOnce` contains *once* and *one person* — with a canary proving a
+  sentence that states the second fact one sentence later does **not** satisfy it, since that is
+  the entire content of the word *leads*;
+- `closing.notSent` says there is **no confirmation** and that the peer's copy is still open.
+
+And because a claim that has been removed can come back, two refusals were added over **every**
+string, each canaried against the exact sentences it replaced:
+
+- no sentence anywhere says a link or code works *only for the person you send/read/give* it to;
+- no `closing.*` sentence claims the notice **failed** to arrive — *"nothing got through"* was the
+  same unearned certainty as *"seen"*, pointing the other way. §6.7.1 rule 2's existing guard
+  refuses the delivery claim; this one refuses its mirror image.
+
+#### ⭐⭐ A finding can be a correction in one language and an addition in the other
+
+The Finnish `linkIsOnce` never carried the false claim: it read *"toimii kerran, yhdelle
+henkilölle, 24 h ajan"* — once, for one person, for 24 h, and nothing about the addressee. So in
+English this ruling **removes** a claim and in Finnish it **adds** a missing one, from the same
+finding, at the same key. ⚠️ Nothing in `copy-fi.mjs` could have seen that: its gates compare
+numbers, paragraph shapes and named words, all of which agreed. ➡️ **A translation gate proves the
+two files say the same amount, never that either says the right thing.**
+
+⭐ The reviewed Finnish was moved as little as possible — 27 rounds and two Finnish readers are
+behind those clauses. *"Tämä kutsulinkki toimii kerran, yhdelle henkilölle"* and *"Lähetä se niin
+kuin tavallisestikin puhut sen henkilön kanssa"* are verbatim; the duration became its own
+sentence (which is the shape D-153 gave the English) and the dash clause is new.
+
+#### Still open, unchanged
+
+D-165's other three rulings: **§3.2.1's Caddy fix** (needs its own authorization — the config is
+shared with a live privsend), **I6's wording**, and **§3.4.1b rule 6's scope**. The `ghostAdds`
+sentence above is honest today with the proxy logging as it is; if §3.2.1 is ever fixed **and
+measured**, it may widen again — and not one hour before.
+
 ### D-165. ⭐⭐⭐⭐ Seven fixes, and five of them were a rule already written in a comment one branch above
 
 **2026-08-25, verifying the second pass of the 2026-08-24 outside review.** Slice B's findings
@@ -5633,7 +5717,7 @@ that does not run is not a guard.** The check now computes the boundary from the
 loudly if a payload grows into it again, with a second check that a message one bucket up is
 *not* the same size, because bucketing hides length within a bucket and never claimed otherwise.
 
-#### ⏳ Open — four rulings, none invented
+#### ⏳ Open — four rulings, none invented *(4 closed by D-166)*
 
 1. **`ARCHITECTURE.md` §3.2.1's Caddy fix** (C #9). `server.ghostAdds` says the server *"holds
    nothing tying this conversation to any identity of yours"*, and §3.2.1 records the proxy
@@ -5646,10 +5730,9 @@ loudly if a payload grows into it again, with a second check that a message one 
    narrower than rule 6 as written — rule 6 restricts only its *rule 10* occasion to role I. The
    reason it gives applies here unchanged (*"deleting either destroys another party's state on a
    guess"*), but the section should say so rather than leave it to be re-derived.
-4. **Copy that overclaims** (C #5, #8, #9, #10), in both languages: *"only for the person you
-   send it to"*, *"the mailbox number goes at the same time"* (§5.1.1 gives it 14 days from
-   creation regardless), and *"nothing got through"* for a send whose response was merely lost —
-   the same correction already applied to the success sentence two lines above it.
+4. ~~**Copy that overclaims** (C #5, #8, #9, #10), in both languages.~~ ✅ **RULED 2026-08-26 —
+   see D-166.** All five sentences corrected in English and Finnish, and the two guards that had
+   memorised the old words repaired to assert the fact instead.
 
 ### D-164. ⛔⛔⛔⛔ The review sample was a fiction, so twenty-seven rounds reviewed a sentence the product cannot produce
 

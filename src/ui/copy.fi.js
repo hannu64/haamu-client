@@ -81,7 +81,7 @@ export const FI = {
   // ── closing
   "closing.willTell": "Yritämme kerran lähettää toiselle henkilölle ilmoituksen, että tämä keskustelu on loppunut.",
   "closing.sent": "Lopetusilmoitus lähetettiin, ja siinä kerrotaan, että lopetit keskustelun.",
-  "closing.notSent": "Keskustelu on poistettu täältä, mutta toiselle henkilölle ei saatu kerrottua — mikään ei mennyt perille. Hänen kopionsa on yhä auki hänen laitteellaan.",
+  "closing.notSent": "Keskustelu on poistettu täältä, mutta ei ole varmuutta siitä, saiko toinen henkilö tiedon. Hänen kopionsa on yhä auki hänen laitteellaan.",
   "closing.theyLeft": "Tämä keskustelu on loppunut.",
   "closing.theyLeftWhat": "Toinen henkilö lopetti sen, ja hänen kopionsa siitä on poissa. Tänne ei voi enää lähettää mitään.",
   "closing.startAnother": "Aloita uusi keskustelu, jos haluat jatkaa.",
@@ -212,7 +212,7 @@ export const FI = {
   "openLink.noSecret": "Tuosta kutsulinkistä puuttuu #-merkin jälkeinen osa, joka on sen salaisuus. Jokin matkan varrella katkaisi sen — pyydä uusi.",
 
   // ── pairing
-  "pairing.linkIsOnce": "Tämä kutsulinkki toimii kerran, yhdelle henkilölle, 24 h ajan. Lähetä se niin kuin tavallisestikin puhut sen henkilön kanssa.",
+  "pairing.linkIsOnce": "Tämä kutsulinkki toimii kerran, yhdelle henkilölle — sille, joka avaa sen ensimmäisenä. Se on voimassa 24 h. Lähetä se niin kuin tavallisestikin puhut sen henkilön kanssa.",
   "pairing.keepOpen.kept": "Kutsulinkki toimii 24 h. Jos muutat mielesi tai se meni jonnekin minne et tarkoittanut, peruuta se. Jos suljet tämän selaimen ennen kuin ystäväsi avaa sen, kutsulinkki toimii yhä loppuajan — seuraavan kerran kun kirjoitat AVAIMESI, voit jatkaa sen kanssa tai peruuttaa sen silloin.",
   "pairing.keepOpen.ghost": "Pidä tämä välilehti auki, kunnes ystäväsi on avannut sen. Haamu-tilassa tämä välilehti pitää hallussaan sinun puoltasi pariliitoksesta — jos suljet sen, kutsulinkkiä ei voi viedä loppuun ja tarvitsette kumpikin uuden.",
   "pairing.notDurable": "Tämä selain ei antanut tämän sivun tallentaa sinun puoltasi pariliitoksesta. Pidä tämä välilehti auki, kunnes pariliitos on valmis — jos se sulkeutuu, teidän molempien on aloitettava alusta.",
@@ -244,7 +244,7 @@ export const FI = {
   "pairing.qr.what": "Suuntaa ystäväsi kamera tähän. Tämä on sama kutsulinkki, joten se avautuu hänen puhelimessaan, ja se toimii yhä vain kerran.",
   "pairing.qr.room": "Se on ruudullasi, joten näytä ruutu ystävällesi ja piilota se heti kun hänen puhelimensa on avannut sen. Kutsulinkki toimii kerran: jos joku muu avaa sen ensin, ystäväsi ei enää pysty.",
   "pairing.toCode": "Ystäväni ei pysty avaamaan kutsulinkkiä, näytä koodi jonka voin lukea tai lähettää.",
-  "pairing.code.isOnce": "Tämä koodi toimii kerran, yhdelle henkilölle, 24 h ajan. Lue se ystävällesi ääneen tai lähetä tekstiviestillä.",
+  "pairing.code.isOnce": "Tämä koodi toimii kerran, yhdelle henkilölle — sille, joka syöttää sen ensimmäisenä. Se on voimassa 24 h. Lue se ystävällesi ääneen tai lähetä tekstiviestillä.",
   "pairing.code.spelling": "Koodin alla on jokaiselle merkille sana. Sano sanat kirjainten sijaan — B ja P kuulostavat puhelimessa samalta, sanat eivät.",
   "pairing.code.keep.kept": "Koodi toimii 24 h. Jos muutat mielesi tai luit sen väärälle henkilölle, peruuta se. Jos suljet tämän selaimen ennen kuin ystäväsi kirjoittaa sen, koodi toimii yhä loppuajan — seuraavan kerran kun kirjoitat AVAIMESI, voit jatkaa sen kanssa tai peruuttaa sen silloin.",
   "pairing.code.keep.ghost": "Pidä tämä välilehti auki, kunnes ystäväsi on kirjoittanut koodin. Haamu-tilassa tämä välilehti pitää hallussaan sinun puoltasi pariliitoksesta — jos suljet sen, koodia ei voi viedä loppuun ja tarvitsette kumpikin uuden.",
@@ -338,7 +338,7 @@ export const FI = {
   "server.whenItGoes": "Viesti poistetaan palvelimelta sillä hetkellä, kun vastaanottajan laite on hakenut sen. Kaikkea hakematta jäänyttä säilytetään vähintään 7 päivää, ja se poistetaan, kun postilaatikko kierrätetään — 14 päivää sen jälkeen, kun postilaatikko luotiin.",
   "server.list": "Keskustelulistasi säilytetään myös palvelimella, salattuna AVAIMESI alle ja arkistoituna numeron alle. Ei puhelinta, ei nimeä, ei sähköpostiosoitetta — eikä palvelin pysty lukemaan sitäkään.",
   "server.metadata": "Palvelin näkee, että jokin postilaatikko — luotu tunnusnumero — vastaanotti jonkin kokoisen salatun viestin jollain hetkellä. Se on [metatietoa](metadata): ei luettavaa tekstiä, ei nimeä, ei sähköpostiosoitetta. Jokaisen viestejä välittävän palvelimen on tiedettävä ainakin tuon verran.",
-  "server.ghostAdds": "Tässä tilassa tuohon listaan ei kirjoiteta mitään, joten palvelimella ei ole mitään, mikä yhdistäisi tämän keskustelun mihinkään henkilöllisyyteesi.",
+  "server.ghostAdds": "Tässä tilassa tuohon listaan ei kirjoiteta mitään, joten palvelimen tietokannassa ei ole mitään, mikä yhdistäisi tämän keskustelun mihinkään henkilöllisyyteesi.",
 
   // ── tabs
   "tabs.blocked": "Tämän sovelluksen toinen välilehti on auki ja pitää hallussaan vanhempaa versiota paikallisesta tallennustilastasi. Sulje muut välilehdet ja lataa tämä uudelleen.",
@@ -385,7 +385,7 @@ export const FI = {
   "terms.metadata.body.0": "Metatieto tarkoittaa sitä, että jotain sanottiin — ei sitä mitä sanottiin. Tässä tapauksessa: että jokin postilaatikko (tunnusnumero) vastaanotti tietyn kokoisen salatun viestin tiettynä hetkenä.",
   "terms.metadata.body.1": "Palvelimen on tiedettävä, mihin viesti laitetaan ja milloin se saapui, tai se ei pysty toimittamaan sitä. Mutta toimitusosoite on luotu numero, joka vaihtuu jatkuvasti, ja itse viesti on salattu jollain, joka on vain sinun ja ystäväsi laitteella.",
   "terms.metadata.body.2": "Mitä siinä ei ole: ei luettavaa tekstiä, ei nimeä, ei sähköpostiosoitetta, ei puhelinnumeroa. Se joka lukee kaiken mitä palvelimella on, saa tietää että numeroitu postilaatikko oli tiistaina vilkas.",
-  "terms.metadata.body.3": "Kuinka kauan: merkintä viestistä poistetaan yhdessä viestin kanssa — sillä hetkellä kun ystäväsi laite hakee sen, tai 14 päivää postilaatikon tekemisen jälkeen, kumpi tulee ensin. Postilaatikon numero menee samalla.",
+  "terms.metadata.body.3": "Kuinka kauan: merkintä viestistä poistetaan yhdessä viestin kanssa — sillä hetkellä kun ystäväsi laite hakee sen, tai 14 päivää postilaatikon tekemisen jälkeen, kumpi tulee ensin. Postilaatikon numero itse säilyy nuo 14 päivää joka tapauksessa.",
   "terms.six-digits.label": "kuusi numeroa",
   "terms.six-digits.title": "Miksi kuusi numeroa",
   "terms.six-digits.body.0": "Jokaisen valmiin keskustelun molemmissa päissä näkyy aina samat kuusi numeroa. Tämä on tarkistus siitä, että toista ruutua pitelevä henkilö on se ystävä, jonka halusit tavoittaa.",

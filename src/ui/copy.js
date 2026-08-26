@@ -469,7 +469,13 @@ export const terms = {
       // measured. See ARCHITECTURE.md §3.2.
       `How long: the record of a message is deleted together with the message — the moment your ` +
         `friend's device collects it, or ${days(MAILBOX_LIFE_S)} days after the mailbox was ` +
-        `made, whichever comes first. The mailbox number goes at the same time.`,
+        // ⚠️⚠️ D-166 — IT DOES NOT GO AT THE SAME TIME, AND §5.1.1 SAYS SO. The server
+        // computes `expires_at = created_at + 2 × EPOCH_SECONDS` when the mailbox is
+        // made, and nothing about collecting a message moves it. The old sentence gave
+        // a reader in a hurry the impression that reading their messages emptied the
+        // server of them, which is exactly the impression this panel exists to correct.
+        `made, whichever comes first. The mailbox number itself lasts those ` +
+        `${days(MAILBOX_LIFE_S)} days either way.`,
     ],
   },
 
@@ -584,9 +590,18 @@ export const server = {
     "address. Any server that delivers a message has to know that much.",
 
   // §7.6, one line further than `ghost.what` goes.
+  //
+  // ⚠️⚠️ D-166 — AND THE RULE THAT CORRECTED IT WAS TWENTY LINES ABOVE THIS ONE. The
+  // comment on `terms.metadata`'s "how long" paragraph forbids exactly this shape of
+  // sentence: a claim about the whole MACHINE rather than about the database, made while
+  // the web server in front of this one records a client IP beside a mailbox id
+  // (ARCHITECTURE.md §3.2.1, measured). *"The server holds nothing"* was that claim. This
+  // one is about the store the product controls, and it is true today.
+  // ⭐ If §3.2.1's proxy logging is ever fixed and measured, this sentence MAY widen
+  // again — and not one hour before.
   ghostAdds:
-    "In this mode nothing is written to that list at all, so the server holds nothing tying this " +
-    "conversation to any identity of yours.",
+    "In this mode nothing is written to that list at all, so nothing in the server's database ties " +
+    "this conversation to any identity of yours.",
 };
 
 // ------------------------------------------------------------------ the phrase
@@ -2191,8 +2206,14 @@ export const pairing = {
   // the collision instead of ruling on it — the person and the day now say themselves in
   // separate sentences, so neither form has to win. The two facts testers got wrong —
   // ONCE, and ONE PERSON — still lead.
+  // ⚠️⚠️ D-166 — *"only for the person you send it to"* WAS A CLAIM THE PROTOCOL DOES NOT
+  // MAKE. The link binds to whoever opens it first and to nobody else; it cannot know who
+  // that is, which is the entire reason the six digits exist on the next screen. A person
+  // who believed the link itself was addressed had no reason to read the digits out.
+  // ⭐ D-153's split survives untouched: ONCE and ONE PERSON still lead, the duration is
+  // still its own sentence, and the correction rides in a dash clause after both.
   linkIsOnce:
-    "This invite link works once, and only for the person you send it to. " +
+    "This invite link works once, for one person — whoever opens it first. " +
     `It lasts ${span(PAIRING_TTL_SECONDS)}. Send it however you normally talk to that person.`,
 
   /**
@@ -2552,7 +2573,10 @@ export const pairing = {
     // contact the reporting testers had, and a code fits an SMS where a URL is
     // mangled or unclickable.
     isOnce:
-      "This code works once, and only for the person you read it to. " +
+      // ⚠️ D-166, and it is the same sentence as `linkIsOnce`'s, said of a code that is
+      // typed rather than opened. Correcting one and not the other would leave the
+      // product making the claim on whichever screen the person happened to reach.
+      "This code works once, for one person — whoever types it in first. " +
       `It lasts ${span(PAIRING_TTL_SECONDS)}. Read it out to your friend, or send it in a text message.`,
 
     /**
@@ -2949,13 +2973,19 @@ export const closing = {
    */
   sent: "A closing notice was sent, saying that you ended the conversation.",
 
-  // ⚠️ IT DID NOT GO, AND SAYING SO IS THE POINT. Nothing about the deletion
-  // changes — the conversation is gone from here either way — and a person who
-  // may need to warn somebody by other means has to know which of the two
-  // happened.
+  // ⚠️ THE UNCERTAINTY IS THE POINT, AND SAYING SO IS STILL THE POINT. Nothing about
+  // the deletion changes — the conversation is gone from here either way — and a person
+  // who may need to warn somebody by other means has to know where they stand.
+  //
+  // ⚠️⚠️ D-166 — *"nothing got through"* CLAIMED KNOWLEDGE THIS END DOES NOT HAVE. A
+  // request that arrived and whose response was lost looks identical here to a request
+  // that never left. Telling somebody the notice failed, when it may well have been
+  // delivered, sends them to warn a person who has already been warned — and the same
+  // correction was made to the success sentence two lines above, whose comment says a
+  // peer may simply withhold the notice.
   notSent:
-    "The conversation has been deleted here, but the other person could not be told — nothing " +
-    "got through. Their copy is still open on their device.",
+    "The conversation has been deleted here, but there is no confirmation that the other person " +
+    "was told. Their copy is still open on their device.",
 
   // The receiving end.
   theyLeft: "This conversation has ended.",

@@ -286,10 +286,53 @@ check(
 // rather than with the words. What testers got wrong is ONCE and ONE PERSON, and both must
 // still lead — they are now the first clause rather than a comma list. ⭐ The duration was
 // never part of what this asserts; it is checked against the constant three lines above.
+//
+// ⛔⛔ AND D-166 FOUND IT PINNED TO THE WORDS ANYWAY. The regex quoted the leading clause
+// entire — *"and only for the person you send it to"* included, which is the claim D-166
+// removed — so a check whose own comment says it moved with the FACT failed on a sentence
+// that states both facts it names. ➡️ It reads the leading clause now and looks in it for
+// the two facts, which is what the comment above has claimed since D-153.
+const leadingClause = (s) => s.split(".")[0];
 check(
-  "and the sentence leads with the two things testers got wrong — once, and only that person",
-  /^This invite link works once, and only for the person you send it to\./.test(copy.pairing.linkIsOnce),
-  copy.pairing.linkIsOnce
+  "and the sentence leads with the two things testers got wrong — once, and one person",
+  /\bonce\b/.test(leadingClause(copy.pairing.linkIsOnce)) &&
+    /\bone person\b/.test(leadingClause(copy.pairing.linkIsOnce)),
+  leadingClause(copy.pairing.linkIsOnce)
+);
+
+// ⚠️ The canary: both facts must be in the LEADING clause, not merely somewhere in the
+// paragraph — which is the whole content of the word "leads".
+check(
+  "⚠️ and a sentence that states the second fact one sentence later does not satisfy it",
+  !/\bone person\b/.test(leadingClause("This invite link works once. It is for one person.")) &&
+    /\bone person\b/.test(leadingClause("This works once, for one person — whoever opens it first.")),
+  "canary"
+);
+
+/**
+ * ⛔⛔ D-166 — THE CLAIM MAY NOT COME BACK, IN ANY STRING.
+ *
+ * *"Only for the person you send it to"* described a binding §2 does not build: the link
+ * carries a secret and opens for whoever presents it FIRST, and it cannot know who that is.
+ * The six digits on the next screen exist for precisely that gap, so a person who believed
+ * the link was addressed had been told the digits were a formality.
+ *
+ * ⭐⭐ AND THE PRODUCT ALREADY SAID THE TRUE VERSION, on the QR panel, in the sentence
+ * above: *"The invite link works once: if somebody else opens it first, your friend will
+ * not be able to."* Two screens of one product disagreeing about what a link is — which
+ * is why this is a correction and not a matter of taste.
+ */
+check(
+  "⛔⛔ D-166 — no sentence says a link or code works only for the person it was sent to",
+  !all.some(([, s]) => /only for the person you (send|read|give)/i.test(s)),
+  all.filter(([, s]) => /only for the person you (send|read|give)/i.test(s)).map(([p]) => p).join(", ")
+);
+
+check(
+  "⚠️ and the detector matches the two sentences it was written against",
+  /only for the person you (send|read|give)/i.test("This invite link works once, and only for the person you send it to.") &&
+    /only for the person you (send|read|give)/i.test("This code works once, and only for the person you read it to."),
+  "canary"
 );
 
 // ⚠️ THIS CHECK MOVED IN ROUND 5 AND DID NOT DISAPPEAR WITH THE STRING IT USED TO
@@ -716,16 +759,36 @@ check(
 // ⚠️⚠️ THE COPY MAY SAY **SENT** AND MUST NOT SAY **SEEN**. §6.7.1 makes this one
 // bounded attempt that never delays the removal, so a sentence promising delivery
 // would promise the one thing the design deliberately does not do — and there is a
-// separate sentence for the attempt that failed, because a person who may need to
-// warn somebody by other means has to know which of the two happened.
+// separate sentence for the attempt that did not come back, because a person who may
+// need to warn somebody by other means has to know where they stand.
+//
+// ⚠️⚠️ D-166 — AND THE SECOND SENTENCE MAY NOT PROMISE THE OPPOSITE EITHER. A request
+// that arrived and whose response was lost is indistinguishable from here from one that
+// never left, so *"nothing got through"* was the same shape of unearned certainty as
+// *"seen"*, pointing the other way.
 
 section("§6.7.1 — the closing notice, and what it may claim");
 
 check(
-  "⭐⭐ the failed attempt is reported as a failure, not swallowed",
-  /could not be told/.test(copy.closing.notSent) && /still open on their device/.test(copy.closing.notSent),
+  "⭐⭐ the attempt that did not come back is reported honestly, not swallowed",
+  /no confirmation/.test(copy.closing.notSent) && /still open on their device/.test(copy.closing.notSent),
   copy.closing.notSent
 );
+
+{
+  const closing = all.filter(([p]) => p.startsWith("closing.")).map(([, s]) => s);
+  const claimsFailure = (s) => /nothing got through|could not be told|did not arrive|never arrived|was not told/i.test(s);
+  check(
+    "⛔⛔ D-166 — and no closing sentence claims the notice FAILED to arrive",
+    !closing.some(claimsFailure),
+    closing.filter(claimsFailure).join(" · ")
+  );
+  check(
+    "⚠️ the detector reads the sentence it replaced, and there were closing sentences to read",
+    claimsFailure("the other person could not be told — nothing got through") && closing.length > 3,
+    `${closing.length} closing sentences`
+  );
+}
 
 check(
   "⚠️ and the deletion happened anyway, which the same sentence says",
