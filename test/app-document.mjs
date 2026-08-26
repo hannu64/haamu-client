@@ -440,6 +440,65 @@ const bodyAfter = (src, header, terminator) => {
   return j < 0 ? "" : rest.slice(0, j);
 };
 
+/**
+ * ⛔⛔⛔ D-167 — §3.6.2's SCREEN IS REACHED TWICE AND ONLY ONE ENTRANCE CARRIED THE ALARM.
+ *
+ * `succeed()` showed §3.5's panel inline after pairing. `verify-now` — the same screen,
+ * reached from inside a conversation, which is where somebody who answered *"not yet"*
+ * finally decides — showed the digits and no alarm. Hannu walked that path on 2026-08-26
+ * with a conversation whose invitation a second party had demonstrably held, chose "yes",
+ * and was shown nothing.
+ *
+ * ⭐ The rule was written TWO LINES BELOW the branch that ignored it: `showSas`'s own
+ * comment says the screen *"is reached twice: right after pairing, and again from inside
+ * a conversation whenever the person is finally able to ask."*
+ *
+ * So the rule tested here is about ENTRANCES, not about one function: every path onto
+ * that screen decides the alarm from a value, through the one helper — which is also why
+ * a bare `show("tripwire")` may not come back. Showing without ever hiding would leave a
+ * verified alarm standing over the NEXT pairing, and §3.5 says a false alarm is the worst
+ * outcome available.
+ */
+section("⛔⛔ D-167 — both entrances to §3.6.2's screen decide §3.5's alarm");
+
+{
+  const src = code("../app/app.js");
+  const entrances = [
+    ["after pairing", bodyAfter(src, "async function succeed(result) {", "\n}\n")],
+    ["from inside the conversation", bodyAfter(src, '$("verify-now").addEventListener("click", async () => {', "\n});")],
+  ];
+
+  for (const [where, body] of entrances) {
+    // ⭐ The guard on the guard: a rename would leave an empty body and pass by vacancy.
+    check(
+      `⚠️ the entrance ${where} is found, and it is the one that shows the digits`,
+      body.includes("showSas(") && body.includes('only("verify")'),
+      `${body.length} characters`
+    );
+    check(`⛔⛔ ${where}: the alarm is decided from a value`, /showPairingTripwire\(/.test(body), where);
+  }
+
+  // ⚠️ AND IT IS THE CHANNEL'S FLAG ON THE SECOND ENTRANCE, not a pairing result — there
+  // is no result on that path. §7.3.1 rule 7 carried the flag there, possibly from another
+  // device, and reading it back off the entry is the point of having recorded it.
+  const revisit = bodyAfter(src, '$("verify-now").addEventListener("click", async () => {', "\n});");
+  check(
+    "⭐⭐ and the second entrance reads it off the CHANNEL, which is where rule 7 put it",
+    /showPairingTripwire\(Boolean\(openEntry\.tripwire\)\)/.test(revisit),
+    revisit.trim().split("\n").pop()
+  );
+
+  // ⛔ A show with no value is the shape that cannot hide: it made the alarm sticky for
+  // the rest of the session, which is a FALSE alarm on the next, clean pairing.
+  const bare = [...src.matchAll(/show\("tripwire"\s*\)/g)];
+  equal("⛔⛔ no `show(\"tripwire\")` without a value — showing must be able to hide", bare.length, 0);
+  check(
+    "⚠️ the detector tells a bare show from one with a value",
+    /show\("tripwire"\s*\)/.test('show("tripwire");') && !/show\("tripwire"\s*\)/.test('show("tripwire", on);'),
+    "canary"
+  );
+}
+
 section("§3.6.2 — the three answers are offered only once there is something to answer about (C #2)");
 
 {

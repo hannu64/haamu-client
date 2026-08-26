@@ -2973,11 +2973,34 @@ async function succeed(result) {
    * screen offered over a channel that was not stored is a decision about nothing.
    */
   showSas(result.sas);
-  if (tripwire) {
-    text("tripwire-body", copy.pairing.tripwire);
-    show("tripwire");
-  }
+  showPairingTripwire(tripwire);
   only("verify");
+}
+
+/**
+ * §3.5's alarm on §3.6.2's screen — and it is a FUNCTION because that screen is
+ * reached TWICE (D-167).
+ *
+ * ⛔⛔ THE SECOND ENTRANCE DID NOT HAVE IT. `succeed()` showed the panel inline after
+ * pairing; `verify-now`, which is the same screen reached from inside a conversation,
+ * showed the digits and no alarm — and that is the screen where somebody who answered
+ * *"not yet"* finally decides. Hannu walked exactly that path on 2026-08-26, chose
+ * "yes", and was never shown that a second party had held the invitation.
+ *
+ * ⭐ AND THE RULE WAS WRITTEN TWO LINES BELOW THE BRANCH THAT IGNORED IT: the comment
+ * on `showSas` already said the screen *"is reached twice: right after pairing, and
+ * again from inside a conversation whenever the person is finally able to ask."*
+ * ➡️ D-165's lesson inside the code D-165 shipped, which is why the repair is a single
+ * function and not a second copy of the same three lines.
+ *
+ * ⚠️ IT TAKES A VALUE AND ALWAYS SETS ONE. Showing without ever hiding would leave a
+ * verified alarm standing over the NEXT pairing — and §3.5's own reasoning says a false
+ * alarm is the worst outcome available: *"the one alarm this design has would become the
+ * one thing users learn to dismiss."*
+ */
+function showPairingTripwire(on) {
+  if (on) text("tripwire-body", copy.pairing.tripwire);
+  show("tripwire", on);
 }
 
 /**
@@ -4002,6 +4025,12 @@ $("verify-now").addEventListener("click", async () => {
   revisiting = openEntry;
   showSas(await pairings.shortAuthString(rootBytesOf(openEntry)));
   text("sas-ask", copy.verification.checkLater);
+  // ⚠️⚠️ D-167 — THE EVIDENCE COMES FROM THE CHANNEL HERE, not from a pairing result.
+  // There is no `result` on this path: the pairing happened at some earlier moment, in
+  // some earlier session, possibly on another device. §7.3.1 rule 7 is what carried the
+  // flag to this entry, and reading it back off the entry is the whole point of having
+  // recorded it (0.9.22) rather than shown it.
+  showPairingTripwire(Boolean(openEntry.tripwire));
   only("verify");
 });
 

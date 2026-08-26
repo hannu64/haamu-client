@@ -372,6 +372,49 @@ section("§3.5 — the tripwire, judged by the party that can");
 }
 
 {
+  /**
+   * ⛔⛔⛔ D-167 — EVERYTHING ABOVE IS THE PRIMITIVE, AND THE PRIMITIVE WAS NEVER THE
+   * QUESTION. The two checks before this one prove the server records the refused claim
+   * and that `verifyClaim` accepts it. Neither runs `initiate()`, so neither could say
+   * whether the alarm reaches the value the interface reads — and it is the interface
+   * that had the fault Hannu found on 2026-08-26.
+   *
+   * ➡️ **A test of the pieces is not a test of the path.** This drives the real flow,
+   * with two real joiners racing one link, and asks the initiator what it came back with.
+   */
+  let resolveLink;
+  const linkReady = new Promise((r) => (resolveLink = r));
+  const events = [];
+  const iRun = flow.initiate({
+    api, origin: ORIGIN, storage: memStorage(),
+    onEvent: (e) => { events.push(e.type); if (e.type === "link") resolveLink(e.link); },
+  });
+  const raced = await linkReady;
+  const [i, one, two] = await Promise.allSettled([
+    iRun,
+    flow.join({ api, link: raced, storage: memStorage() }),
+    flow.join({ api, link: raced, storage: memStorage() }),
+  ]);
+
+  const refused = [one, two].filter((r) => r.status === "rejected");
+  check("one of the two holders of `L` is refused", refused.length === 1, `${refused.length} refused`);
+  check("⭐⭐⭐ and the INITIATOR comes back with a verified tripwire", i.value?.tripwire?.verified === true);
+  check("⭐⭐ the interface is told while it waits, not only at the end", events.includes("tripwire"));
+
+  // ⚠️ THE OTHER DIRECTION, because an alarm that is always on is no alarm. §3.5's own
+  // reasoning: the one alarm this design has must not become the one users dismiss.
+  let cleanLink;
+  const cleanReady = new Promise((r) => (cleanLink = r));
+  const cleanRun = flow.initiate({
+    api, origin: ORIGIN, storage: memStorage(),
+    onEvent: (e) => { if (e.type === "link") cleanLink(e.link); },
+  });
+  const link2 = await cleanReady;
+  const [ci] = await Promise.all([cleanRun, flow.join({ api, link: link2, storage: memStorage() })]);
+  check("⚠️ an unraced pairing right afterwards comes back clean", ci.tripwire?.verified === false);
+}
+
+{
   // The same flag, raised by somebody who saw `pairing_id` go past but does not
   // hold `L`. ⚠️ If the client trusted the flag, this would be a false alarm any
   // observer could raise at will — which is why §3.5's check had to move.

@@ -178,4 +178,78 @@ section("⛔⛔ D-165 — rule 4 discards the record, rule 6 sends the `DELETE` 
   equal("⚠️ the record is still there to be resumed from", store.size(), 1);
 }
 
+// ============================================================ §3.4.1b rule 6, 0.9.26
+
+/**
+ * ⛔⛔ D-167 — `abandon()` SENT THE `DELETE` FOR A JOINER, AND THE RULING IS WHAT FOUND IT.
+ *
+ * Rule 6 restricted only its *rule 10* occasion to role I until 0.9.26, so `loadInFlight`
+ * was made correct at D-165 and `abandon` — twenty lines away, the occasion for *leaving
+ * the screen* and for rule 6's retry — was not. **Ruling the section tighter is what
+ * exposed the second site**: nothing about the code changed that day.
+ *
+ * ➡️ Before ruling a spec tighter, grep for every site the tightened rule now binds.
+ */
+section("⛔⛔ D-167 — only the INITIATOR may send §3.4.1's abandonment `DELETE`");
+
+{
+  const api = watchingApi();
+  const store = mapStore();
+  await eventsFrom(store); // a real initiator record, still live
+  const rec = await store.get(flow.INFLIGHT_KEY);
+  const linkSecret = b64uDecode(rec.l, "stored L");
+
+  const sent = await flow.abandon({ api, storage: store });
+  const { pairingId } = await pairing.derivePairing(linkSecret);
+  check("⭐⭐ the initiator's abandonment still goes out", sent === true && api.deleted.length === 1);
+  equal(
+    "⭐ addressed to the `pairing_id` its own `L` derives",
+    api.deleted[0],
+    `/api/pair/${b64uEncode(pairingId)}`
+  );
+  equal("⚠️ and the record is gone either way", store.size(), 0);
+}
+
+{
+  // ⚠️ THE JOINER, WHOSE SESSION IS NOT ITS OWN TO END. The link it holds is spent (it
+  // claimed) or still the initiator's live offer; a claimed session is carrying §3.5's
+  // evidence, which the initiator is entitled to read.
+  const api = watchingApi();
+  const store = mapStore();
+  await eventsFrom(store);
+  const rec = await store.get(flow.INFLIGHT_KEY);
+  await store.set(flow.INFLIGHT_KEY, { ...rec, role: pairing.ROLE_JOINER });
+
+  const sent = await flow.abandon({ api, storage: store });
+  check("⛔⛔ a joiner sends NO abandonment `DELETE`", sent === false && api.deleted.length === 0);
+  equal("⚠️ and its record is still discarded — only the request is withheld", store.size(), 0);
+}
+
+{
+  /**
+   * ⛔⛔⛔ THE MEMO PATH, WHICH IS THE ONE A ROLE CHECK ON THE RECORD ALONE MISSES.
+   *
+   * `abandon` falls back to `lastPairingId` when the record has already been cleared out
+   * from under it — and the memo cannot say which role wrote it. `join()` used to set it,
+   * so a joiner whose record was gone sent the `DELETE` from memory with every role check
+   * in the file passing. The fix is that `join()` no longer memoises at all.
+   *
+   * ⚠️ The check is on a REAL `join()` — a mutation that made `join` memoise again has to
+   * fail here, and it cannot if this drives `abandon` alone.
+   */
+  const api = { ...watchingApi(), async powChallenge() { throw new Error("no network"); } };
+  const deleted = [];
+  api.deleted = deleted;
+  api.del = async (path) => deleted.push(path);
+
+  const store = mapStore();
+  await flow
+    .join({ api, link: `https://haamu.invalid/c#${b64uEncode(new Uint8Array(16).fill(7))}`, storage: store })
+    .catch(() => {}); // it cannot reach a server; the memo is what is under test
+
+  const empty = mapStore(); // no record at all — only the memo could speak now
+  const sent = await flow.abandon({ api, storage: empty });
+  check("⛔⛔ a failed join leaves no memo for `abandon` to send from", sent === false && deleted.length === 0);
+}
+
 done();

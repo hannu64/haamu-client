@@ -5546,6 +5546,84 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-167. ⭐⭐⭐⭐ The two-party exercise: the alarm fires, and the thing he found by accident is bigger than the thing he was sent to test
+
+**2026-08-26.** Hannu ran the two-party exercise on real devices and reported back that **it had
+not worked**: he raced two phones for one invite link, the loser was told *"somebody else opened
+this invite link before you"*, and **the initiator was never warned** — after which he verified the
+conversation with no trace of a second claimant. Then, almost in passing, he described what
+happened when he put one KEY on two devices.
+
+It worked. It produced one proof, one measurement, one new fault and one finding nobody was
+looking for.
+
+#### ✅ PROVED, and for the first time in this product's life: §3.5's alarm fires in a browser
+
+`~/lpm-probes/probe-tripwire-browser.mjs` — three browsers, three identities, two of them racing
+one link. The warning appears on the initiator's verify screen, and it **survives §3.6.2's weakest
+answer, reopening the conversation, and a full reload with the KEY re-entered**. Marking the
+conversation verified does **not** clear it. §3.5's "non-dismissable for the channel's whole life"
+and §7.3.1 rule 7's OR are no longer arguments.
+
+#### ⛔ Why he could not hit it by hand — and it is not the click
+
+**A navigation is a new document and `K_master` is memory-only (§4.1)**, so each joiner ran a full
+**Argon2** between pressing and claiming. The two claims were therefore separated by the difference
+between two KEY DERIVATIONS, not by the difference between two presses. ➡️ **Pressing together is
+not claiming together.**
+
+⚠️ My own first browser probe made exactly this mistake and **fired on one run and not the next
+with no code change between them** — a probe measuring its own unlock times. Through §2.1.1's paste
+path instead — same document, unlock already spent, nothing between the press and the claim — the
+race is **3/3 in browsers and 12/12 at the flow level**. ➡️ **A flaky probe is a measurement of
+something; find out what before calling the product flaky.**
+
+#### ⛔⛔ NEW FAULT — the alarm is absent from the six-digit screen on the SECOND visit
+
+`succeed()` shows the tripwire panel after pairing. The **`verify-now`** handler — §3.6.2's screen
+reached from inside a conversation, which is where somebody who answered *"not yet"* finally makes
+the decision — shows the digits and **not the alarm**. It is the exact screen Hannu was on when he
+chose "yes".
+
+⭐ **And the rule is written two lines below the branch that does not apply it**: the comment on
+`showSas` says the screen *"is reached twice: right after pairing, and again from inside a
+conversation whenever the person is finally able to ask."* **D-165's lesson, inside the code D-165
+shipped.** The conversation banner is unaffected, so §3.5's channel requirement still holds; what
+is missing is the alarm **at the point of decision**.
+
+#### ⭐⭐⭐⭐ AND THE ONE NOBODY SENT HIM TO FIND: two devices on one KEY silently fork a conversation
+
+He typed the same eight words into a second browser, and paired a third holding a different KEY.
+Measured, in his words: both copies of the identity could send and the peer received — and **the
+peer's replies reached only the duplicate, never the device that had typed the KEY first.** No
+warning, no error, no failed send. *"The conversation was mixed and a different user got responses
+than who was sending."*
+
+⚠️ **This is the case D-045 puts out of scope and §7.3.1 says the protocol CANNOT enforce** — every
+holder of `K_master` is a fully authoritative writer, there is no device list and nothing to
+revoke. Two mechanisms are already named in this specification and both produce exactly what he
+saw:
+
+- §7.3.1a's own warning: a device whose identity has been opened elsewhere takes §6.3's
+  `generation` floor from its own record, the peer refuses what it sends as `stale_generation`,
+  and **"the sender's own screen reports it as sent, because it was. The failure is silent at both
+  ends."**
+- §5.4: a message is deleted from the server **the moment a device collects it**, so two devices on
+  one identity compete for delivery and the loser never learns there was anything to lose.
+
+➡️ **The product says nothing about this anywhere, and offers no signal when it happens.** A person
+who reads *"the KEY is your identity"* and *"it is the only way back to your conversations"* will
+do what he did — that is what those sentences invite. **Raised, not invented: whether the answer is
+a sentence, a detection, or neither, is Hannu's.**
+
+#### Settled in the same round
+
+**I6 is now I6a / I6b / I6c** (client / deployment / ending), because a page cannot fetch itself
+without credentials and no code review can decide I6b — with an instruction to answer I6b only
+from deployed response headers. **§3.4.1b rule 6 is the initiator's on every occasion**
+(PROTOCOL 0.9.26), on the ground that *the hazard rule 6 exists for is a link left claimable, and
+only an initiator can leave one.* Both texts were drafted, read by Hannu, and approved unchanged.
+
 ### D-166. ⭐⭐⭐ Four sentences that claimed more than the product does — and the guards had memorised the words instead of the fact
 
 **2026-08-26, Hannu ruling on the last of D-165's four open questions.** The 2026-08-24 review's
@@ -5725,8 +5803,9 @@ loudly if a payload grows into it again, with a second check that a message one 
    about five weeks. ⭐ `copy.js` already knows: the comment on the *metadata* paragraph forbids
    exactly this kind of whole-machine claim, twenty lines away. The fix is designed and unapplied
    and touches a config shared with a live privsend, so it needs its own authorization.
-2. **I6's wording** (B #2, above).
-3. **§3.4.1b rule 6 and rule 4.** The fix sends the `DELETE` for the **initiator only**, which is
+2. ~~**I6's wording** (B #2, above).~~ ✅ **RULED 2026-08-26 — split into I6a/I6b/I6c, see D-167.**
+3. ✅ **RULED 2026-08-26 — every occasion is the initiator's, PROTOCOL 0.9.26, see D-167.**
+   ~~**§3.4.1b rule 6 and rule 4.** The fix sends the `DELETE` for the **initiator only**, which is
    narrower than rule 6 as written — rule 6 restricts only its *rule 10* occasion to role I. The
    reason it gives applies here unchanged (*"deleting either destroys another party's state on a
    guess"*), but the section should say so rather than leave it to be re-derived.

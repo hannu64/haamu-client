@@ -1142,9 +1142,10 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
   }
   const { pairingId, macKey } = await pairing.derivePairing(linkSecret);
   const idPath = idPathFor(pairingId);
-  // See `abandon` — this is what keeps §3.4.1's DELETE sendable after an abort that
-  // clears the record out from under it. Cleared on success, below.
-  lastPairingId = pairingId;
+  // ⚠️⚠️ NO MEMO HERE, AND ITS ABSENCE IS THE RULE (§3.4.1b rule 6, 0.9.26 — D-167). The
+  // memo exists so `abandon` can still send the `DELETE` after an abort has cleared the
+  // record; a joiner may not send that `DELETE` on any occasion, so a joiner has nothing
+  // to remember. Setting it here is how the joiner's `DELETE` used to get out.
   let failure = null; // §3.4.1b rule 10 — the `finally` has to know WHICH ending
 
   // ⚠️⚠️ THIS DEVICE MAY HAVE BEEN HERE BEFORE, AND UNTIL §3.4.1b NOTHING ASKED.
@@ -1398,7 +1399,10 @@ export async function resume({ api, storage, signal, onEvent = () => {} } = {}) 
 
   const { pairingId, macKey } = await pairing.derivePairing(rec.linkSecret);
   const idPath = idPathFor(pairingId);
-  lastPairingId = pairingId;
+  // ⚠️ THE MEMO IS THE INITIATOR'S (§3.4.1b rule 6, 0.9.26 — D-167). A resumed J may
+  // not send the abandonment `DELETE` on any occasion, so remembering an id it must
+  // never use would only give `abandon` a way to send one after the record is gone.
+  if (rec.role === pairing.ROLE_INITIATOR) lastPairingId = pairingId;
 
   // ⚠️ THE `open` BRANCH BELOW IS ONE PATH THAT MUST NOT CLEAR THE RECORD. Since
   // 0.9.12 it is no longer the only one: §3.4.1b rule 10 keeps it past any failure
@@ -1492,6 +1496,24 @@ export async function resume({ api, storage, signal, onEvent = () => {} } = {}) 
  */
 let lastPairingId = null;
 
+/**
+ * §3.4.1b rule 6 — the abandonment `DELETE`, on leaving a pairing screen, and rule 6's
+ * "retry at the next unlock".
+ *
+ * ⛔⛔ IT SENT IT FOR A JOINER TOO, AND PROTOCOL 0.9.26 FORBIDS THAT (D-167). The rule
+ * had restricted only its *rule 10* occasion to role I; ruling the section tighter
+ * exposed this function, twenty lines from `discardExpired`, which had it right. **The
+ * hazard rule 6 exists for is a link left claimable, and only an initiator can leave
+ * one** — a joiner's record describes a session it has already claimed (the link is
+ * spent) or the initiator's own live link, offered to a friend who may yet arrive, and
+ * deleting either destroys another party's state on a guess. A claimed session is
+ * carrying §3.5's evidence, which the initiator is still entitled to read.
+ *
+ * ⚠️ THE MEMO IS THE INITIATOR'S TOO, and it had to be: `lastPairingId` alone cannot
+ * say which role wrote it, so a J that reached here with its record already cleared
+ * would have sent the `DELETE` from the memo instead. `join()` therefore no longer
+ * memoises at all — it has nothing it may abandon.
+ */
 export async function abandon({ api, storage, signal } = {}) {
   // ⚠️ `api` IS PASSED IN, AND WITHOUT IT THIS FUNCTION DEFEATED ITSELF (D-165). This
   // is rule 6's "retry at the next unlock" — and its first act was a read that silently
@@ -1500,9 +1522,14 @@ export async function abandon({ api, storage, signal } = {}) {
   // for. `discardExpired` now sends it, and leaves the memo behind if it failed.
   const rec = await loadInFlight(storage, { api });
   await clearInFlight(storage);
-  // The record is the truth when it is there; the memo covers only the race.
+  // The record is the truth when it is there; the memo covers only the race. ⚠️ A
+  // record that is present and is J's answers the question — it does NOT fall through
+  // to the memo, which would be a `DELETE` sent on a guess about a different session.
   let pairingId = lastPairingId;
-  if (rec) ({ pairingId } = await pairing.derivePairing(rec.linkSecret));
+  if (rec) {
+    pairingId =
+      rec.role === pairing.ROLE_INITIATOR ? (await pairing.derivePairing(rec.linkSecret)).pairingId : null;
+  }
   lastPairingId = null;
   if (!pairingId) return false;
   try {
