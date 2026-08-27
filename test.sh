@@ -66,6 +66,15 @@ echo "=== roster.mjs — §7.3's merge rules, freshness and padding ==="
 node test/roster.mjs
 
 echo
+echo "=== elsewhere.mjs — D-168, a second holder of the KEY, over a faked transport ==="
+# ⚠️⚠️ THE TRANSPORT IS THE ONLY FAKE, for `binding.mjs`'s reason: `e2e-roster.mjs`
+# proves the same path against the real Go server and cannot run in the published
+# client repository, which ships no `../server`. What this product says about two
+# devices on one KEY is the whole answer to the fault Hannu measured on 2026-08-26,
+# and a guard a stranger's `./test.sh` skips is a guard for nobody.
+node test/elsewhere.mjs
+
+echo
 echo "=== storage.mjs — what reaches disk, and under which key ==="
 # No browser: `storage/db.js` ships a Map-backed handle with IndexedDB's own key
 # ordering, so the layer that decides what is encrypted, under which key and into

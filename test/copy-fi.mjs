@@ -394,6 +394,13 @@ const KIELLETYT = [
   [/taattu|takuu|takaamme/i, "§6.6 — poisto on paras yritys, ei takuu"],
   [/sotilastason|pankkitason|murtamaton|100 ?%/i, "§11 — uhkamalli on lista siitä mitä tämä EI suojaa"],
   [/anonyymi|jäljittämät/i, "§7.3.3 — `roster_id` on pysyvä tunniste jokaisessa luku- ja kirjoituspyynnössä"],
+  // ⚠️⚠️ D-168 — TÄSSÄ TUOTTEESSA EI KIRJAUDUTA SISÄÄN EIKÄ ULOS. `unlock.why` sanoi
+  // *"joka kerta kun kirjaudut sisään"* 2026-08-27 asti; koko muu `unlock`- ja `lock`-
+  // sanasto sanoo **avata**, **lukita**, **kirjoita AVAIMESI**. Tiliä ei ole, istuntoa ei
+  // ole, eikä palvelin erota kahta saman AVAIMEN haltijaa toisistaan — joten "kirjaudu
+  // ulos" on teko, jota tämä tuote ei voi koskaan tarjota.
+  // ⚠️ EI `kirjoitat`, joka on eri verbi ja on puolella tämän tuotteen ruuduista.
+  [/\bkirjaudu\w*|\bkirjautu\w*|sisäänkirjaut\w*|uloskirjaut\w*/i, "D-168 — tässä tuotteessa ei kirjauduta sisään eikä ulos"],
 ];
 
 for (const [pattern, why] of KIELLETYT) {
@@ -409,9 +416,28 @@ check(
     // ⭐ and the two sentences the patterns must NOT find: a real one from this product,
     // and the postposition the guarantee pattern used to collide with.
     !KIELLETYT.some(([re]) => re.test("eikä mitään tapaa nollata sitä")) &&
-    !KIELLETYT.some(([re]) => re.test("keskustelusi ovat AVAIMESI takana")),
+    !KIELLETYT.some(([re]) => re.test("keskustelusi ovat AVAIMESI takana")) &&
+    // ⭐ D-168: the sentence it was written for fails, and the verb it must not be
+    // confused with passes. *kirjaudut* is "you log in"; *kirjoitat* is "you write".
+    KIELLETYT.some(([re]) => re.test("joka kerta kun kirjaudut sisään")) &&
+    !KIELLETYT.some(([re]) => re.test("joka kerta kun kirjoitat AVAIMESI")),
   `${KIELLETYT.length} patterns`
 );
+
+/**
+ * ⭐⭐ D-168 IN FINNISH, CHECKED AGAINST THE TWO WORDS THAT CARRY THE FACT.
+ *
+ * The English rule is *"it names both a browser and a device, because this client cannot
+ * tell which"*, and the paragraph-shape and number checks above cannot see it: the claim
+ * is made of nouns, not of numbers or markup. These are the two nouns, and if the Finnish
+ * stops naming both it has narrowed a claim the evidence does not narrow.
+ */
+{
+  const fi = SUOMI.get("list.elsewhere") ?? "";
+  check("⭐⭐ the Finnish names both selain and laite, as the English names both", /selaime/i.test(fi) && /laittee/i.test(fi), fi);
+  check("⛔⛔ and it does not say the messages are lost either", !/kadon|katoa|menetet|hukku|hävi/i.test(fi), fi);
+  check("⚠️ the detector still recognises a Finnish sentence that WOULD say it", /kadon|katoa|menetet/i.test("viestejä katoaa"), "canary");
+}
 
 // ================================================================== the switch itself
 

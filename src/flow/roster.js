@@ -165,6 +165,16 @@ export function openRoster({
   let size = rosters.ROSTER_SIZE; // §7.3's one-way growth
   let lastUserCheck = 0;
   let lastFreshness = null;
+  // ⚠️⚠️ D-168 — IS `roster.version` EVIDENCE ABOUT WHO WROTE? It is, for as long as this
+  // document has been a client without interruption: every rise it caused is here, so a
+  // rise it did not cause came from somewhere else. A document that STOPPED being a client
+  // — §4.2.2's `dormant`, which touches nothing and so cannot refresh — slept through an
+  // interval it has no evidence about, and the honest answer for the first read after it
+  // wakes is the same as for the first read ever: say nothing. Measured, not reasoned:
+  // `~/lpm-probes/probe-elsewhere-tabs.mjs` fired the notice on a same-browser takeover,
+  // where the sentence would have named a browser and a device for what was a tab — and
+  // §4.2.2 had already handled that case properly, with a control.
+  let baselineTrusted = true;
   const warnings = [];
 
   /**
@@ -245,6 +255,35 @@ export function openRoster({
       warnings.push({ kind: "version_mismatch", inner: state.inner, outer: state.outer });
     }
 
+    // ⚠️⚠️ D-168 — THE ONE THING THIS CLIENT CAN OBSERVE ABOUT A SECOND HOLDER OF THE
+    // KEY, and it is observed HERE because this is the only number in the system that
+    // another device raises and this one can check. §7.3.1's compare-and-swap is the
+    // usual way it is met — a 409, whose refetch comes back through this function — but
+    // the same evidence arrives on any read: §7.3.3 case 5's "check for changes" reaches
+    // it without writing anything, and so does the fetch that follows a channel change.
+    //
+    // ⚠️ IT IS THE INNER VERSION AND IT HAS TO BE. The outer counter is the SERVER's, and
+    // a server that wanted this notice to appear could raise it for nothing; the inner one
+    // lives inside the sealed blob, so raising it needs `rosterKey`, which comes from the
+    // KEY. §7.3.2's mismatch warning is what covers the two disagreeing, and it is raised
+    // above — this is a different question about a different number.
+    //
+    // ⚠️⚠️ AND EVERY WORD `ui/copy.js` SPENDS ON IT IS BOUNDED BY WHAT THIS LINE KNOWS.
+    // It is an EVENT and never a presence: it fires when the other device WRITES, so a
+    // second device that has only ever read is invisible to it, and it is always AFTER the
+    // fact. Silence here is therefore not evidence of a single device — a hostile server
+    // can simply keep serving the old blob. It cannot usefully FAKE one, because the blob
+    // is authenticated and §7.3.2's high-water mark refuses a roster older than one already
+    // seen; withholding is the whole of what it can do.
+    //
+    // ⭐ THAT IS WHY NOTHING IN THIS PRODUCT SAYS "no other device is using this KEY".
+    // D-045 puts concurrent multi-device out of scope and §7.3.1 cannot enforce it; a
+    // client saying what it saw is all that is left, and a client claiming the absence of
+    // what it cannot see would be the one thing worse than saying nothing.
+    if (roster && baselineTrusted && opened.roster.version > roster.version) {
+      warnings.push({ kind: "elsewhere", version: opened.roster.version });
+    }
+
     // §7.3.1a, and it is asked HERE because this is the only place a device sees
     // another device's deletions. The merge below runs on a 409, which is a write
     // this device chose to make; a channel disappearing is something that happened
@@ -271,6 +310,9 @@ export function openRoster({
     roster = opened.roster;
     outer = outerVersion;
     size = opened.size;
+    // D-168: whatever this device did or did not see before, it has just read the current
+    // roster, so from here the comparison above is evidence again.
+    baselineTrusted = true;
     await remember(blob, outerVersion, opened.roster.version);
     return roster;
   }
@@ -324,6 +366,9 @@ export function openRoster({
         roster = next;
         outer = res.version;
         size = sealed.size;
+        // D-168: a PUT only succeeds when `if_match` was current, so this device's own
+        // version is the server's — the baseline is established by the write itself.
+        baselineTrusted = true;
         await remember(sealed.blob, res.version, next.version);
         return roster;
       } catch (err) {
@@ -360,9 +405,35 @@ export function openRoster({
     get freshness() {
       return lastFreshness;
     },
-    /** §3.5-register things the interface should say. Drained by the caller. */
+    /**
+     * §3.5-register things the interface should say. Drained by the caller.
+     *
+     *   version_mismatch    §7.3.2 rule 3: the server's counter and the blob's disagree
+     *   unexplained_removal §7.3.1a: channels gone with no tombstone to explain them
+     *   role_conflict       §7.3.1 rule 2, from `protocol/roster.js`'s merge
+     *   name_unresolved     §7.3.1 rule 4, from the same merge
+     *   elsewhere           D-168: the sealed version rose without this device raising it
+     *
+     * ⚠️ DRAINING IS THE CALLER'S JOB AND WHERE IT DRAINS IS A DECISION. `app.js` did
+     * it on the conversation list alone until D-168, which is the one screen the person
+     * is NOT on while the thing `elsewhere` reports is doing its damage.
+     */
     takeWarnings() {
       return warnings.splice(0, warnings.length);
+    },
+
+    /**
+     * D-168 — this document has stopped being a client, so it stops being a witness.
+     *
+     * ⚠️ ARCHITECTURE §4.2.2's `dormant` document writes nothing and touches `roster_id`
+     * not at all, so it cannot keep its copy of the version current. Waking with a stale
+     * one and calling the difference "another device" would name a browser and a device
+     * for what was, in the case §4.2.2 exists for, the tab next door — and §4.2.2 has
+     * already told the person about that one, with a control. The next read is silent and
+     * re-establishes the baseline; a genuine second device is caught by the one after it.
+     */
+    forgetBaseline() {
+      baselineTrusted = false;
     },
 
     /**
@@ -393,6 +464,7 @@ export function openRoster({
       roster = fresh;
       outer = 1;
       size = sealed.size;
+      baselineTrusted = true; // D-168: this device made version 1.
       await remember(sealed.blob, 1, fresh.version);
       return roster;
     },

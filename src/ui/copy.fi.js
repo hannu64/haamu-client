@@ -146,6 +146,10 @@ export const FI = {
   "list.roleJ": "sinä liityit",
   "list.roleConflict": "2 laitetta oli eri mieltä siitä, kumpi puoli keskustelua tämä on.",
   "list.versionMismatch": "Palvelimen versio keskustelulistastasi ei täsmää itse listan kanssa. Lista on aito. Suhtaudu epäillen kaikkeen, mitä palvelin siitä sanoo.",
+  // ⚠️⚠️ D-168 — kaksi selainta yhdellä AVAIMELLA. Ks. `copy.js`: jokainen väite on
+  // rajattu siihen, mitä `flow/roster.js` todella mittasi.
+  "list.elsewhere":
+    "Keskustelulistaasi on muutettu jossain muualla kuin täällä. AVAIMESI on käytössä toisessa selaimessa tai toisella laitteella, ja niin kauan kuin tilanne jatkuu, jokainen toisen henkilön viesti saapuu vain yhteen paikkaan — tänne tai sinne, ei koskaan molempiin. Käytä vain yhtä kerrallaan.",
   "list.localOnly": "vain tällä laitteella",
 
   // ── lock
@@ -196,7 +200,7 @@ export const FI = {
   "nav.namePrompt": "Nimeä keskustelu!",
   "nav.delete": "Poista tämä keskustelu",
   "nav.checkForChanges": "Tarkista muutokset muilta laitteiltani",
-  "nav.checked": "Ei muutoksia muilla laitteillasi.",
+  "nav.checked": "Ei muutoksia keskusteluissasi.",
   "nav.checkedChanged": "Keskustelulistasi on päivitetty.",
 
   // ── openLink
@@ -395,7 +399,7 @@ export const FI = {
   // ── unlock
   "unlock.ask": "Kirjoita AVAIMESI.",
   "unlock.working": "Avataan — tämä vie hetken.",
-  "unlock.why": "AVAIMESI ajetaan Argon2id-laskennan läpi 128 MiB:n muistilla, jotta keskustelusi aukeavat. Vanhalla puhelimella siihen menee noin sekunti joka kerta kun kirjaudut sisään.",
+  "unlock.why": "AVAIMESI ajetaan Argon2id-laskennan läpi 128 MiB:n muistilla, jotta keskustelusi aukeavat. Vanhalla puhelimella siihen menee noin sekunti joka kerta kun kirjoitat AVAIMESI.",
   "unlock.placeholder": "AVAIMESI",
   "unlock.notFound": "Tuota AVAINTA ei löydy. Tarkista mitä kirjoitit ylös ja yritä uudelleen — tämä ei luo uutta.",
   "unlock.exists": "Tuo AVAIN on jo olemassa. Avaa se sen sijaan, että ottaisit käyttöön uuden.",

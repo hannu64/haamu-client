@@ -5546,6 +5546,142 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-168. ⭐⭐⭐⭐ Two devices on one KEY: the client cannot stop it, so it says so — and the guard, the answer beneath it and one word in the unlock screen were all wrong in the same direction
+
+**2026-08-27.** Hannu's ruling on what D-167 found by accident. He asked for the loud version —
+*"is it possible that haamu.app warns the users loudly"* — and asked, in the same breath, whether
+a logout was possible. It is not, and that half is closed for good below.
+
+#### The fault, as he measured it
+
+Two browsers, one KEY, one conversation. He sent from both. **The peer's replies reached only one
+of them**, the other's copy of the conversation quietly diverged, and there was no error at either
+end. §5.4's mailbox is **delete-on-collect**, so whichever device drains first takes the message
+and removes it; the other is not delayed, it is skipped.
+
+⛔ **It cannot be enforced, and that is a property of the design rather than a gap in it.** §7.3.1
+rule 1 and D-045: every holder of `K_master` is a fully authoritative writer, there is no device
+list, and there is nothing to revoke.
+
+⛔⛔ **A CROSS-DEVICE LOGOUT IS RULED OUT PERMANENTLY.** There is no session and no token; the
+server cannot tell two holders of one KEY apart, so *"log the other one out"* is the same request
+as somebody holding your KEY logging **you** out. Anything an honest client obeys a modified one
+ignores. Real revocation needs per-device keys, a device list and an authenticated owner — which
+is an account, which is the thing this product exists not to have.
+
+#### What ships instead: the client says what it saw
+
+**One comparison, in `flow/roster.js`'s `adopt()`:** the sealed roster's own version rose, and this
+device did not raise it. That is the entire mechanism.
+
+⭐ **It is the INNER version and it has to be.** The outer counter is the server's and a server
+that wanted the notice to appear could raise it for nothing; the inner one lives inside the
+sealed blob, so raising it needs `roster_key`, which comes from the KEY. §7.3.2 rule 3's mismatch
+warning is what covers the two disagreeing — a different question about a different number.
+
+⭐ **One detection point covers both directions.** §7.3.1's 409 refetch comes back through the
+same function, and so does §7.3.3 case 5's *"check for changes"* — a device that only ever reads
+still meets the other one.
+
+#### ⚠️ The three limits, and they are in the code as well as the prose
+
+1. **An EVENT, never a presence.** It fires when the other device WRITES. A second device that has
+   only ever read is invisible to it.
+2. **Always after the fact**, and **the device that wrote first is the last to know** — measured,
+   not assumed. A second message on an existing session raises no generation, so it is not a
+   roster write, so that device touches `roster_id` not at all. ⛔ **Polling is not the fix and
+   must never be proposed**: §7.3.3 permits five occasions and *"on a schedule"* is deliberately
+   not one of them, because a periodic touch turns a permanent identifier into a daily
+   behavioural signal — the exact thing §4 and §9.1 spend their whole design budget avoiding.
+   The answer already in the product is the button, which is D-163's question answered for this
+   mechanism: **a person who wants to know can ask.**
+3. **A hostile server can withhold it** by serving the old blob. It cannot usefully FAKE one: the
+   blob is authenticated and §7.3.2's high-water mark refuses a roster older than one already
+   seen. ➡️ **So nothing in this product may ever say "no other device is using this KEY".**
+   Silence here is not evidence.
+
+#### ⭐⭐ And the drain was on the wrong screen — the queue had existed all along
+
+`#notices` has sat **above** the screens since it was built; its own comment in `index.html` says
+these are *"things that happened to this device, not steps in a flow, and a person must not have
+to navigate to find them"*. And the one caller of `takeWarnings()` was `openHome()`.
+
+That cost nothing until now, because every earlier warning is about a roster the person fetched by
+pressing something on that very screen. This one is not: the write that meets another device is
+§6.3's generation moving, which happens **while the person is in a conversation**. ➡️ **A notice
+drained only on the list is a notice that waits for the person to stop doing the thing it is
+about.** It drains on the send and on the arrival now, and — §7.6 has no roster at all —
+`renderWarnings` had to learn to survive a mode it could not previously be reached from.
+
+#### ⛔⛔ Three sentences were wrong in the same direction, and two of the three were found by the instruments
+
+1. **`unlock.why` ended *"every time you sign in"*** — the single outlier in a namespace whose
+   every other sentence says *open*, *unlock*, *type your KEY*, and the same in Finnish
+   (*"kirjaudut sisään"*). There is no account and nothing to sign out of. ➡️ **A person asks for
+   a sign-out because they were told they signed in.** He asked for exactly that control one
+   screen after being told he signs in. Found while writing this ruling's own guard.
+2. **`nav.checked` answered *"No changes on your other devices."*** — and the browser probe caught
+   it standing **directly under the new alarm**, on one screen, in one frame, from one button
+   press: *"Your KEY is in use in another browser"* over *"No changes on your other devices."*
+   ⭐ **Neither was wrong about what it measured.** `listSignature()` compares roots, names, roles,
+   verification and the quarantine count; the other device had raised §6.3's generation, which is
+   a roster write and **not** a list change. So the sentence had promoted a claim about the LIST
+   into a claim about DEVICES. ➡️ **A sentence may only claim about the thing its own comparison
+   looked at.** The button keeps its name — it says where it looks, which is the act.
+3. **The new sentence itself**, held to the same standard: not *"messages are being lost"* —
+   nothing was lost, it went to the other place whole — and it names **both** a browser and a
+   device, because this client cannot tell which and naming one would be a claim.
+
+#### ⛔⛔ And the first browser probe of §4.2.2's takeover fired it on a TAB
+
+`~/lpm-probes/probe-elsewhere-tabs.mjs`, written to ask rather than to confirm: two tabs of ONE
+browser on one KEY. The second went dormant exactly as §4.2.2 requires, the first wrote the
+roster, and the takeover then raised *"your KEY is in use in another browser or on another
+device"* — **for the tab next door, which §4.2.2 had already named on the screen the person was
+looking at, with a control underneath it.** §3.5's rule is that a false alarm is the worst outcome
+available, and this one would have landed on the first thing Hannu tried.
+
+⭐ **THE FIX IS THE HONEST STATEMENT, NOT A SUPPRESSION.** A dormant document *writes nothing and
+touches `roster_id` not at all*, so it cannot keep its copy of the version current — it slept
+through an interval it has **no evidence about**, and the right answer for its first read after
+waking is the same as for the first read ever: say nothing. `flow/roster.js` gets
+`forgetBaseline()`, `showDormant()` calls it, and the very next comparison catches a real second
+device — a one-read silence, not an off switch, and §7.3.2's server warnings are untouched by it.
+
+⚠️ **The reasoning that would have been wrong here is "widen the sentence to mention a tab".**
+That trades a precise claim for a vague one to accommodate a case another mechanism already
+handles better.
+
+#### ⚠️⚠️ And my own guard was answered by a neighbour
+
+The first version of the check *"the notice is an alarm"* asked the whole of `renderWarnings()`
+for `alarm: true`, **and passed with the alarm removed**, because two neighbouring branches carry
+one. That is D-165's fault class inside the instrument written to close it. ➡️ **A guard whose
+SCOPE is wider than the thing it guards is answered by something else.** It reads the one line
+now, with a canary that says so. Found by mutation; it would not have been found by reading.
+
+#### What was proved, and where
+
+* **`client/test/elsewhere.mjs`** — new, 12 checks, **the transport is the only fake** so a
+  stranger who clones `hannu64/haamu-client` and types `./test.sh` runs it. Three mutations
+  watched failing: deleting the comparison, widening `>` to `>=`, and reading the outer counter.
+* **`~/lpm-probes/probe-elsewhere-browser.mjs`** — three real browsers. A pairs with C; **B
+  unlocks with A's KEY in a separate browser**, so §4.2.2's census cannot see it and `dormant`
+  never fires, which is exactly why this case was silent. **B is told on the conversation screen,
+  while it is still there.** C, holding a different KEY, is told nothing. And the fork itself is
+  measured rather than claimed: C's reply reached **one** of the two.
+* **`~/lpm-probes/probe-elsewhere-tabs.mjs`** — new, and it found the false alarm above. It
+  asserts the same-browser takeover is now **silent**, and that the tab that was live stood down.
+* Eleven further mutations across `app.js`, `flow/roster.js` and the copy, each watched failing.
+
+#### Half of what he asked for already shipped, for one browser
+
+§4.2.2's `dormant` screen — *"This is already open in another tab in this browser"* — plus a real
+takeover. It missed his case only because he used two separate **browsers**, and
+`BroadcastChannel` and `navigator.locks` are same-browser by definition. ➡️ **Enforcement is
+impossible; cooperation is sufficient for the case that actually hurts people**, and this notice
+is that same bet across the gap the census cannot reach.
+
 ### D-167. ⭐⭐⭐⭐ The two-party exercise: the alarm fires, and the thing he found by accident is bigger than the thing he was sent to test
 
 **2026-08-26.** Hannu ran the two-party exercise on real devices and reported back that **it had
@@ -5591,6 +5727,13 @@ conversation whenever the person is finally able to ask."* **D-165's lesson, ins
 shipped.** The conversation banner is unaffected, so §3.5's channel requirement still holds; what
 is missing is the alarm **at the point of decision**.
 
+✅ **FIXED AND DEPLOYED THE SAME DAY** (`lpm f969dd4`, stamp `f08e3f9ca24d15ea`). Both entrances now
+go through one `showPairingTripwire(on)` that **takes a value and always sets one**, and the second
+reads it off the CHANNEL — there is no pairing result on that path; §7.3.1 rule 7 is what carried
+the flag there, possibly from another device. ⚠️ A bare `show("tripwire")` is now refused by a
+check: showing without ever hiding would leave a verified alarm standing over the **next** pairing,
+and §3.5's own reasoning says a false alarm is the worst outcome available.
+
 #### ⭐⭐⭐⭐ AND THE ONE NOBODY SENT HIM TO FIND: two devices on one KEY silently fork a conversation
 
 He typed the same eight words into a second browser, and paired a third holding a different KEY.
@@ -5615,6 +5758,26 @@ saw:
 who reads *"the KEY is your identity"* and *"it is the only way back to your conversations"* will
 do what he did — that is what those sentences invite. **Raised, not invented: whether the answer is
 a sentence, a detection, or neither, is Hannu's.**
+
+#### ⛔⛔ AND THE SECOND FAULT WAS FOUND BY THE RULING ITSELF
+
+Tightening §3.4.1b rule 6 to *"the initiator on every occasion"* immediately put **`abandon()`** in
+breach: it sent the `DELETE` whatever the role, twenty lines from `discardExpired`, which D-165 had
+made correct. **Nothing about the code changed that day — the rule moved, and the second site came
+into view.** ➡️ **Before ruling a spec tighter, grep for every site the tightened rule now binds.**
+
+⚠️ The memo needed the same treatment and a role check on the record alone would have missed it:
+`lastPairingId` cannot say which role wrote it, so a J whose record was already cleared would have
+sent the `DELETE` from memory with every role check in the file passing. **`join()` therefore no
+longer memoises at all** — a joiner has nothing it may abandon. Fixed and deployed with the above.
+
+#### ⛔ THE COVERAGE GAP THAT LET THE FIRST FAULT HIDE
+
+`e2e-pair.mjs` proved the server records a refused claim and that `verifyClaim` accepts the
+evidence. It never called `initiate()`. ➡️ **A test of the pieces is not a test of the path.** It now
+races two real joiners on one link and asks the initiator what it came back with — and asks the
+opposite question too, because an alarm that is always on is no alarm: the next, unraced pairing
+must come back clean.
 
 #### Settled in the same round
 

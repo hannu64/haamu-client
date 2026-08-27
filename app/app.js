@@ -1100,6 +1100,12 @@ let dormant = false;
  */
 async function showDormant() {
   dormant = true;
+  // ⚠️⚠️ D-168 — A DORMANT DOCUMENT STOPS BEING A WITNESS, and this is the one funnel every
+  // path into dormancy goes through. Rule 1 says it writes nothing and touches `roster_id`
+  // not at all, so its copy of the roster version stops being current the moment it gets
+  // here; the difference it would find on waking is the OTHER TAB, which the panel below
+  // has just named and offered a control for. `probe-elsewhere-tabs.mjs` measured it firing.
+  if (session?.roster) session.roster.forgetBaseline();
   text("dormant-title", copy.tabs.dormantTitle);
   prose("dormant-body", copy.tabs.dormantBody);
   text("dormant-why", copy.tabs.dormantWhy);
@@ -1215,6 +1221,11 @@ function startDelivery(hash, entry) {
     live: liveFlow.startLive(flowChannel, {
       onMessages: async (messages) => {
         const stored = await storeIncoming(hash, entry, messages);
+        // ⚠️ D-168 — AND THE OTHER ONE. §7.3.1 rule 3 merges the generation by taking the
+        // maximum, so a generation ACCEPTED from the peer is a roster write too — a device
+        // that only reads still meets the other one here. Before the early return: a drain
+        // that stored nothing may still have written the roster.
+        renderWarnings();
         if (stored === 0) return;
         // The other tabs share this store and have just been given something to
         // read. They are not told WHAT — only which conversation moved.
@@ -2002,11 +2013,23 @@ async function renderQuarantine() {
 
 /** §7.3.2 rule 3 and §7.3.1 rule 4 — things the roster flow noticed. */
 function renderWarnings() {
+  // ⚠️⚠️ D-168 — GHOST MODE HAS NO ROSTER AT ALL, and this became reachable from Ghost the
+  // moment the drain moved off the conversation list. §7.6 keeps no identity and writes
+  // nothing durable, so there is no roster to have been written from anywhere else, and
+  // `session.roster` is genuinely absent rather than empty. Both new call sites — the send
+  // and the drain — run in both modes.
+  if (!session?.roster) return;
   for (const w of session.roster.takeWarnings()) {
     if (w.kind === "version_mismatch") notice("mismatch", copy.list.versionMismatch, { alarm: true });
     else if (w.kind === "name_unresolved") notice("rename", copy.list.nameUnresolved(w.kept));
     else if (w.kind === "unexplained_removal") notice("unexplained", copy.list.unexplained(w.count), { alarm: true });
     else if (w.kind === "role_conflict") notice("role", copy.list.roleConflict);
+    // ⚠️⚠️ D-168 — AN ALARM, AND THE ONLY ONE HERE THAT IS NOT ABOUT THE SERVER. The other
+    // three report something wrong with what arrived; this reports something ordinary that
+    // this product cannot support (§7.3.1 rule 1, D-045) and has never mentioned. Hannu
+    // measured the cost of the silence on 2026-08-26: two browsers, one KEY, and the peer's
+    // replies reaching only one of them with no error at either end.
+    else if (w.kind === "elsewhere") notice("elsewhere", copy.list.elsewhere, { alarm: true });
   }
 }
 
@@ -2713,6 +2736,11 @@ async function deliver(body) {
   line(body, "mine", stamp(record));
   // Any tab may send, so any tab may be the one with something new on disk.
   session.tabs.announce("messages", { id: TAB_ID, channel: hash });
+  // ⚠️ D-168 — SENDING IS A ROSTER WRITE WHENEVER §6.3's GENERATION MOVES, so this is one
+  // of the two places a second device announces itself, and the person is on the chat
+  // screen when it does. `#notices` sits above every screen for exactly this reason; what
+  // was missing was anything draining the queue anywhere but the conversation list.
+  renderWarnings();
 }
 
 /**

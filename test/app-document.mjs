@@ -499,6 +499,113 @@ section("⛔⛔ D-167 — both entrances to §3.6.2's screen decide §3.5's alar
   );
 }
 
+/**
+ * ⛔⛔⛔ D-168 — THE QUEUE EXISTED, THE SENTENCE DID NOT, AND THE DRAIN WAS ON THE WRONG
+ * SCREEN.
+ *
+ * `flow/roster.js` has raised warnings for §7.3.2's mismatch and §7.3.1a's vanishing
+ * since they were written, and `#notices` has sat ABOVE the screens since it was built —
+ * its own comment in `index.html` says these are *"things that happened to this device,
+ * not steps in a flow, and a person must not have to navigate to find them"*. And the one
+ * caller of `takeWarnings()` was `openHome()`.
+ *
+ * ⭐ THAT COST NOTHING UNTIL D-168, because every earlier warning is about a roster the
+ * person fetched by pressing something on that very screen. `elsewhere` is not: the roster
+ * write that meets another device is §6.3's generation moving, which happens while the
+ * person is IN a conversation, sending and receiving. A notice drained only on the list is
+ * a notice that waits for the person to stop doing the thing it is about.
+ *
+ * So the rule tested here is about DRAIN POINTS, not about one function — the same shape
+ * as D-167's entrances one section above, found the same way, one day later.
+ */
+section("⛔⛔ D-168 — the roster's warnings are drained where the person actually is");
+
+{
+  const src = code("../app/app.js");
+
+  const drains = [
+    ["the conversation list", bodyAfter(src, "async function openHome() {", "\n}\n")],
+    ["a message sent", bodyAfter(src, "async function deliver(body) {", "\n}\n")],
+    ["a message arriving", bodyAfter(src, "onMessages: async (messages) => {", "\n      },")],
+  ];
+
+  for (const [where, body] of drains) {
+    // ⭐ The guard on the guard: a rename would leave an empty body and pass by vacancy.
+    check(`⚠️ the path for ${where} is found`, body.length > 40, `${body.length} characters`);
+    check(`⛔⛔ ${where}: the queue is drained here`, /renderWarnings\(\)/.test(body), where);
+  }
+
+  // ⚠️⚠️ AND ON THE ARRIVAL PATH IT IS BEFORE THE EARLY RETURN, which is exactly the
+  // "one branch too late" fault this whole file exists for. §7.3.1 rule 3 takes the
+  // maximum generation, so a drain that stored NOTHING may still have written the roster
+  // and met the other device; a `renderWarnings()` below `if (stored === 0) return` would
+  // be silent in precisely that case.
+  const arriving = bodyAfter(src, "onMessages: async (messages) => {", "\n      },");
+  check(
+    "⛔⛔ and it drains before the early return, not after it",
+    arriving.indexOf("renderWarnings()") >= 0 &&
+      arriving.indexOf("renderWarnings()") < arriving.indexOf("if (stored === 0) return"),
+    arriving.trim().split("\n").slice(0, 3).join(" / ")
+  );
+
+  // ⚠️ §7.6 HAS NO ROSTER AT ALL, and both new drain points run in Ghost mode. The old
+  // single caller could not reach it — `openHome()` is Kept-only — so moving the drain
+  // moved this from unreachable to reachable, and `session.roster` is genuinely absent
+  // there rather than empty.
+  const render = bodyAfter(src, "function renderWarnings() {", "\n}\n");
+  check(
+    "⚠️⚠️ and `renderWarnings` survives a mode that has no roster",
+    /if \(!session\?\.roster\) return;/.test(render),
+    render.trim().split("\n")[0]
+  );
+
+  // ⛔ The sentence itself is a copy lookup like its four neighbours. `copy.mjs` forbids
+  // app.js typing prose at all; what this adds is that the branch EXISTS, since a warning
+  // kind with no branch is silently dropped by the `else if` chain — and that it is LOUD.
+  //
+  // ⚠️⚠️ THE FIRST VERSION OF THIS CHECK ASKED THE WHOLE FUNCTION FOR `alarm: true` AND
+  // PASSED WITH THE ALARM REMOVED, because two neighbouring branches carry one. That is
+  // D-165's fault class in the instrument written to close it: a guard whose SCOPE is
+  // wider than the thing it is guarding is answered by something else. It reads the one
+  // line now, and the canary below is what says so.
+  const branch = render.split("\n").find((l) => l.includes('w.kind === "elsewhere"')) ?? "";
+  check(
+    "⛔⛔ 'elsewhere' has a branch, and it says it out loud rather than quietly",
+    /copy\.list\.elsewhere/.test(branch) && /alarm: true/.test(branch),
+    branch.trim()
+  );
+  check(
+    "⚠️⚠️ and the check reads THAT line — a neighbour's alarm does not answer for it",
+    !/alarm: true/.test('else if (w.kind === "elsewhere") notice("elsewhere", copy.list.elsewhere);') &&
+      /alarm: true/.test(branch),
+    "canary"
+  );
+
+  // ⚠️⚠️ AND §4.2.2's DORMANT DOCUMENT STOPS BEING A WITNESS. `probe-elsewhere-tabs.mjs`
+  // measured the notice firing on a same-browser takeover, where the sentence would have
+  // named a browser and a device for the tab next door — a case §4.2.2 has already handled,
+  // with a control. `showDormant()` is the one funnel every path into dormancy goes through,
+  // which is why the call belongs there and not at each of them.
+  const dormantBody = bodyAfter(src, "async function showDormant() {", "\n}\n");
+  check("⚠️ the dormant screen's function is found", dormantBody.includes('only("dormant")'), `${dormantBody.length} characters`);
+  check(
+    "⛔⛔ a document going dormant forgets its roster baseline",
+    /session\?\.roster\) session\.roster\.forgetBaseline\(\)/.test(dormantBody),
+    dormantBody.trim().split("\n").find((l) => l.includes("forgetBaseline")) ?? "absent"
+  );
+
+  // ⚠️ The canary: every kind `flow/roster.js` pushes has a branch here, so the next one
+  // added cannot fall through the chain the way this one would have.
+  const raised = [...read("../src/flow/roster.js").matchAll(/warnings\.push\(\{ kind: "([a-z_]+)"/g)].map((m) => m[1]);
+  const merged = [...read("../src/protocol/roster.js").matchAll(/warnings\.push\(\{ kind: "([a-z_]+)"/g)].map((m) => m[1]);
+  const unhandled = [...new Set([...raised, ...merged])].filter((k) => !render.includes(`"${k}"`));
+  equal(
+    `⭐⭐ every warning kind either module raises has a sentence (${new Set([...raised, ...merged]).size} kinds)`,
+    unhandled.join(", "),
+    ""
+  );
+}
+
 section("§3.6.2 — the three answers are offered only once there is something to answer about (C #2)");
 
 {

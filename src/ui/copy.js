@@ -832,8 +832,19 @@ export const nav = {
    * and cannot be refused. The probe written to demonstrate the collision proved the
    * opposite and had to be rewritten to abort the request instead. ➡️ **A mechanism I had
    * not read is a mechanism I was describing from its name.**
+   *
+   * ⛔⛔ D-168 — AND IT SAID *"No changes on your OTHER DEVICES"* UNTIL 2026-08-27, WHICH
+   * A PROBE CAUGHT CONTRADICTING THE ALARM PANEL DIRECTLY ABOVE IT, on one screen, in one
+   * frame: *"Your KEY is in use in another browser"* over *"No changes on your other
+   * devices."* Both from the same button press.
+   *
+   * ⭐ AND NEITHER WAS WRONG ABOUT WHAT IT MEASURED — they measured different things.
+   * `listSignature()` compares roots, names, roles, verification and the quarantine
+   * count; the other device had raised §6.3's generation, which is a roster write and not
+   * a list change. So the sentence was reporting the LIST and claiming about DEVICES.
+   * ➡️ **A sentence may only claim about the thing its own comparison looked at.**
    */
-  checked: "No changes on your other devices.",
+  checked: "No changes to your conversations.",
   checkedChanged: "Your conversation list has been updated.",
 };
 
@@ -1022,9 +1033,22 @@ export const unlock = {
   // this same sentence for anybody who wants it. ⚠️ What must never come back is
   // D-112's CONSTRUCTION. The missing payoff is a length decision and may be revisited;
   // an abstract subject announcing what something is NOT may not.
+  //
+  // ⚠️⚠️ D-168 — AND THE LAST TWO WORDS WERE *"sign in"*, WHICH IS THE ONE MENTAL MODEL
+  // THIS PRODUCT DOES NOT HAVE. There is no account, no server that knows who you are and
+  // nothing to sign out of; every other sentence in this namespace and in `lock` says
+  // **open**, **unlock**, **type your KEY**. It was the single outlier, in both languages
+  // (*"kirjaudut sisään"*).
+  //
+  // ⭐⭐ AND IT IS NOT A MATTER OF TASTE — IT ANSWERS A QUESTION THE PRODUCT THEN CANNOT.
+  // Hannu asked on 2026-08-26 for a control to *"log out the other one"*, and there can
+  // never be one: no session, no token, and a server that cannot tell two holders of one
+  // KEY apart. ➡️ **A person asks for a sign-out because they were told they signed in.**
+  // Found while writing D-168's guard, which is the notice that stands where that control
+  // would have gone.
   why:
     "Your KEY is put through Argon2id at 128 MiB to open your conversations. On an old phone that " +
-    "takes about a second, every time you sign in.",
+    "takes about a second, every time you type it in.",
 
   placeholder: "your KEY",
 
@@ -1229,6 +1253,40 @@ export const list = {
   unexplained: (n) =>
     `${n} ${n === 1 ? "conversation is" : "conversations are"} missing from the list the server sent, ` +
     "and nothing in it explains why. Do not re-pair anything until you know more.",
+
+  /**
+   * ⚠️⚠️ D-168 — WHAT THE PRODUCT MAY SAY ABOUT A SECOND HOLDER OF THE KEY, and every
+   * clause here is bounded by what `flow/roster.js` actually measured.
+   *
+   * ⭐ HIS OWN TEST IS WHY THIS SENTENCE EXISTS (2026-08-26). Two browsers, one KEY, one
+   * conversation: he sent from both, the peer's replies reached only ONE of them, and the
+   * product said nothing at all. §7.3.1 rule 1 and D-045 put concurrent multi-device out
+   * of scope and it CANNOT be enforced — every holder of `K_master` is a fully
+   * authoritative writer, there is no device list and there is nothing to revoke — so what
+   * is left is telling the person, and telling them the true shape of it.
+   *
+   * ⚠️ "arrives in only one place" IS THE MEASURED FACT AND NOT A GUESS. §5.4's mailbox is
+   * delete-on-collect: whichever device drains it first takes the message and removes it,
+   * so the two do not each get a copy. That is the symptom he reported, in the words of the
+   * thing that causes it.
+   *
+   * ⚠️⚠️ WHAT IT MAY NOT SAY. Not *"messages are being lost"* — nothing was lost, they went
+   * somewhere else, and a person told they are losing messages will go looking for a fault
+   * that is not there. Not *"log the other one out"* — there is no such act: no session and
+   * no token, and the server cannot tell two holders of one KEY apart, so "log the other one
+   * out" is the same request as somebody with your KEY logging YOU out. ⭐ And not a word
+   * about which — this device cannot know whether the other one is a tab, a browser or a
+   * phone, and "browser or device" is the honest span.
+   *
+   * ⭐ "While that lasts" IS DOING WORK. The evidence is an event and not a presence: the
+   * other place announced itself by WRITING, and nothing here can tell whether it is still
+   * there. A sentence in the present tense with no bound would be claiming a reading this
+   * client never takes.
+   */
+  elsewhere:
+    "Your conversation list has been changed somewhere other than here. Your KEY is in use " +
+    "in another browser or on another device, and while that lasts each message from the " +
+    "other person arrives in only one place — here or there, never both. Use one at a time.",
 
   localOnly: "on this device only",
 };

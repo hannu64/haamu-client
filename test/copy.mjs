@@ -3048,4 +3048,140 @@ check(
   equal("⚠️ nor tells the joiner they sent something, on a screen both roles see", sent.map(([p]) => p).join(", "), "");
 }
 
+/**
+ * ⛔⛔⛔ D-168 — THIS PRODUCT HAS NO ACCOUNT, SO IT MAY NOT USE THE VERBS OF ONE.
+ *
+ * `unlock.why` ended *"every time you sign in"* until 2026-08-27 — the single outlier in
+ * a namespace whose every other sentence says **open**, **unlock** or **type your KEY**,
+ * and it was the same in Finnish (*"kirjaudut sisään"*).
+ *
+ * ⭐⭐ AND IT IS NOT A MATTER OF TASTE. There is no session, no token, and a server that
+ * cannot tell two holders of one KEY apart, so *"sign out"* is an act this product can
+ * never offer — and Hannu asked for exactly that control on 2026-08-26, one screen after
+ * being told he signs in. ➡️ **A person asks for a sign-out because they were told they
+ * signed in.** The notice this ruling is named for is what stands where that control
+ * would have gone, which is why the two are one decision.
+ *
+ * ⚠️ "session" IS NOT BANNED AND MUST NOT BE. §3's *pairing session* is a real object in
+ * the protocol with a real lifetime, and `pairing.failure.not_found` names it correctly.
+ * What is banned is the ACT — the thing a person is told they do, which here they do not.
+ */
+{
+  const ACCOUNT_ACT =
+    /\b(log(ged|ging)? ?in|log ?out|logged ?out|sign ?in|signed ?in|sign ?out|signed ?out)\b/i;
+  const slips = all.filter(([, text]) => ACCOUNT_ACT.test(text));
+  equal(
+    "⛔⛔ no sentence tells the person they sign in, log in or log out of anything",
+    slips.map(([p]) => p).join(", "),
+    ""
+  );
+  check(
+    "⚠️⚠️ and the detector still catches the sentence it was written for",
+    ACCOUNT_ACT.test("takes about a second, every time you sign in.") &&
+      ACCOUNT_ACT.test("log out the other one") &&
+      !ACCOUNT_ACT.test("There is no pairing session at this invite link any more."),
+    "canary — the pre-D-168 sentence fails, §3's pairing session passes"
+  );
+}
+
+/**
+ * ⛔⛔⛔ D-168 — WHAT THE NOTICE ABOUT A SECOND DEVICE MAY AND MAY NOT CLAIM.
+ *
+ * Hannu measured the fault on 2026-08-26: two browsers, one KEY, one conversation, and
+ * the peer's replies reaching only ONE of them with no error at either end. §7.3.1 rule 1
+ * and D-045 put that out of scope and it cannot be enforced — every holder of `K_master`
+ * is a fully authoritative writer, there is no device list and nothing to revoke — so the
+ * whole of the product's answer is a sentence, and the sentence has to be exactly true.
+ *
+ * ⚠️⚠️ THE CHECKS BELOW ARE PROPERTIES, NOT THE WORDS (D-166). A guard that quoted this
+ * sentence would go red on the day somebody improved it and green on the day somebody
+ * broke it, which is the fault D-166 found in two guards at once.
+ */
+{
+  const sentence = copy.list.elsewhere;
+
+  // ⛔ NOT "messages are being lost". Nothing was lost — §5.4's mailbox is delete-on-
+  // collect, so the message went to the other place, whole. A person told they are losing
+  // messages goes looking for a fault that is not there, and this product's own §5.4.2
+  // vocabulary for a real loss is a different thing entirely.
+  check(
+    "⛔⛔ it does not tell the person messages are being lost",
+    !/\b(lost|losing|gone|missing|never arrived?|did not arrive|do not arrive)\b/i.test(sentence),
+    sentence
+  );
+
+  // ⭐ IT NAMES BOTH, BECAUSE THIS DEVICE CANNOT TELL WHICH. `flow/roster.js` sees one
+  // number rise. Whether the other holder is a second browser on this machine or a phone
+  // in another country is not in the evidence, and naming only one would be a claim.
+  check(
+    "⭐⭐ it names both a browser and a device — the honest span of what was measured",
+    /\bbrowser\b/i.test(sentence) && /\bdevice\b/i.test(sentence),
+    sentence
+  );
+
+  // ⭐ AND IT NAMES WHAT IS SHARED. D-109: the capital is the word — this is the person's
+  // eight words and nothing else, and it is the only thing the two places have in common.
+  check("⭐ and it says KEY, which is the thing the two places share", /\bKEY\b/.test(sentence), sentence);
+
+  // ⛔ NOT A CONTROL THAT CANNOT EXIST. A cross-device logout is ruled out for good: the
+  // server cannot tell two holders of one KEY apart, so "log the other one out" is the
+  // same request as somebody with your KEY logging YOU out, and anything an honest client
+  // obeys a modified one ignores. The account-verb rule above covers the verbs; this
+  // covers the offer.
+  check(
+    "⛔⛔ and it offers no way to stop the other one, because there is none",
+    !/\b(disconnect|revoke|kick|remove the other|close the other|stop the other)\b/i.test(sentence),
+    sentence
+  );
+
+  // ⚠️ The canary for the two refusals above, since "does not say X" passes on an empty
+  // string and on a sentence that was deleted.
+  check(
+    "⚠️⚠️ the refusals are refusing something — a sentence that made both claims fails them",
+    /\blost\b/i.test("messages are being lost") &&
+      /\b(disconnect|revoke)\b/i.test("disconnect the other device") &&
+      sentence.length > 120,
+    `canary — the live sentence is ${sentence.length} characters`
+  );
+}
+
+/**
+ * ⛔⛔⛔ D-168 — THE ANSWER TO §7.3.3 CASE 5 MAY ONLY CLAIM ABOUT WHAT IT COMPARED.
+ *
+ * `nav.checked` read *"No changes on your other devices."* until 2026-08-27, and a probe
+ * caught it standing directly UNDER the new alarm — *"Your KEY is in use in another
+ * browser"* — on one screen, in one frame, from one button press.
+ *
+ * ⭐ NEITHER SENTENCE WAS WRONG ABOUT WHAT IT MEASURED. `listSignature()` in `app.js`
+ * compares roots, names, roles, verification and the quarantine count. The other device
+ * had raised §6.3's generation, which is a roster write and NOT a list change — so the
+ * comparison was right, the alarm was right, and the sentence had promoted a claim about
+ * the LIST into a claim about DEVICES. ➡️ **A sentence may only claim about the thing its
+ * own comparison looked at.**
+ *
+ * ⚠️ THE BUTTON KEEPS ITS NAME. `checkForChanges` says where it looks — that is the act,
+ * and round 3 called the older, vaguer label "a mystery". What could not stay is an
+ * ANSWER about devices produced by a comparison of conversations.
+ */
+{
+  const NAMES_A_DEVICE = /\bdevices?\b/i;
+  check(
+    "⛔⛔ the all-clear answer claims about the conversations, which is what it compared",
+    !NAMES_A_DEVICE.test(copy.nav.checked) && !NAMES_A_DEVICE.test(copy.nav.checkedChanged),
+    `${copy.nav.checked} · ${copy.nav.checkedChanged}`
+  );
+  check(
+    "⚠️⚠️ and the detector still catches the sentence it was written for",
+    NAMES_A_DEVICE.test("No changes on your other devices.") &&
+      !NAMES_A_DEVICE.test("No changes to your conversations."),
+    "canary"
+  );
+  // ⭐ The button is allowed to name them — it says where it LOOKS, not what it found.
+  check(
+    "⭐ and the control itself still says where it looks",
+    NAMES_A_DEVICE.test(copy.nav.checkForChanges),
+    copy.nav.checkForChanges
+  );
+}
+
 done();
