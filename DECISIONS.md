@@ -5546,6 +5546,172 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-169. ⭐⭐⭐⭐⭐ His device run of D-168: the alarm reached a browser that held a KEY nobody else held — and the caveat I had written down an hour earlier was the bug
+
+**2026-08-27.** Hannu ran the four steps D-168 shipped with, on three browsers and in both
+languages, and wrote up what he saw. Three of the four steps came back clean. The fourth was a
+defect, and re-reading his account of the third found a second one that his own words describe
+exactly.
+
+#### The larger half: what his run PROVED
+- **Three browsers on one KEY, the panel in all three**, on the conversation screen *and* on the
+  list, in Finnish and in English. §4.2.4 rule 5's drain reaches the person where they are.
+- **Two tabs of one browser: §4.2.2's control, and no panel.** D-168's `forgetBaseline()` holds
+  on a real device — *"This is already open in another tab in this browser"*, with the takeover
+  offered underneath, and nothing about another browser or another device.
+- ⭐⭐ **The fork itself, observed by a person rather than by a probe.** *"Messages from opera go
+  to only chrome private."* That is §5.4's delete-on-collect exactly, and it is the first time
+  the alarm's central claim — *each message from the other person arrives in only one place* —
+  has been confirmed by the user it is written for.
+
+#### Defect 1 — the panel could not change its language
+
+*"In this second test with english texts I had to remove the KEY first because the language
+change did not change that warning panel language as long as it was there."*
+
+`only()` shows the language control **only on screens the client can re-render**, because a
+control that changed half the words would look like it had worked. That promise is made **per
+screen**. `#notices` sits above the screens — deliberately, so a notice survives navigation —
+so a panel fell outside a promise that was being made on the very screen it was sitting on.
+
+➡️ **A GUARANTEE MADE PER CONTAINER DOES NOT COVER WHAT LIVES OUTSIDE THE CONTAINER.**
+
+⚠️ **It was never about `elsewhere`.** All sixteen panels in the client had it, including the
+one that offers to carry on an unfinished pairing and the one that warns the local store is
+blocked. The panel D-168 added is simply the first one anybody had on screen long enough to
+press a menu item underneath.
+
+⭐ **The fix is structural, not a second table.** A parallel list of re-render functions would
+have a row per notice for somebody to forget — D-165's class exactly. Instead `notice()` now
+takes **the words as a function**: a panel that cannot be said again in the other language is
+not a panel the client can make. Sixteen call sites, one shape, and the guard reads the rule
+rather than the shape.
+
+⭐⭐ **And it found a caller handing a finished sentence across.** `failWith` built the failure
+prose and passed it to the resume offer, which meant that sentence could never become the other
+language no matter what the panel did. D-152 had already made exactly this move inside
+`flow/roster.js` — *what travels is what happened, and the words are chosen where they are
+said* — and it reached `app.js` only now. **Closing a class in one module is not closing the
+class**, for the third recorded time (D-088, D-165, this).
+
+#### Defect 2 — "the panel came only in the first try"
+
+*"If I removed my KEY from the two browsers where the same KEY was and typed it back in again
+there was then not any more that panel warning."*
+
+Two different things sit under that sentence, and only one of them is a defect.
+
+**(a) Not a defect — the residual, and it is the price of not polling.** Once a conversation is
+established, ordinary messages are **not roster writes**: §6.3's generation only moves on the
+first message of a session, so nothing fetches the roster, so there is nothing to compare and
+nothing to say. §4.2.4 rule 3 already states this, and §7.3.3 case 5's *"check my other devices
+for changes"* is how a person asks — measured again this session: pressing it brings the alarm
+straight back. ⛔ **Polling stays ruled out**; a periodic touch turns `roster_id` into a daily
+behavioural signal.
+
+**(b) A defect — the baseline did not outlive the session.** The comparison lived in memory, and
+memory is `null` on the first read of every session. So the read **most likely** to be carrying
+another device's work — the person locked the device, the other one wrote while nobody was
+looking, this one comes back and fetches — was the one read that could never say anything.
+
+➡️ **A COMPARISON THAT LIVES ONLY IN MEMORY IS ABSENT EXACTLY WHEN IT IS MOST LIKELY TO BE
+TRUE.**
+
+⭐ **The number was already on this device's disk, in the one store an ending may not clear.**
+§7.3.2 keeps the highest inner version this device has ever adopted in `DURABLE` *precisely* so
+that locking cannot erase what this device has seen, and every version this device produced
+itself passed through that mark on the way. A fetched version above it is a version this device
+did not make — the same claim as before, over a longer span. ⚠️ **No new network call**: the
+five occasions of §7.3.3 are untouched. ⚠️ It came with one stated false positive, and **that
+caveat turned out to be defect 3** — see below.
+
+Proven both ways in a real browser (`probe-elsewhere-return.mjs`): A ends, types the KEY back
+and **is told**; C performs the same ending on a KEY nobody else holds and is told **nothing**.
+
+#### Defect 3 — ⛔⛔⛔ the caveat was the bug, and his opera answer is what found it
+
+I asked which KEY opera held, because his account had three browsers on one KEY *and* opera
+exchanging messages with the other two, which cannot both be true. **Opera held a unique KEY**
+— so the panel that appeared on it was a **false alarm**, and every browser probe written for
+D-168 asserts the peer is told nothing and passes.
+
+An hour earlier I had written into `flow/roster.js`, `ARCHITECTURE.md` and this entry that the
+new baseline came with *"one honest false positive… a crash window and not a routine one"*: the
+high-water mark is recorded **after** the server accepts a write, because §7.3.2 rule 2 forbids
+recording a version this device has not decrypted, so a device interrupted in that window has
+**raised a version it never wrote down**. It is the first thing his data contradicted.
+
+➡️ **A WINDOW IS NOT RARE BECAUSE IT IS SMALL — IT IS RARE OR NOT ACCORDING TO WHAT ELSE
+HAPPENS IN IT.** ARCHITECTURE §4.2.3's *measured* hazard is a store operation caught in flight
+when a phone freezes a background tab; a lost response does it just as well; and a tester who
+force-closes tabs — *"those keys I have made some tests and those have jammed them"* — lives in
+that window. I had reasoned about the width of the gap and not about who walks through it.
+
+⭐⭐ **AND IT WAS ALREADY WRITTEN DOWN — IN THE SENTENCE HANNU APPROVED THE SAME HOUR.**
+*"…rise above the highest it has adopted, **without having raised it**"* has two clauses, and
+the client could only check the first. The second is what a device knows about its own act.
+
+**The fix:** record the roster blob this device is **about to send, before sending it**, in the
+store the ordinary ending may not clear, and treat a fetched blob it recognises as its own as
+what it is. ⭐ **The bytes and never the version number** — matching on the number would let a
+genuine second device's write at that number be read as this device's own attempt, which is a
+false **silence**, and D-168 rules that the worse of the two errors. Proven by mutation: storing
+the number instead of the bytes silences four real detections, including the one that matters
+most — **the loser of a compare-and-swap, which attempted that very number and is still being
+told the truth.**
+
+⚠️ **The reproduction came before the fix and asked rather than confirmed.** Two shapes were
+tried and eliminated first — two overlapping writes from one device, and a read racing a write —
+before the third reproduced it exactly. A guess that had gone straight to a fix would have
+"fixed" a mechanism that was not the one on his screen.
+
+#### Still open — Firefox, and the sentence that is right for the person and useless for the report
+
+*"If I try to TYPE in Firefox the same key that I typed in Chrome, Firefox says 'Something went
+wrong, and this device could not say what.' Firefox private windows do not show that."*
+
+Normal window fails, private window works — so it is **something already stored in that profile**,
+not a capability Firefox lacks. Three hypotheses were eliminated by reading rather than guessing:
+the roster cache is keyed per identity (a foreign blob is never found), `loadInFlight` swallows a
+record it cannot open, and `DURABLE` has existed since the database did, so no profile can be
+missing that store. No Firefox is installed in the build container, so this cannot be reproduced
+here.
+
+➡️ **A GENERIC SENTENCE IS THE RIGHT ANSWER FOR THE PERSON AND A DEAD END FOR THE REPORT** —
+which is why `noteProblem()` exists and why the diagnostics panel carries a `problem` row naming
+the reason. It was built for this and asking for it beats guessing at a fourth hypothesis.
+
+**And it answered.** Three affected KEYs, three identical readings: `problem OperationError ×1`,
+after `key 443 ms, 129 MiB` — so Argon2id completed and the failure is a **WebCrypto AES-GCM
+open on a record already in that profile**. `haamu.app/lab/clear.html` cleared it and all three
+KEYs then worked. His own account of how they got that way: *"those keys I have made some tests
+and those have jammed them."*
+
+⛔⛔ **THE DEFECT IS NOT THE JAMMED RECORD — IT IS THAT ONE UNREADABLE RECORD MAKES THE WHOLE
+IDENTITY UNOPENABLE, WITH A SENTENCE THAT NAMES NOTHING AND OFFERS NOTHING.** The rule for this
+is already written twice in this client and applied at neither of the places that needed it:
+`vault.sweep()` skips a record it cannot open and says why, and `pair.loadInFlight()` catches
+exactly this and returns `null`. The unlock path throws. **D-165's class for the fourth time.**
+
+⏭️ **NEXT, AND NOT FOLDED INTO THIS ONE, because it needs a decision rather than a patch.** The
+cached roster blob may be treated as absent and refetched — that is what a device with no cache
+does, and the fetched roster still meets §7.3.2's mark. **§7.3.2's mark itself may not.** A
+device that cannot read its own high-water mark cannot perform the rollback check, and quietly
+reading that as "no mark" would manufacture the precondition the check exists to catch. Failing
+closed is right and is what happens today; what is wrong is that failing closed currently looks
+like *"something went wrong, and this device could not say what."* That needs a sentence, in two
+languages, and it is Hannu's call which of the two records gets which treatment.
+
+#### One question put back to him rather than answered
+
+His account has three browsers holding a KEY and one of them, opera, exchanging messages with
+the other two — which cannot both be true. If opera held the **other person's** KEY it must
+never have seen the panel, and `probe-elsewhere-browser.mjs` asserts exactly that and passes. So
+either opera held the same eight words as the two Chromes, or there is a false positive worth
+more than everything above. **A report that cannot be true as written is a question, not a
+finding**, and inventing the reading that makes it consistent is how a real defect gets
+explained away.
+
 ### D-168. ⭐⭐⭐⭐ Two devices on one KEY: the client cannot stop it, so it says so — and the guard, the answer beneath it and one word in the unlock screen were all wrong in the same direction
 
 **2026-08-27.** Hannu's ruling on what D-167 found by accident. He asked for the loud version —

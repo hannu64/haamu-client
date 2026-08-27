@@ -791,4 +791,95 @@ section("§12 — no exception reaches the screen as its own message (C #11)");
   );
 }
 
+// ═════════════════════════ D-169 — a panel is above the screens, and must still translate
+
+section("⛔⛔ D-169 — every notice can be said again in the other language");
+
+// ⭐⭐ HANNU FOUND IT WITH D-168's OWN PANEL, 2026-08-27: *"the language change did not
+// change that warning panel language as long as it was there."* `only()` shows the
+// language control only where `RERENDER` can redraw the screen — a control that changed
+// half the words would look like it had worked — and `#notices` is not a screen. It sits
+// ABOVE them, so it fell outside a promise that was being made on the very screen it was
+// sitting on. ➡️ **A GUARANTEE MADE PER CONTAINER DOES NOT COVER WHAT LIVES OUTSIDE THE
+// CONTAINER**, and the answer is not a second table to remember: `notice()` takes the
+// words as a FUNCTION, so a panel that cannot be re-said is not a panel that can be made.
+
+{
+  const src = code("../app/app.js");
+
+  /**
+   * Every `notice(...)` call site, and whether its words arrive as a function.
+   *
+   * ⚠️ THE RULE, NOT THE SHAPE. What matters is that the words are fetched when the
+   * panel is painted rather than when the event happened — so this asks for a callable
+   * and does not care whether it returns a sentence or a descriptor. `clearNotice` and
+   * `paintNotice` carry a capital N and are not call sites of this.
+   */
+  const sites = (text) => [...text.matchAll(/\bnotice\("([a-z-]+)",\s*([\s\S]{0,8})/g)].map((m) => ({ id: m[1], next: m[2] }));
+  const deferred = (site) => /^\(\s*\)\s*=>/.test(site.next);
+
+  const found = sites(src);
+  check("⚠️ the call sites are found at all", found.length >= 15, `${found.length} panels`);
+
+  const literal = found.filter((f) => !deferred(f));
+  check(
+    "⛔⛔ no panel is built from words chosen when the event happened",
+    literal.length === 0,
+    literal.length ? literal.map((f) => f.id).join(", ") : found.map((f) => f.id).join(", ")
+  );
+
+  check(
+    "⚠️⚠️ and the detector still recognises what it forbids",
+    sites('notice("elsewhere", copy.list.elsewhere, { alarm: true });').filter((f) => !deferred(f)).length === 1,
+    "canary — a sentence passed by value fails"
+  );
+
+  // The builder is kept, or there is nothing to re-run.
+  const put = bodyAfter(src, "function notice(id, build) {", "\n}\n");
+  check("a panel put on screen is remembered by id", /liveNotices\.set\(id, build\)/.test(put), "kept for the switch");
+
+  // ⚠️ AND DROPPED WITH THE PANEL. A builder that outlives its panel is re-run by the
+  // next language switch, which would put a cleared notice back on the screen.
+  const cleared = bodyAfter(src, "const clearNotice = (id) => {", "\n};");
+  check("⭐ and forgotten when the panel is cleared", /liveNotices\.delete\(id\)/.test(cleared), "no orphan builders");
+
+  const stopped = bodyAfter(src, "async function stopEverything() {", "\n}\n");
+  check(
+    "⭐⭐ and the whole map goes when the session does",
+    /liveNotices\.clear\(\)/.test(stopped),
+    "a panel from an ended session cannot come back"
+  );
+
+  // The switch itself.
+  const switched = bodyAfter(src, "async function switchTo(choice) {", "\n}\n");
+  check("⛔⛔ the language control re-says the panels", /repaintNotices\(\)/.test(switched), "notices follow the language");
+  check(
+    "⚠️ after `setLanguage`, or it would say them again in the language just left",
+    switched.indexOf("setLanguage(") < switched.indexOf("repaintNotices()"),
+    "order"
+  );
+  check(
+    "⚠️⚠️ the detector still tells that order apart",
+    !(switched.replace("repaintNotices();", "").indexOf("repaintNotices()") >= 0),
+    "canary — with the call removed there is nothing to find"
+  );
+
+  const repaint = bodyAfter(src, "function repaintNotices() {", "\n}\n");
+  check(
+    "and it walks the map in the order it was filled",
+    /for \(const \[id, build\] of liveNotices\)/.test(repaint) && /paintNotice\(id, build\)/.test(repaint),
+    "the column is left as it was"
+  );
+
+  // ⚠️ THE ONE CALLER THAT USED TO HAND A FINISHED SENTENCE ACROSS. D-152's rule about
+  // `flow/roster.js` — what travels is what happened, and the words are chosen where
+  // they are said — reached `app.js` only when this was found.
+  const fail = code("../app/app.js");
+  check(
+    "⭐⭐⭐ and no caller passes a built sentence to a notice-maker",
+    !/offerToResume\(\{[^}]*body:/.test(fail),
+    "the resume offer carries the reason, not the prose"
+  );
+}
+
 done();

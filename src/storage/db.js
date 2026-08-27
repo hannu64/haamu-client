@@ -47,9 +47,14 @@ export const CONVERSATION = "conversation";
 export const MESSAGES = "messages";
 
 /**
- * NOT cleared by the ordinary ending. §7.3.2's high-water mark and nothing else
- * yet — §7.5's unlock record is device unlock state, which the ordinary ending in
- * Kept mode DOES clear, so it belongs in `CONVERSATION` when it lands.
+ * NOT cleared by the ordinary ending. §7.3.2's high-water mark, and — since D-169 —
+ * the fingerprint of the last roster blob this device SENT, which is the only thing
+ * that can tell "another device raised the version" from "I raised it and never heard
+ * back". Both are answers to a question asked on the first read of a session, and the
+ * ordinary ending is exactly what makes that read the whole of what a device knows.
+ *
+ * §7.5's unlock record is device unlock state, which the ordinary ending in Kept mode
+ * DOES clear, so it belongs in `CONVERSATION` when it lands.
  */
 export const DURABLE = "durable";
 

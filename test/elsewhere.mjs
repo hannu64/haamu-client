@@ -30,7 +30,7 @@ import { check, equal, section, done } from "./harness.mjs";
 
 /** A roster row in memory: one blob, one compare-and-swap counter, no crypto. */
 function fakeServer() {
-  const state = { blob: null, version: 0 };
+  const state = { blob: null, version: 0, killNextPut: false };
   const api = {
     async signed(method, path, { bodyBytes } = {}) {
       const body = bodyBytes === undefined ? undefined : JSON.parse(utf8String(bodyBytes));
@@ -49,6 +49,13 @@ function fakeServer() {
         if (body.if_match !== state.version) throw new ApiError(409, "version_conflict");
         state.blob = body.blob;
         state.version += 1;
+        // ⚠️⚠️ THE SERVER HAS COMMITTED AND THE CLIENT NEVER HEARS. ARCHITECTURE §4.2.3's
+        // measured hazard is exactly this — a phone freezing a background tab with a
+        // request in flight — and a lost response does it just as well.
+        if (state.killNextPut) {
+          state.killNextPut = false;
+          throw new Error("the tab was frozen; the response never arrived");
+        }
         return { version: state.version };
       }
       throw new ApiError(405, "method_not_allowed");
@@ -65,7 +72,16 @@ function fakeServer() {
 
 const memStore = () => {
   const m = new Map();
-  return { get: async (k) => (m.has(k) ? m.get(k) : null), set: async (k, v) => void m.set(k, v), delete: async (k) => void m.delete(k) };
+  return {
+    get: async (k) => (m.has(k) ? m.get(k) : null),
+    set: async (k, v) => void m.set(k, v),
+    delete: async (k) => void m.delete(k),
+    // §7.8's two endings, as the two calls that separate them: the ordinary one clears
+    // `CONVERSATION` and leaves `DURABLE` standing, and step 5's `Clear-Site-Data` takes
+    // both. Nothing in `flow/roster.js` calls this; the tests below are the ending.
+    wipe: () => m.clear(),
+    empty: () => m.size === 0,
+  };
 };
 
 /** One phrase, two devices: shared keys, separate caches. §7.2 produces exactly this. */
@@ -254,6 +270,202 @@ section("⚠️⚠️ a document that stopped being a client stops being a witne
   server.bumpCounterOnly();
   await b.check();
   check("⚠️⚠️ §7.3.2 rule 3's mismatch is untouched by it", kinds(b).includes("version_mismatch"), "mismatch still raised");
+}
+
+// ============================================================================
+
+section("⚠️⚠️ D-169 — the baseline survives the lock, because §7.3.2's mark does");
+
+// ⭐⭐ HANNU MEASURED THIS ON A DEVICE, 2026-08-27: *"the panel came only in the first try
+// and stayed until I removed the key but did not come anymore."* The comparison lived in
+// memory, and memory is `null` on the first read of every session — which is exactly the
+// read most likely to be carrying another device's work. The number was already on disk:
+// §7.3.2 keeps the high-water mark in `DURABLE` precisely so that locking cannot erase
+// what this device has seen, and the ordinary ending is forbidden from clearing it.
+
+{
+  const server = fakeServer();
+  // One device, two sessions, one pair of stores — which is what a lock is.
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+  const other = device(server.api, keys);
+
+  const first = mine();
+  await first.create();
+  check("this device made version 1 and wrote it down", !durable.empty(), "high-water mark recorded");
+
+  await other.load({ network: true });
+  check(
+    "⛔⛔ a device with no mark of its own claims NOTHING on its first read",
+    elsewhereIn(kinds(other)) === 0,
+    "a KEY typed into a new browser is not evidence about anybody"
+  );
+
+  await other.addChannel({ root: root(20), name: "twenty", role: "I" });
+
+  // §7.8's ORDINARY ending — and the whole point is which of the two stores it may touch.
+  storage.wipe();
+  check("the ordinary ending took the cached roster", storage.empty(), "conversation store cleared");
+  check("⭐⭐ and §7.3.2 forbids it the mark", !durable.empty(), "durable store kept");
+
+  const back = mine();
+  await back.load({ network: true, reason: rosterFlow.SETUP });
+  check(
+    "⭐⭐⭐ so the first read after the lock CAN say another device wrote",
+    elsewhereIn(kinds(back)) === 1,
+    "elsewhere, from a baseline that outlived the session"
+  );
+}
+
+{
+  // ⚠️⚠️ THE CANARY, AND IT IS WHAT STOPS THE CHECK ABOVE FROM BEING TRUE OF EVERY UNLOCK.
+  // Same shape, same wipe, same fresh session — and nobody else wrote in between. A guard
+  // that fires here would be announcing a second device to every person who locks and
+  // comes back, which is worse than the silence it replaced.
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+
+  const first = mine();
+  await first.create();
+  await first.addChannel({ root: root(21), name: "twenty-one", role: "I" });
+  kinds(first);
+  storage.wipe();
+
+  const back = mine();
+  await back.load({ network: true, reason: rosterFlow.SETUP });
+  check(
+    "⚠️⚠️ and a version this device made itself is not another device",
+    elsewhereIn(kinds(back)) === 0,
+    "locking and coming back to your own work is silent"
+  );
+}
+
+{
+  // ⭐ THE HONEST CONSEQUENCE OF §7.8 STEP 5, which `ui/copy.js` already warns about in as
+  // many words: `Clear-Site-Data` takes the high-water mark too, so the device that comes
+  // back after one has no baseline and cannot claim. That is the same trade the rollback
+  // check makes, stated once here so that a future change cannot quietly assume otherwise.
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+  const other = device(server.api, keys);
+
+  await mine().create();
+  await other.load({ network: true });
+  await other.addChannel({ root: root(22), name: "twenty-two", role: "I" });
+
+  storage.wipe();
+  durable.wipe(); // §7.8 step 5 — the thorough ending, the one that warns
+
+  const back = mine();
+  await back.load({ network: true, reason: rosterFlow.SETUP });
+  check(
+    "⚠️ the thorough ending resets the comparison as well as the rollback check",
+    elsewhereIn(kinds(back)) === 0,
+    "nothing seen, nothing claimed"
+  );
+}
+
+// ============================================================================
+
+section("⛔⛔⛔ D-169 — a device may not accuse ITSELF of being a second device");
+
+// ⭐⭐⭐ HANNU, 2026-08-27, ON A BROWSER HOLDING A KEY NOBODY ELSE HELD. The panel named
+// another browser and another device for his own interrupted write. §7.3.2's high-water
+// mark is recorded AFTER the server accepts a write — rule 2 forbids recording a version
+// this device has not decrypted — so a device killed in that window has RAISED a version
+// it never WROTE DOWN, and every later read finds it and calls it somebody else's.
+//
+// The approved §7.3.1 sentence has two clauses — *"rise above the highest it has adopted,
+// WITHOUT HAVING RAISED IT"* — and until now the client could only check the first.
+
+{
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+
+  const first = mine();
+  await first.create();
+  await first.addChannel({ root: root(30), name: "thirty", role: "I" });
+  kinds(first);
+
+  server.state.killNextPut = true;
+  let threw = false;
+  await first.setGeneration(root(30), 4).catch(() => (threw = true));
+  check("the write reached the server and the answer did not", threw && server.state.version === 3, `server at ${server.state.version}`);
+
+  // The tab is gone. A reload, or the KEY typed back in.
+  const back = mine();
+  await back.load({ network: false });
+  check("⚠️ the cache alone says nothing, as it always did", elsewhereIn(kinds(back)) === 0);
+  await back.check();
+  check(
+    "⛔⛔⛔ AND THE NETWORK READ DOES NOT ACCUSE IT EITHER — those are its own bytes",
+    elsewhereIn(kinds(back)) === 0,
+    "one device, one KEY, no alarm"
+  );
+}
+
+{
+  // ⚠️⚠️ THE CANARY, AND WITHOUT IT THE CHECK ABOVE COULD BE AN OFF SWITCH. Same
+  // interruption, and then a REAL second device writes. The device must still be told.
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+  const other = device(server.api, keys);
+
+  const first = mine();
+  await first.create();
+  await first.addChannel({ root: root(31), name: "thirty-one", role: "I" });
+  kinds(first);
+
+  server.state.killNextPut = true;
+  await first.setGeneration(root(31), 4).catch(() => {});
+
+  await other.load({ network: true });
+  kinds(other);
+  await other.addChannel({ root: root(32), name: "thirty-two", role: "I" });
+
+  const back = mine();
+  await back.load({ network: false });
+  await back.check();
+  check(
+    "⭐⭐ a genuine second device is still announced, interruption or no interruption",
+    elsewhereIn(kinds(back)) === 1,
+    "the silence is one blob wide, not a switch"
+  );
+}
+
+{
+  // ⭐⭐⭐ WHY IT IS THE BLOB AND NOT THE NUMBER. This device attempts version N+1 and is
+  // beaten to it by another device, which makes a DIFFERENT N+1. Comparing numbers would
+  // read its own attempt in somebody else's write and say nothing — a false silence, which
+  // D-168 rules is the worse of the two errors. Two devices cannot produce the same sealed
+  // bytes: `sealRoster` picks a fresh nonce every time.
+  const server = fakeServer();
+  const a = device(server.api, keys);
+  const b = device(server.api, keys);
+
+  await a.create();
+  await b.load({ network: true });
+  kinds(a);
+  kinds(b);
+
+  // Both are holding version 1 and both go to write version 2. `b` gets there first.
+  await b.addChannel({ root: root(33), name: "b's", role: "I" });
+  await a.addChannel({ root: root(34), name: "a's", role: "I" });
+
+  check(
+    "⛔⛔ the loser of the compare-and-swap is told, even though it attempted that very number",
+    elsewhereIn(kinds(a)) === 1,
+    "same version, different bytes, still another device"
+  );
 }
 
 done();

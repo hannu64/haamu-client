@@ -170,10 +170,16 @@ export function openRoster({
   // rise it did not cause came from somewhere else. A document that STOPPED being a client
   // — §4.2.2's `dormant`, which touches nothing and so cannot refresh — slept through an
   // interval it has no evidence about, and the honest answer for the first read after it
-  // wakes is the same as for the first read ever: say nothing. Measured, not reasoned:
-  // `~/lpm-probes/probe-elsewhere-tabs.mjs` fired the notice on a same-browser takeover,
-  // where the sentence would have named a browser and a device for what was a tab — and
-  // §4.2.2 had already handled that case properly, with a control.
+  // wakes is to say nothing. Measured, not reasoned: `~/lpm-probes/probe-elsewhere-tabs.mjs`
+  // fired the notice on a same-browser takeover, where the sentence would have named a
+  // browser and a device for what was a tab — and §4.2.2 had already handled that case
+  // properly, with a control.
+  //
+  // ⚠️ THIS FLAG IS NOT THE BASELINE, IT IS PERMISSION TO USE ONE. Round 2 gave `adopt()`
+  // a second baseline that outlives the session — §7.3.2's high-water mark, on disk — so
+  // "no baseline in memory" and "no evidence at all" stopped being the same state. A
+  // dormant document is still the second one, and this is what says so: it slept through
+  // an interval, and no number on disk covers an interval it did not watch.
   let baselineTrusted = true;
   const warnings = [];
 
@@ -280,7 +286,57 @@ export function openRoster({
     // D-045 puts concurrent multi-device out of scope and §7.3.1 cannot enforce it; a
     // client saying what it saw is all that is left, and a client claiming the absence of
     // what it cannot see would be the one thing worse than saying nothing.
-    if (roster && baselineTrusted && opened.roster.version > roster.version) {
+    // ⚠️⚠️ D-168 ROUND 2 — THE BASELINE SURVIVES THE LOCK, BECAUSE §7.3.2's HIGH-WATER
+    // MARK DOES. `roster` is memory, so it is `null` on the first read of every session,
+    // and the first read of a session is exactly the read most likely to be carrying
+    // another device's work: the person locked this device, the other one wrote while
+    // nobody was looking, and this one comes back and fetches. Comparing against memory
+    // alone, that read is the one read that can never say anything — which is what Hannu
+    // measured on 2026-08-27: *"the panel came only in the first try and stayed until I
+    // removed the key but did not come anymore."* Removing the KEY is §7.8's ordinary
+    // ending; it clears the cached blob and the baseline went with it.
+    //
+    // ⭐ THE NUMBER WAS ALREADY ON THIS DEVICE'S DISK, IN THE ONE STORE THAT ENDING DOES
+    // NOT CLEAR. `hwm` is the highest inner version this device has ever adopted, and
+    // §7.3.2 keeps it in `DURABLE` precisely so that locking cannot erase what this device
+    // has seen. Every version this device itself produced went through `remember()` on the
+    // way (see `write()`'s success path), so `hwm` is an upper bound on this device's own
+    // work — and a fetched version above it is a version this device did not make.
+    //
+    // ⚠️ IT IS THE SAME CLAIM, NOT A WIDER ONE. Memory and the high-water mark answer the
+    // same question — "is this higher than anything I have seen?" — over different spans,
+    // and the sentence in `ui/copy.js` is bounded by that question either way. Nothing
+    // here fetches: §7.3.3's five occasions are untouched, which is what keeps this a
+    // comparison and not the polling D-168 ruled out permanently.
+    //
+    // ⚠️⚠️ AND THE FALSE POSITIVE THAT COMES WITH IT IS CLOSED BELOW, NOT ACCEPTED. It was
+    // written down here as *"a crash window and not a routine one"* for about an hour, and
+    // Hannu's device answered that: he met it on a browser holding a KEY nobody else held.
+    // ➡️ **A WINDOW IS NOT RARE BECAUSE IT IS SMALL — IT IS RARE OR NOT ACCORDING TO WHAT
+    // ELSE HAPPENS IN IT**, and what happens in this one is a phone freezing a background
+    // tab (§4.2.3, measured) and a response that does not come back.
+    //
+    // ⚠️⚠️ AND THE SECOND CLAUSE OF THE RULE, WHICH THE CLIENT COULD NOT CHECK UNTIL NOW.
+    // *"…rise above the highest it has adopted, WITHOUT HAVING RAISED IT"* — and "raised
+    // it" is not the same as "recorded it". The mark below is written AFTER the server
+    // accepts a write, because §7.3.2 rule 2 forbids recording a version this device has
+    // not decrypted; a device killed in that window has raised a version it never wrote
+    // down, and every later read finds it and calls it somebody else's.
+    //
+    // ⭐⭐ NOT A NARROW WINDOW ON THIS PRODUCT. ARCHITECTURE §4.2.3's measured hazard is
+    // precisely a store operation caught in flight when a phone freezes a background tab,
+    // and a lost response does it just as well. Hannu hit it on a browser holding a KEY
+    // NOBODY ELSE HELD (2026-08-27) — the alarm named another browser and another device
+    // for his own interrupted write.
+    //
+    // ⚠️ IT IS THE BLOB AND NOT THE NUMBER, and it has to be. Comparing version numbers
+    // would suppress a REAL second device whose write happens to carry the number this
+    // device also attempted — a false silence, which D-168 rules is the worse of the two
+    // errors. Two devices cannot produce the same sealed bytes: `sealRoster` picks a fresh
+    // nonce, so "these are the bytes I sent" is an exact answer and never an approximate
+    // one. What is stored is a SHA-256 prefix of them, never the blob.
+    const baseline = roster ? roster.version : hwm;
+    if (baseline !== null && baselineTrusted && opened.roster.version > baseline && !(await isOurAttempt(blob))) {
       warnings.push({ kind: "elsewhere", version: opened.roster.version });
     }
 
@@ -327,6 +383,31 @@ export function openRoster({
     if (previous === null || innerVersion > previous) await durable.set(`${k}.hwm`, innerVersion);
   }
 
+  /**
+   * The bytes this device last SENT, so that meeting them again is not a discovery.
+   *
+   * ⚠️⚠️ IT GOES IN `DURABLE` AND IT HAS TO. §7.8's ordinary ending clears the cached
+   * roster, and the read that follows one is exactly the read this answers — the person
+   * removed their KEY, typed it back, and the first fetch is the whole of what the device
+   * knows. A record in `CONVERSATION` would be swept away by the act that needs it.
+   *
+   * ⚠️ WRITTEN BEFORE THE `PUT` AND NEVER AFTER. After is where §7.3.2's mark lives and
+   * why it cannot answer this: the point is to survive the gap between the server
+   * accepting the write and this device hearing that it did.
+   *
+   * ⚠️ A PREFIX, NOT THE BLOB. This is a note to ourselves about our own ciphertext; the
+   * ciphertext itself already has a home in `CONVERSATION` under `local_key`, and there is
+   * no reason for a second copy of it to sit in the store the ending may not clear.
+   */
+  async function recordAttempt(blob) {
+    await durable.set(`${await key}.sent`, await fingerprint(blob));
+  }
+
+  async function isOurAttempt(blob) {
+    const sent = await durable.get(`${await key}.sent`);
+    return typeof sent === "string" && sent === (await fingerprint(blob));
+  }
+
   async function highWaterMark() {
     const n = await durable.get(`${await key}.hwm`);
     return Number.isSafeInteger(n) && n >= 0 ? n : null;
@@ -360,6 +441,10 @@ export function openRoster({
         // and says so. Dropping old tombstones to make room is not permitted.
         throw new RosterFailure("roster_full", err.message, err);
       }
+
+      // ⚠️ BEFORE THE REQUEST LEAVES, because the whole failure this closes is the
+      // request arriving and the answer not coming back.
+      await recordAttempt(sealed.blob);
 
       try {
         const res = await call("PUT", { if_match: outer, blob: b64uEncode(sealed.blob) }, reason);
@@ -449,6 +534,12 @@ export function openRoster({
       const fresh = rosters.emptyRoster(unixSeconds());
       const sealed = await rosters.sealRoster(keys.rosterKey, fresh, { currentSize: rosters.ROSTER_SIZE });
       const body = { pow: "", blob: b64uEncode(sealed.blob) };
+      // ⚠️ THE SAME NOTE AS `write()`'s, AND IT IS HERE BECAUSE THE RULE IS ABOUT SENDING
+      // A BLOB AND NOT ABOUT WHICH METHOD SENDS IT. A create whose response is lost is
+      // safe today only because a device with no high-water mark claims nothing — which is
+      // an accident of another rule, not this one being obeyed. D-165: a rule kept only
+      // where somebody remembered it is not kept.
+      await recordAttempt(sealed.blob);
       try {
         // §5.1's two-round-trip dance, as everywhere: ask, and pay only when the
         // server says what it wants. Here the server always wants it, because a
@@ -715,6 +806,11 @@ export function openRoster({
  * confirming a passphrase guess with one HKDF. The blob beside it is already
  * bound to this identity; the key does not need to name it too.
  */
+/** 128 bits of SHA-256 over the sealed bytes — enough to identify our own ciphertext. */
+async function fingerprint(blob) {
+  return b64uEncode((await sha256(blob)).slice(0, 16));
+}
+
 async function storageKeyPromise(rosterId) {
   return `lpm.roster.${b64uEncode((await sha256(rosterId)).slice(0, 16))}`;
 }

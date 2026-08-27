@@ -492,6 +492,8 @@ async function switchTo(choice) {
   langs.choose(choice, { ghost: isGhost() });
   setLanguage(choice);
   paintCopy();
+  // D-169: `#notices` is above the screens, so `RERENDER` below never reaches it.
+  repaintNotices();
   await RERENDER[shownScreen]?.();
 }
 
@@ -828,7 +830,7 @@ async function withIdentity(phrase, run) {
       // start; `versionchange` means another tab is trying to upgrade and cannot
       // until this one lets go. Unhandled, the first is a blank screen and the
       // second makes the release uninstallable for anyone with two tabs open.
-      onBlocked: () => notice("dbblocked", copy.tabs.blocked, { alarm: true }),
+      onBlocked: () => notice("dbblocked", () => ({ body: copy.tabs.blocked, alarm: true })),
       onVersionChange: () => void haltWith(copy.tabs.upgraded),
       // ⚠️ ARCHITECTURE §4.2.3. Not an error and not an event — a level, raised while
       // the shared store is not answering and lowered when it does.
@@ -1025,7 +1027,7 @@ async function continueGhost() {
       // so a link arriving in a tab that already has one has nowhere to go. Saying
       // so beats silently ignoring it or silently replacing what is here.
       pendingJoin = null;
-      notice("ghostbusy", copy.ghost.linkElsewhere);
+      notice("ghostbusy", () => copy.ghost.linkElsewhere);
     }
     await openConversation({ ...entry, rootBytes: b64uDecode(entry.root, "channel root") });
     return;
@@ -1047,7 +1049,7 @@ async function showGhostStart() {
   // Where there is no census this check cannot be made at all — §7.6 records that
   // as a residual rather than solving it, so the app says which of the two it is
   // instead of showing nothing and implying the stronger one.
-  if (!session.tabs.capabilities.census) notice("nocensus", copy.ghost.noCensus);
+  if (!session.tabs.capabilities.census) notice("nocensus", () => copy.ghost.noCensus);
   only("ghost");
 }
 
@@ -1479,6 +1481,10 @@ async function stopEverything() {
   $("log").replaceChildren();
   $("channels").replaceChildren();
   $("notices").replaceChildren();
+  // ⚠️ D-169: the panels are gone from the screen, so they must be gone from the map
+  // too — a builder left behind here would be re-run by the next language switch and
+  // put a panel from an ended session back on a screen that has no session.
+  liveNotices.clear();
   return stopped;
 }
 
@@ -1890,7 +1896,7 @@ async function absorb(change, quarantine, vault) {
     // irreversible, no quarantine, and a plain notice.
     for (const entry of change.removed) await forgetLocally(entry, vault);
     await quarantine.purge();
-    notice("purged", copy.deletion.purged, { alarm: true });
+    notice("purged", () => ({ body: copy.deletion.purged, alarm: true }));
     return;
   }
   if (change.kind === "deletion") {
@@ -1945,11 +1951,42 @@ const rootBytesOf = (entry) => entry.rootBytes ?? b64uDecode(entry.root, "channe
  */
 function warnNotDurable() {
   if (isGhost()) return;
-  notice("not-durable", copy.pairing.notDurable);
+  notice("not-durable", () => copy.pairing.notDurable);
 }
 
-function notice(id, body, { alarm = false, actions = [] } = {}) {
-  clearNotice(id);
+/**
+ * Every panel that is on screen right now, in the order they were put there.
+ *
+ * ⚠️⚠️ D-169 — `#notices` IS NOT A SCREEN, AND THAT IS WHY IT WAS THE HOLE IN THE
+ * LANGUAGE SWITCH. `only()` shows the control only where `RERENDER` can redraw the
+ * screen — *"a control that changed half the words would look like it had worked"* —
+ * and that guarantee is per SCREEN. A notice sits ABOVE the screens (`index.html`),
+ * so it fell outside the promise on screens where the promise was made: Hannu found
+ * a red §7.3.1 panel still in English under a list that had just become Finnish.
+ *
+ * ➡️ **A GUARANTEE MADE PER CONTAINER DOES NOT COVER WHAT LIVES OUTSIDE THE
+ * CONTAINER.** The fix is not a second `RERENDER` table anybody could forget to add
+ * a row to — it is that `notice()` now takes the WORDS AS A FUNCTION, so a panel
+ * that cannot be re-said in the other language is not a panel this file can make.
+ */
+const liveNotices = new Map();
+
+/**
+ * Put a panel on screen — `build()` is re-run whenever the language changes.
+ *
+ * It returns either the sentence, or `{ body, alarm, actions }` when there is more
+ * than a sentence. It MUST read `copy` at call time rather than close over a string:
+ * that is the whole property, and `test/app-document.mjs` is what keeps it true.
+ */
+function notice(id, build) {
+  liveNotices.set(id, build);
+  paintNotice(id, build);
+}
+
+function paintNotice(id, build) {
+  const made = build();
+  const { body, alarm = false, actions = [] } = typeof made === "string" ? { body: made } : made;
+  document.querySelector(`[data-notice="${id}"]`)?.remove();
   const el = document.createElement("section");
   el.className = `panel${alarm ? " alarm" : ""}`;
   el.dataset.notice = id;
@@ -1975,14 +2012,29 @@ function notice(id, body, { alarm = false, actions = [] } = {}) {
   $("notices").append(el);
 }
 
-const clearNotice = (id) => document.querySelector(`[data-notice="${id}"]`)?.remove();
+const clearNotice = (id) => {
+  liveNotices.delete(id);
+  document.querySelector(`[data-notice="${id}"]`)?.remove();
+};
+
+/**
+ * Say every panel again, in the language just chosen.
+ *
+ * ⚠️ IN INSERTION ORDER, because each re-said panel is appended at the end — walking
+ * the map in the order it was filled leaves the column exactly as it was. A panel
+ * that arrived while the person was reading is not moved by translating it.
+ */
+function repaintNotices() {
+  for (const [id, build] of liveNotices) paintNotice(id, build);
+}
 
 /** §7.3.1a's notice, one panel per held conversation so the choice is per-entry. */
 async function renderQuarantine() {
   const pending = await session.quarantine.pending();
   clearNotice("quarantine");
   if (pending.length === 0) return;
-  notice("quarantine", copy.deletion.suspect(pending.length), {
+  notice("quarantine", () => ({
+    body: copy.deletion.suspect(pending.length),
     actions: [
       {
         note: `${copy.deletion.undoIsLocal} ${copy.deletion.quarantineWindow}`,
@@ -2008,7 +2060,7 @@ async function renderQuarantine() {
         ]),
       },
     ],
-  });
+  }));
 }
 
 /** §7.3.2 rule 3 and §7.3.1 rule 4 — things the roster flow noticed. */
@@ -2020,16 +2072,17 @@ function renderWarnings() {
   // and the drain — run in both modes.
   if (!session?.roster) return;
   for (const w of session.roster.takeWarnings()) {
-    if (w.kind === "version_mismatch") notice("mismatch", copy.list.versionMismatch, { alarm: true });
-    else if (w.kind === "name_unresolved") notice("rename", copy.list.nameUnresolved(w.kept));
-    else if (w.kind === "unexplained_removal") notice("unexplained", copy.list.unexplained(w.count), { alarm: true });
-    else if (w.kind === "role_conflict") notice("role", copy.list.roleConflict);
+    if (w.kind === "version_mismatch") notice("mismatch", () => ({ body: copy.list.versionMismatch, alarm: true }));
+    else if (w.kind === "name_unresolved") notice("rename", () => copy.list.nameUnresolved(w.kept));
+    else if (w.kind === "unexplained_removal")
+      notice("unexplained", () => ({ body: copy.list.unexplained(w.count), alarm: true }));
+    else if (w.kind === "role_conflict") notice("role", () => copy.list.roleConflict);
     // ⚠️⚠️ D-168 — AN ALARM, AND THE ONLY ONE HERE THAT IS NOT ABOUT THE SERVER. The other
     // three report something wrong with what arrived; this reports something ordinary that
     // this product cannot support (§7.3.1 rule 1, D-045) and has never mentioned. Hannu
     // measured the cost of the silence on 2026-08-26: two browsers, one KEY, and the peer's
     // replies reaching only one of them with no error at either end.
-    else if (w.kind === "elsewhere") notice("elsewhere", copy.list.elsewhere, { alarm: true });
+    else if (w.kind === "elsewhere") notice("elsewhere", () => ({ body: copy.list.elsewhere, alarm: true }));
   }
 }
 
@@ -2903,7 +2956,7 @@ $("delete").addEventListener("click", async () => {
   await openHome();
   // ⚠️ SENT, NOT SEEN. §6.7.1 makes this one bounded attempt and the copy may not
   // promise more than it does.
-  notice("closing", told ? copy.closing.sent : copy.closing.notSent, { alarm: told === false });
+  notice("closing", () => ({ body: told ? copy.closing.sent : copy.closing.notSent, alarm: told === false }));
 });
 
 // ------------------------------------------------------------------ §3 pairing
@@ -3147,10 +3200,11 @@ function failWith(err) {
   const paused = !flow.endsThePairing(err);
   const secretShown = !$("linkbox").classList.contains("hidden") || !$("codebox").classList.contains("hidden");
   if (paused && secretShown) {
-    void offerToResume({
-      interrupted: true,
-      body: copy.pairing.failure[err?.reason] ?? copy.pairing.interruptedUnknown,
-    });
+    // ⚠️ D-169 — WHAT HAPPENED, NOT THE SENTENCE ABOUT IT. This handed `offerToResume`
+    // a finished string, which is a sentence in whichever language was in force when it
+    // was built and can never become the other one. D-152 made exactly this move inside
+    // `flow/roster.js`: the reason travels, and the words are chosen where they are said.
+    void offerToResume({ interrupted: true, failure: err?.reason ?? "" });
     return;
   }
 
@@ -3487,7 +3541,7 @@ let busyPairing = false;
  */
 async function followLink(link) {
   if (busyPairing) {
-    notice("linkbusy", copy.openLink.busy);
+    notice("linkbusy", () => copy.openLink.busy);
     return;
   }
   if (!session) {
@@ -3500,7 +3554,7 @@ async function followLink(link) {
   if (isGhost()) {
     if (ghostInert) return;
     if (await session.ghost.channel()) {
-      notice("ghostbusy", copy.ghost.linkElsewhere);
+      notice("ghostbusy", () => copy.ghost.linkElsewhere);
       await backToStart();
       return;
     }
@@ -3740,7 +3794,8 @@ async function offerToAbandon() {
   // merely opened somebody else's link. That is a message arriving at a person it
   // is not about, which is exactly how it read to the first person who saw it.
   const initiator = held.role === pairings.ROLE_INITIATOR;
-  notice("inflight", initiator ? copy.pairing.inflight.made : copy.pairing.inflight.opened, {
+  notice("inflight", () => ({
+    body: initiator ? copy.pairing.inflight.made : copy.pairing.inflight.opened,
     actions: [
       {
         buttons: [
@@ -3754,7 +3809,7 @@ async function offerToAbandon() {
         ],
       },
     ],
-  });
+  }));
 }
 
 /**
@@ -3775,7 +3830,7 @@ async function offerToAbandon() {
  * ⚠️ THE SECOND BUTTON SENDS §3.4.1's DELETE AND THE FIRST DOES NOT. Rule 6 makes
  * that DELETE a MUST when the person declines; carrying on is not declining.
  */
-async function offerToResume({ interrupted = false, body = null } = {}) {
+async function offerToResume({ interrupted = false, failure = null } = {}) {
   const storage = pairingStore();
   if (!storage) return;
   // D-165: §3.4.1b rule 6 follows rule 4 — an expired record owes a `DELETE` before it goes.
@@ -3785,19 +3840,21 @@ async function offerToResume({ interrupted = false, body = null } = {}) {
   const initiator = held.role === pairings.ROLE_INITIATOR;
   // ⚠️ THREE SITUATIONS NOW, BECAUSE THERE ARE THREE CALLERS, AND EACH KNOWS SOMETHING
   // THE OTHERS DO NOT. At unlock the browser really did close. From `failWith` it did
-  // not — feedback 16. And when the invite link is still on screen (`body`), the
+  // not — feedback 16. And when the invite link is still on screen (`failure`), the
   // reassurance is redundant: the person can SEE the link, so the notice needs to say
   // only what happened and offer the two buttons.
-  const said =
-    body ??
-    (interrupted
-      ? initiator
-        ? copy.pairing.resume.interruptedMade
-        : copy.pairing.resume.interruptedOpened
-      : initiator
-        ? copy.pairing.resume.made
-        : copy.pairing.resume.opened);
-  notice("resume", said, {
+  const said = () =>
+    failure !== null
+      ? (copy.pairing.failure[failure] ?? copy.pairing.interruptedUnknown)
+      : interrupted
+        ? initiator
+          ? copy.pairing.resume.interruptedMade
+          : copy.pairing.resume.interruptedOpened
+        : initiator
+          ? copy.pairing.resume.made
+          : copy.pairing.resume.opened;
+  notice("resume", () => ({
+    body: said(),
     actions: [
       {
         buttons: [
@@ -3818,7 +3875,7 @@ async function offerToResume({ interrupted = false, body = null } = {}) {
         ],
       },
     ],
-  });
+  }));
 }
 
 /**
