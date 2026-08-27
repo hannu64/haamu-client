@@ -70,12 +70,38 @@ function fakeServer() {
   return { state, api, bumpCounterOnly };
 }
 
+const { identityDigest } = await import("../src/storage/vault.js");
+
 const memStore = () => {
   const m = new Map();
+  // D-170: the keys whose record EXISTS and will not open — another identity's, or
+  // damaged. `storage/vault.js` answers this with `attempt`; a `Map` has to be told.
+  const jammed = new Set();
   return {
-    get: async (k) => (m.has(k) ? m.get(k) : null),
+    // ⚠️ IT THROWS ON A JAMMED KEY, BECAUSE `storage/vault.js`'s `get` DOES. A fake
+    // whose `get` sailed past the case the fix is about would let the fix be reverted
+    // with every check still green.
+    get: async (k) => {
+      if (jammed.has(k)) throw new Error("fake: this record does not open under this local_key");
+      return m.has(k) ? m.get(k) : null;
+    },
     set: async (k, v) => void m.set(k, v),
     delete: async (k) => void m.delete(k),
+
+    /**
+     * The three-state read `storage/vault.js` grew for D-170, over a Map.
+     *
+     * ⚠️ `found: true, ours: false` IS THE STATE THE WHOLE FIX IS ABOUT and a fake
+     * that could not produce it would be a fake that agrees with the code by being
+     * unable to disagree.
+     */
+    attempt: async (k) => {
+      if (jammed.has(k)) return { found: true, ours: false, value: null };
+      if (!m.has(k)) return { found: false, ours: false, value: null };
+      return { found: true, ours: true, value: m.get(k) };
+    },
+    jam: (k) => void jammed.add(k),
+    unjam: (k) => void jammed.delete(k),
     // §7.8's two endings, as the two calls that separate them: the ordinary one clears
     // `CONVERSATION` and leaves `DURABLE` standing, and step 5's `Clear-Site-Data` takes
     // both. Nothing in `flow/roster.js` calls this; the tests below are the ending.
@@ -466,6 +492,102 @@ section("⛔⛔⛔ D-169 — a device may not accuse ITSELF of being a second de
     elsewhereIn(kinds(a)) === 1,
     "same version, different bytes, still another device"
   );
+}
+
+// ============================================================================
+
+section("⛔⛔ D-170 — an unreadable record is not an absent one, and only ONE of them may be treated as one");
+
+// ⭐⭐ HANNU MET THIS ON A DEVICE, 2026-08-27: three of seven KEYs would not open in one
+// Firefox profile, and the whole of what the product could tell him was *"Something went
+// wrong, and this device could not say what."* The refusal was CORRECT — see below — and
+// indistinguishable from a crash, which is the part that was wrong.
+
+{
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+
+  const first = mine();
+  await first.create();
+  // The roster cache is a copy of something the server still holds, so a device that
+  // cannot read it is in a state it already knows how to be in: the state every new
+  // device is in.
+  const k = `lpm.roster.${await identityDigest(keys.rosterId)}`;
+  storage.jam(`${k}.blob`);
+  // ⚠️ CAUGHT, so that reverting this to `get` reads as a named failure rather than
+  // killing the runner — and so the two halves of D-170's split are checked the same
+  // way, one asserting a refusal and one asserting the absence of a refusal.
+  let offline = "(threw)";
+  try {
+    offline = await mine().load();
+  } catch {
+    /* left as "(threw)" */
+  }
+  equal("⭐ a cached roster that will not open reads as NO cached roster", String(offline), "null");
+  const online = await mine().load({ network: true, reason: rosterFlow.SETUP });
+  check("⭐⭐ so the caller fetches, exactly as a new device does, and the person sees their list",
+    online !== null && online.channels.length === 0, "refetched");
+  storage.unjam(`${k}.blob`);
+}
+
+{
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+  await mine().create();
+
+  const k = `lpm.roster.${await identityDigest(keys.rosterId)}`;
+  durable.jam(`${k}.hwm`);
+
+  // ⛔⛔ §7.3.2 SAYS THE OPPOSITE ABOUT ITS OWN MARK: *"a device unlocking with no local
+  // history has no high-water mark, which is exactly where the attack aims."* Reading an
+  // unreadable mark as "no mark" would not be recovering from damage — it would be
+  // manufacturing the rollback precondition, quietly, on the unlock path, every time.
+  let raised = null;
+  try {
+    await mine().load({ network: true, reason: rosterFlow.SETUP });
+  } catch (err) {
+    raised = err;
+  }
+  check("⛔⛔ an unreadable high-water mark REFUSES — it is not read as an absent one", raised !== null);
+  equal("⭐⭐ and it refuses by NAME, so the sentence can say which thing is damaged",
+    raised?.reason ?? "(none)", "record_unreadable");
+  equal("⭐ naming the record itself, for the panel a tester reads out", raised?.which ?? "(none)", "hwm");
+
+  durable.unjam(`${k}.hwm`);
+  const fine = await mine().load({ network: true, reason: rosterFlow.SETUP });
+  check("⚠️ and the refusal is the damage's and not a latch — an intact mark opens", fine !== null);
+}
+
+{
+  // ⚠️ THE SAME RULE FOR THE SAME STORE. D-169's note about this device's own last write
+  // lives in `DURABLE` beside the mark; a device that cannot read it can check neither
+  // clause of §7.3.1's sentence, and has no third answer available that is honest.
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+  const a = mine();
+  await a.create();
+
+  const other = device(server.api, keys);
+  await other.load({ network: true });
+  await other.addChannel({ root: root(4), name: "theirs", role: "I" });
+
+  const k = `lpm.roster.${await identityDigest(keys.rosterId)}`;
+  durable.jam(`${k}.sent`);
+  let raised = null;
+  try {
+    await a.check();
+  } catch (err) {
+    raised = err;
+  }
+  equal("⛔ the note about our own last write refuses in the same way and for the same reason",
+    raised?.reason ?? "(none)", "record_unreadable");
+  equal("and names itself too", raised?.which ?? "(none)", "sent");
 }
 
 done();

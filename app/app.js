@@ -837,7 +837,14 @@ async function withIdentity(phrase, run) {
       onSlow: (slow) => void storeStalled(slow),
     });
     const vault = vaults.openVault({ db, localKey: keys.localKey });
-    const quarantine = quarantineFlow.openQuarantine({ storage: vault.conversation });
+    // ⚠️⚠️ WHICH IDENTITY'S RECORDS THESE ARE, SAID IN THE NAME AND NOT ONLY IN THE
+    // KEY THEY ARE SEALED UNDER (D-170). One browser is one database; `vault` makes
+    // a record unreadable to another identity and does nothing to stop one
+    // addressing it. Two records were named for the browser rather than the
+    // identity, and both faults were the same fault: the quarantine list threw on
+    // the unlock path, and the in-flight pairing record was overwritten.
+    const recordScope = await vaults.identityDigest(keys.rosterId);
+    const quarantine = quarantineFlow.openQuarantine({ storage: vault.conversation, scope: recordScope });
     const roster = rosterFlow.openRoster({
       api,
       keys,
@@ -862,7 +869,7 @@ async function withIdentity(phrase, run) {
     });
     opened = {
       mode: "kept",
-      keys, db, vault, roster, quarantine, tabs,
+      keys, db, vault, roster, quarantine, tabs, recordScope,
       backend: vault.conversation,
       pickleKey: keys.pickleKey,
       messages: vault.messages,
@@ -894,6 +901,16 @@ async function withIdentity(phrase, run) {
       await showDormant();
       return;
     }
+
+    // ⚠️⚠️ D-170's TWO MIGRATIONS, AND THEY ARE BELOW THE DORMANT RETURN ON PURPOSE.
+    // §4.2.2 rule 1 says a dormant document "writes nothing to the store", and these
+    // write — so they belong here, with the other once-per-open housekeeping, and not
+    // beside the construction they are about. Each moves ONE record from a name every
+    // identity in this browser shared onto this identity's own, and each leaves a
+    // record it cannot open exactly where it is, because that record is another
+    // identity's and not this one's to remove.
+    await quarantineFlow.adoptLegacy(vault.conversation, recordScope);
+    await flow.adoptLegacyInFlight(vault.conversation, recordScope);
 
     // §6.6 and §7.3.1a, both on the same occasion and for the same reason: these
     // are the only two timers in the client, they both need `local_key`, and the
@@ -943,11 +960,68 @@ async function withIdentity(phrase, run) {
     await offerToResume();
     await openHome();
   } catch (err) {
+    // ⚠️ READ BEFORE THE CLOSE, USED AFTER IT. `recordScope` is a prefix of a hash of
+    // `roster_id` and no part of `K_master`, so holding it across a failed unlock
+    // discloses nothing — and it is the only thing the way out below needs, because
+    // deleting a record by name needs no key. That is the whole reason there can be
+    // a way out at all: the person is locked out precisely because `local_key` will
+    // not open these rows.
+    const scope = opened?.recordScope ?? null;
     opened?.tabs?.close();
     opened?.db?.close();
     only("enter");
     text("enter-note", describeIdentity(err));
+    if (err?.reason === "record_unreadable" && scope) offerToForgetLocalHistory(scope);
   }
+}
+
+/**
+ * §7.3.2's mark will not open, so this device cannot perform the rollback check and
+ * refuses to go on. The refusal is right; being unable to do anything about it is not.
+ *
+ * ⛔⛔ THE BUTTON DELETES A SECURITY PROTECTION AND THE PANEL SAYS SO IN THE WORDS
+ * `ending.thoroughConfirm` USES FOR THE SAME LOSS (D-170). It is offered rather than
+ * done, and the alternative to offering it is a person permanently unable to open
+ * their own KEY in this browser with no way to find out why — which is what Hannu
+ * met, and the only way out he had was a diagnostic page nobody else has.
+ *
+ * ⚠️ IT REACHES FOR THE DATABASE DIRECTLY, AND HAS TO. There is no session: the
+ * unlock threw, `K_master` is gone with it, and no vault can be opened. `db.delete`
+ * needs neither — only the name, which contains this identity's digest and so is
+ * this identity's row and nobody else's.
+ *
+ * ⚠️ A PANEL AND NOT A LINE OF TEXT, so that D-169's rule holds: it is built by a
+ * function, so `repaintNotices()` can say it again in the other language.
+ */
+function offerToForgetLocalHistory(scope) {
+  notice("damaged", () => ({
+    body: copy.unlock.damaged.body,
+    alarm: true,
+    actions: [
+      {
+        note: copy.unlock.damaged.note,
+        buttons: [
+          {
+            label: copy.unlock.damaged.control,
+            onClick: async () => {
+              let db = null;
+              try {
+                db = await dbs.openDatabase();
+                await rosterFlow.forgetLocalHistory(db, scope);
+                clearNotice("damaged");
+                text("enter-note", copy.unlock.ask);
+              } catch (err) {
+                noteProblem(err);
+                text("enter-note", describeIdentity(err));
+              } finally {
+                db?.close();
+              }
+            },
+          },
+        ],
+      },
+    ],
+  }));
 }
 
 // ------------------------------------------------------------- §7.6 Ghost mode
@@ -1168,7 +1242,12 @@ const isGhost = () => session?.mode === "ghost";
  * `local_key` until a phrase has been typed, so nothing can be sealed — and nothing
  * needs sealing, because no pairing can be started from the gate.
  */
-const pairingStore = () => (session?.mode === "kept" ? session.vault?.conversation : undefined);
+// ⚠️⚠️ SCOPED, BECAUSE IN KEPT MODE THIS IS INDEXEDDB AND THE RECORD'S NAME WAS THE
+// SAME FOR EVERY IDENTITY IN THE BROWSER (D-170) — see `flow/pair.js`'s `scopedStore`.
+// Ghost is `undefined` here on purpose and always was: `flow/pair.js` then uses
+// `sessionStorage`, which is per tab and so already one identity's.
+const pairingStore = () =>
+  session?.mode === "kept" ? flow.scopedStore(session.vault?.conversation, session.recordScope) : undefined;
 
 // ---------------------------------------------------- ROADMAP step 9, between tabs
 
@@ -4202,6 +4281,11 @@ const measurements = { fallback: null, boot: null, link: null, proof: null, prob
  */
 function noteProblem(err) {
   let name = err?.reason ?? (err?.status ? `${err.status} ${err.code ?? ""}`.trim() : err?.name);
+  // ⚠️ D-170 — WHICH RECORD, WHEN THE REASON ALONE DOES NOT SAY. Hannu's Firefox
+  // panel read `OperationError ×1` and there was no route from it to a record; the
+  // reason is the fix for that, and `which` is what makes the next report name the
+  // row. It is `hwm` or `sent` and carries nothing of the record's contents.
+  if (typeof err?.which === "string" && err.which) name = `${name}/${err.which}`;
   // ⚠️⚠️ CHANGING YOUR MIND IS NOT A PROBLEM. Cancelling a pairing and abandoning
   // a link both unwind by throwing, because that is how you stop work that is
   // already running — but an exception used as control flow is not a fault, and

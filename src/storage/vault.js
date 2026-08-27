@@ -31,7 +31,9 @@
 //     `local_key`, exactly as they hold everything else (§7.3.1, §11).
 
 import * as aead from "../crypto/aead.js";
+import { b64uEncode } from "../crypto/b64u.js";
 import { utf8Bytes, utf8String } from "../crypto/bytes.js";
+import { sha256 } from "../crypto/hash.js";
 import { CONVERSATION, DURABLE, ENDING_CLEARS, MESSAGES, STORES, WriteConflict, prefixRange } from "./db.js";
 
 /** §6.6: a client deletes a message 24 hours after it FIRST RECEIVED it. */
@@ -43,6 +45,41 @@ export const MESSAGE_TTL_S = 24 * 60 * 60;
  * handful in a row is a bug rather than contention.
  */
 export const MAX_APPEND_ATTEMPTS = 8;
+
+/**
+ * The part of a record's key that says WHOSE it is.
+ *
+ * ⚠️⚠️ ENCRYPTING PER IDENTITY IS NOT ISOLATING PER IDENTITY, AND THIS FILE READ AS
+ * THOUGH IT WERE UNTIL D-170. One browser holds ONE database, and `openVault` hands
+ * out a `conversation` and a `durable` that are this identity's only in the sense
+ * that they are sealed under its `local_key`. **The address space is shared by every
+ * identity in the browser.** Two records were named without this digest in them —
+ * `lpm.quarantine` and the in-flight pairing record — so a second KEY in the same
+ * browser addressed the first one's row, and:
+ *
+ *   • the quarantine read THREW, on the unlock path, so the second identity could
+ *     not open at all — a hard lockout with a sentence that named nothing; and
+ *   • the pairing record was OVERWRITTEN, destroying the private key of a pairing
+ *     in flight on the other identity, silently.
+ *
+ * Both reproduced against this code before either was fixed —
+ * `~/lpm-probes/probe-two-identities-one-browser.mjs`.
+ *
+ * ➡️ **A KEY THAT DOES NOT NAME THE IDENTITY IS A KEY EVERY IDENTITY OWNS.** The
+ * AAD below binds the store and the record's name, which makes "it opened" a
+ * statement about this row — it was never a statement about whose row it is, and
+ * nothing else was doing that job.
+ *
+ * ⚠️ It is a PREFIX OF A HASH of `roster_id`, which is already public to the server
+ * (§7.3.3), so it discloses nothing to an examiner that the database's mere
+ * existence does not. It is deliberately the same digest `flow/roster.js` has always
+ * used, so that its keys do not move and §7.3.2's high-water mark survives this
+ * change — a mark that moved would be a mark that vanished, which is the one thing
+ * §7.3.2 may not do.
+ */
+export async function identityDigest(rosterId) {
+  return b64uEncode((await sha256(rosterId)).slice(0, 16));
+}
 
 /**
  * §0.2's AEAD rule reaches here: the IV is inside `seal()` and no caller can pick
@@ -90,6 +127,34 @@ function records(db, store, localKey) {
       const blob = await db.get(store, key);
       if (!blob) return null;
       return JSON.parse(utf8String(await aead.open(localKey, blob, slot(store, key))));
+    },
+
+    /**
+     * `get`, for a caller that has decided what an UNREADABLE record means.
+     *
+     * ⚠️⚠️ `get` THROWS, AND THAT IS RIGHT FOR EVERY CALLER THAT HAS NOT DECIDED.
+     * A record that does not open is not an empty record — reading it as one is how
+     * a rollback guard becomes no guard — so the default has to be the loud one and
+     * this has to be the exception a caller asks for by name (D-170).
+     *
+     * Three answers, not two: `{ found: false }` is nothing there, `{ ours: true }`
+     * is a record this identity can read, and `{ found: true, ours: false }` is a
+     * record that exists and is not this identity's — another KEY's, or damaged.
+     * The middle case is the one a two-state answer loses.
+     *
+     * ⚠️ A STORE THAT IS NOT ANSWERING STILL THROWS. `db.get` is outside the `try`
+     * on purpose: ARCHITECTURE §4.2.3's blocked store is a level the app raises, not
+     * a record it may treat as foreign, and swallowing it here would report an
+     * unreachable database as somebody else's data.
+     */
+    async attempt(key) {
+      const blob = await db.get(store, key);
+      if (!blob) return { found: false, ours: false, value: null };
+      try {
+        return { found: true, ours: true, value: JSON.parse(utf8String(await aead.open(localKey, blob, slot(store, key)))) };
+      } catch {
+        return { found: true, ours: false, value: null };
+      }
     },
     async set(key, value) {
       await db.put(store, key, await aead.seal(localKey, utf8Bytes(JSON.stringify(value)), slot(store, key)));

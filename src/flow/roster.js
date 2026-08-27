@@ -35,6 +35,8 @@
 // passphrase, bypassing §11's locked-device row entirely.
 
 import { b64uDecode, b64uEncode } from "../crypto/b64u.js";
+import { CONVERSATION, DURABLE } from "../storage/db.js";
+import { identityDigest } from "../storage/vault.js";
 import * as epochs from "../protocol/epoch.js";
 import * as passphrase from "../protocol/passphrase.js";
 import * as rosters from "../protocol/roster.js";
@@ -404,13 +406,52 @@ export function openRoster({
   }
 
   async function isOurAttempt(blob) {
-    const sent = await durable.get(`${await key}.sent`);
+    const sent = readable(await durable.attempt(`${await key}.sent`), "sent");
     return typeof sent === "string" && sent === (await fingerprint(blob));
   }
 
   async function highWaterMark() {
-    const n = await durable.get(`${await key}.hwm`);
+    const n = readable(await durable.attempt(`${await key}.hwm`), "hwm");
     return Number.isSafeInteger(n) && n >= 0 ? n : null;
+  }
+
+  /**
+   * ⛔⛔ A RECORD IN `DURABLE` THAT WILL NOT OPEN IS NOT AN ABSENT RECORD, AND THE
+   * WHOLE OF §7.3.2 TURNS ON THE DIFFERENCE (D-170).
+   *
+   * "A device unlocking with no local history has no high-water mark, which is
+   * exactly where the attack aims" — the section says so itself. So a client that
+   * met an unreadable mark and read it as *no mark* would not be recovering from a
+   * damaged record; it would be **manufacturing the one precondition the rollback
+   * attack needs**, quietly, on the unlock path, every time.
+   *
+   * ⚠️ FAILING CLOSED IS THEREFORE RIGHT AND WAS ALREADY WHAT HAPPENED. What was
+   * wrong is that it arrived as a bare `OperationError` from WebCrypto and reached
+   * the person as *"Something went wrong, and this device could not say what"* — a
+   * sentence that is correct for a user and a dead end for the report. It now has a
+   * reason, so `ui/copy.js` can say which thing is damaged and `app.js` can offer
+   * the one way out, and `which` reaches the diagnostics row so the NEXT occurrence
+   * arrives as evidence rather than as a mystery.
+   *
+   * ⚠️ THE ROSTER CACHE IS DELIBERATELY NOT ROUTED THROUGH HERE. It is a copy of
+   * something the server still holds; treating it as absent costs one fetch and no
+   * safety, and `load()` below says so at the one place that decides it.
+   */
+  function readable(record, which) {
+    if (record.found && !record.ours) {
+      const failure = new RosterFailure(
+        "record_unreadable",
+        `§7.3.2: this device's ${which} record will not open under its own local_key, and a mark ` +
+          `that cannot be read may not be treated as a mark that is absent`
+      );
+      // ⚠️ WHICH RECORD, ON THE DIAGNOSTICS ROW AND NOT IN THE SENTENCE (D-085,
+      // D-170). Hannu's Firefox reading said `OperationError ×1` and there was no
+      // way to get from it to a record; the panel is what a tester reads out, and
+      // two more characters on it is the difference between a report and a mystery.
+      failure.which = which;
+      throw failure;
+    }
+    return record.value;
   }
 
   // -------------------------------------------------------------- the writes
@@ -570,9 +611,19 @@ export function openRoster({
      */
     async load({ network = false, reason = SETUP } = {}) {
       const k = await key;
-      const cached = await storage.get(`${k}.blob`);
-      if (cached) {
-        return adopt(b64uDecode(cached.blob, "cached roster"), Number(cached.outer ?? 0));
+      // ⚠️⚠️ A CACHED BLOB THAT WILL NOT OPEN IS TREATED AS NO CACHED BLOB, AND THIS IS
+      // THE ONE RECORD IN THIS FILE THAT MAY BE (D-170). It is a local copy of
+      // something the server still holds, so "absent" is a state this device knows
+      // how to be in — it is the state every new device starts in — and the caller
+      // above already answers `null` by fetching. §7.3.2's mark is NOT like this and
+      // is not treated like it: see `readable()`.
+      //
+      // ⭐ IT ALSO HEALS. `remember()` writes this record on the next successful
+      // fetch, over the row that would not open, so the damage costs one fetch once
+      // rather than a fetch on every launch forever.
+      const cached = await storage.attempt(`${k}.blob`);
+      if (cached.ours && cached.value) {
+        return adopt(b64uDecode(cached.value.blob, "cached roster"), Number(cached.value.outer ?? 0));
       }
       if (!network) return null;
       return fetch(reason);
@@ -811,8 +862,42 @@ async function fingerprint(blob) {
   return b64uEncode((await sha256(blob)).slice(0, 16));
 }
 
+/**
+ * The way out of an unreadable `DURABLE` record, and the only one there is.
+ *
+ * ⛔⛔ IT DELETES §7.3.2's ROLLBACK PROTECTION, WHICH IS WHY NOTHING CALLS IT
+ * WITHOUT BEING ASKED (D-170). After this the next fetch is adopted as the new
+ * baseline, so a server rolling the roster back at that moment is not caught — the
+ * state §7.3.2 calls *"a device unlocking with no local history"*, entered on
+ * purpose instead of by accident. The copy has to say that in those words.
+ *
+ * ⚠️ IT NEEDS NO KEY, AND THAT IS THE POINT. The person is locked out precisely
+ * because `local_key` will not open these rows; a way out that required reading
+ * them would not be one. Deleting by NAME is safe here for a reason that does not
+ * generalise and must not be copied to the message store: these three names each
+ * contain `identityDigest(roster_id)`, so a row at one of them was written by this
+ * KEY and no other. `vault.js`'s rule — never delete what you cannot read — is
+ * about rows whose owner is unknown, and the owner of these is in the address.
+ *
+ * ⚠️ The cached blob goes with them. It is not the problem and it costs one fetch,
+ * and leaving one damaged record behind after the person pressed the button is how
+ * they end up pressing it twice.
+ */
+export async function forgetLocalHistory(db, scope) {
+  const k = `lpm.roster.${scope}`;
+  await db.delete(DURABLE, `${k}.hwm`);
+  await db.delete(DURABLE, `${k}.sent`);
+  await db.delete(CONVERSATION, `${k}.blob`);
+}
+
 async function storageKeyPromise(rosterId) {
-  return `lpm.roster.${b64uEncode((await sha256(rosterId)).slice(0, 16))}`;
+  // ⚠️ THE DIGEST COMES FROM `storage/vault.js` AND IS NOT COMPUTED AGAIN HERE
+  // (D-170). It is the part of a record's name that says whose record it is, and
+  // three files now need it; two derivations of one value is the defect class this
+  // project keeps finding. The bytes are unchanged, which they must be — these keys
+  // hold §7.3.2's high-water mark, and a mark at a new address is a mark that is
+  // gone. `test/storage.mjs` pins the string.
+  return `lpm.roster.${await identityDigest(rosterId)}`;
 }
 
 /**

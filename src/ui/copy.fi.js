@@ -406,6 +406,13 @@ export const FI = {
   "unlock.memory": "Tämän laitteen teho tai muisti ei riitä AVAIMESI avaamiseen.",
   "unlock.rateLimited": "Liian monta yritystä tästä verkosta. Odota tunti ja yritä uudelleen.",
   "unlock.unknown": "Jokin meni vikaan, eikä tämä laite osannut kertoa mikä.",
+  // ⛔⛔ D-170. Sama pari kuin `ending.thoroughConfirm`ssa: molemmat nollaavat saman
+  // tarkistuksen, joten toisen lauseen sanat ovat tarkoituksella samat kuin siellä.
+  "unlock.damaged.body": "Tässä selaimessa on tälle AVAIMELLE jotain, mitä se ei saa auki. Juuri sen avulla tämä laite huomaa vanhentuneen keskustelulistan, joten se ei jatka ilman sitä.",
+  "unlock.damaged.note": "Kun poistat sen, pääset avaamaan normaalisti. Se nollaa tarkistuksen, joka huomaisi vanhentuneen keskustelulistan. Itse listasi on turvassa AVAIMESI takana ja palaa, kun kirjoitat sen.",
+  "unlock.damaged.control": "Poista se ja avaa",
+  "roster.failure.record_unreadable": "Tässä selaimessa on tälle AVAIMELLE jotain, mitä se ei saa auki. Juuri sen avulla tämä laite huomaa vanhentuneen keskustelulistan, joten se ei jatka ilman sitä.",
+
   "unlock.stale": "Palvelin tarjosi vanhempaa keskustelulistaa kuin tämä laite on jo nähnyt. Näin ei pitäisi käydä. Täällä ei ole muutettu mitään; yritä myöhemmin uudelleen äläkä muodosta mitään pariliitosta uudelleen kanavaa pitkin, josta et ole varma.",
 
   // ── verification

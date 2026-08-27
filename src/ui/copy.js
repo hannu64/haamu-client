@@ -1093,6 +1093,34 @@ export const unlock = {
   // most likely to reach somebody on a device nobody here has ever seen.
   unknown: "Something went wrong, and this device could not say what.",
 
+  // ⛔⛔ §7.3.2's MARK, DAMAGED — AND THE ONE PLACE THIS PRODUCT MAY NOT SAY
+  // "SOMETHING WENT WRONG" (D-170). Hannu met this on a real device and the whole of
+  // what it told him was `unknown` above, which named nothing and offered nothing;
+  // three of his seven KEYs would not open in one browser and the only way out he
+  // had was a diagnostic page nobody else has.
+  //
+  // ⚠️ REFUSING IS RIGHT AND IS NOT WHAT NEEDED FIXING. An unreadable high-water mark
+  // read as "no mark" is §7.3.2's rollback precondition, manufactured on the unlock
+  // path — see `flow/roster.js`'s `readable()`. What was wrong is that a correct
+  // refusal was indistinguishable from a crash.
+  //
+  // ⚠️ THE SECOND SENTENCE OF `note` IS `ending.thoroughConfirm`'s, IN ITS WORDS, and
+  // that is deliberate: the two controls do the same thing to the same protection, so
+  // they are a pair and neither may change alone. D-150's ruling stands for both —
+  // shortening a true sentence is safe; deleting the only true sentence about a
+  // security downgrade is not.
+  damaged: {
+    body:
+      "This browser is holding something for this KEY that it cannot open. It is what this " +
+      "device uses to notice an out-of-date conversation list, so it will not go on without it.",
+
+    note:
+      "Deleting it lets you open normally. It resets the check that would notice an out-of-date " +
+      "conversation list. Your list itself is safe under your KEY and comes back when you type it.",
+
+    control: "Delete it and open",
+  },
+
   // §7.3.2 rule 2. The blob authenticated and is OLD — the downgrade-to-re-pair
   // primitive, which presents as "the app forgot my chat" and sends the user to
   // re-pair over whatever channel they used the first time.
@@ -1143,6 +1171,11 @@ export const roster = {
     identity_exists: unlock.exists,
     rate_limited: unlock.rateLimited,
     stale: unlock.stale,
+    // ⚠️ THE SENTENCE ONLY. The way out is a control and a control needs a panel, so
+    // `app.js` raises one beside this — a table of sentences is not the place to put
+    // a button, and a sentence that promised one the screen did not have would be
+    // worse than the generic one it replaces.
+    record_unreadable: unlock.damaged.body,
 
     // ⚠️ THE ONE ENTRY THAT IS A FUNCTION, BECAUSE §5.2's SENTENCE CARRIES A
     // MEASUREMENT. It is in the table rather than beside it: a reason handled by a

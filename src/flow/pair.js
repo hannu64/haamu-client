@@ -146,6 +146,60 @@ const STORAGE_KEY = "lpm.pairing-in-progress.v1";
 /** The key inside a record store. Web Storage keeps using `STORAGE_KEY`. */
 export const INFLIGHT_KEY = "pairing-in-progress-v1";
 
+/**
+ * The same record, addressed by ONE identity rather than by the whole browser.
+ *
+ * ⛔⛔ IN KEPT MODE THIS RECORD LIVES IN INDEXEDDB, NOT IN `sessionStorage`, AND THE
+ * NAME ABOVE IS THE SAME FOR EVERY IDENTITY THERE (D-170). `app.js`'s
+ * `pairingStore()` hands this file `vault.conversation` when the mode is Kept, so
+ * starting a pairing on one KEY **overwrote** the record of a pairing in flight on
+ * another — including the ephemeral private key that is the only thing matching the
+ * published commitment (§3.4.1). `loadInFlight` then found a record it could not
+ * open and correctly returned `null`, so the other identity's pairing did not fail
+ * loudly: **it was silently no longer in flight.** Reproduced before it was fixed —
+ * `~/lpm-probes/probe-two-identities-inflight.mjs`.
+ *
+ * ⚠️ GHOST MODE NEEDS NO SCOPE AND CANNOT HAVE ONE. There `pairingStore()` is
+ * `undefined`, `recordStore` falls through to `sessionStorage`, and that store is
+ * per tab and per origin — already exactly one identity's. §7.6 has no roster and
+ * so no `roster_id` to derive a digest from, which is the same fact stated twice.
+ */
+export function scopedStore(storage, scope) {
+  if (!storage || typeof scope !== "string" || scope.length === 0) return storage;
+  const at = (key) => `lpm.pairing.${scope}.${key}`;
+  return {
+    get: (key) => storage.get(at(key)),
+    set: (key, value) => storage.set(at(key), value),
+    delete: (key) => storage.delete(at(key)),
+    attempt: typeof storage.attempt === "function" ? (key) => storage.attempt(at(key)) : undefined,
+  };
+}
+
+/**
+ * Move a pre-D-170 in-flight record onto this identity's own key, once.
+ *
+ * ⚠️⚠️ IT MOVES RATHER THAN DELETES, AND §3.4.1b RULE 6 IS WHY. An abandoned record
+ * owes the server a `DELETE` before it goes (D-165), and the machinery that sends
+ * it — `loadInFlight` → `discardExpired` — reads the record. Deleting the row here
+ * would discharge nothing and leave a link claimable for its full ten minutes.
+ * Moved, it arrives in front of exactly the code that already knows what it owes.
+ *
+ * ⚠️ A record that does not open is another identity's live pairing and is left
+ * alone, for the reason `storage/vault.js` gives once for the whole client.
+ */
+export async function adoptLegacyInFlight(storage, scope) {
+  if (typeof storage?.attempt !== "function" || typeof scope !== "string" || !scope) return "unsupported";
+  const legacy = await storage.attempt(INFLIGHT_KEY);
+  if (!legacy.found) return "nothing-there";
+  if (!legacy.ours) return "not-ours";
+  const scoped = scopedStore(storage, scope);
+  const mine = await scoped.attempt(INFLIGHT_KEY);
+  // This identity already has one in flight here; the older row is the stale one.
+  if (!mine.found) await scoped.set(INFLIGHT_KEY, legacy.value);
+  await storage.delete(INFLIGHT_KEY);
+  return mine.found ? "discarded" : "moved";
+}
+
 /** Wrap a Web Storage object in the record interface, so there is one code path. */
 function wrapWebStorage(webStorage) {
   return {

@@ -49,7 +49,64 @@ export const HELD = "held";
  */
 export const KEPT = "kept";
 
-const KEY = "lpm.quarantine";
+/**
+ * ⛔⛔ THIS WAS `"lpm.quarantine"` — ONE NAME, SHARED BY EVERY IDENTITY IN THE
+ * BROWSER — UNTIL D-170, AND IT LOCKED THE OTHERS OUT.
+ *
+ * The list is sealed under `local_key`, so a second KEY in the same browser could
+ * not read it. What it could do was ADDRESS it: `read()` runs on every unlock, from
+ * `sweep()`, and `records.get` throws on a record it cannot open — so an identity
+ * that had never quarantined anything was refused entry to its own conversations
+ * because a DIFFERENT identity had. The sentence it produced named nothing:
+ * *"Something went wrong, and this device could not say what."*
+ *
+ * ➡️ **A KEY THAT DOES NOT NAME THE IDENTITY IS A KEY EVERY IDENTITY OWNS.**
+ * Reproduced before it was fixed — `~/lpm-probes/probe-two-identities-one-browser.mjs`.
+ *
+ * ⚠️ The old name is not deleted and cannot be: a row that does not open here is
+ * another identity's live quarantine, and `storage/vault.js` has one rule about
+ * that — deleting what we cannot read would let any identity wipe another's. It is
+ * MOVED when it is ours and left exactly alone when it is not (`adoptLegacy`).
+ */
+const legacyKey = "lpm.quarantine";
+const keyFor = (scope) => `lpm.quarantine.${scope}`;
+
+/**
+ * Carry a pre-D-170 quarantine list onto this identity's own key. Runs once per
+ * unlock; after the first one there is nothing left at the old name.
+ *
+ * ⚠️⚠️ IT MUST NOT DELETE WHAT IT CANNOT READ, and that is the whole of its
+ * caution. The row at the old name belongs to whichever identity in this browser
+ * wrote it last, and for every other identity it is a live quarantine holding
+ * conversations that exist nowhere else — not on the roster, not on the server, not
+ * on another device (see this file's header). `vault.js` states the rule once and
+ * this is the second place that needed it: **deleting what we cannot read would let
+ * any identity wipe another's history.**
+ *
+ * ⚠️ THE ORDER IS WRITE-THEN-DELETE AND IT IS NOT ARBITRARY. A crash between the
+ * two leaves the list at BOTH names, and the next run merges a list into itself and
+ * deletes the old one — so the interrupted case costs nothing. The other order
+ * loses the list outright.
+ *
+ * Returns what it did, because a migration that cannot be observed cannot be tested.
+ */
+export async function adoptLegacy(storage, scope) {
+  if (typeof storage?.attempt !== "function") return "unsupported";
+  const legacy = await storage.attempt(legacyKey);
+  if (!legacy.found) return "nothing-there";
+  // Another identity's live quarantine, or a record nothing can read. Both are left.
+  if (!legacy.ours) return "not-ours";
+
+  const held = Array.isArray(legacy.value) ? legacy.value : [];
+  const mine = await storage.attempt(keyFor(scope));
+  const already = mine.ours && Array.isArray(mine.value) ? mine.value : [];
+  const known = new Set(already.map((e) => e.root));
+  const merged = [...already, ...held.filter((e) => !known.has(e.root))];
+
+  if (merged.length > 0) await storage.set(keyFor(scope), merged);
+  await storage.delete(legacyKey);
+  return already.length > 0 ? "merged" : "moved";
+}
 
 /**
  * The quarantine, over `storage/vault.js`'s interface.
@@ -60,7 +117,15 @@ const KEY = "lpm.quarantine";
  * holds channel roots — so it belongs in the store an ending clears, and never in
  * the durable one.
  */
-export function openQuarantine({ storage, unixSeconds = () => epochs.nowSeconds() }) {
+export function openQuarantine({ storage, scope, unixSeconds = () => epochs.nowSeconds() }) {
+  if (typeof scope !== "string" || scope.length === 0) {
+    throw new RangeError(
+      "openQuarantine: `scope` is required — a quarantine key that does not name the identity is " +
+        "a key every identity in the browser owns, and reading another one's threw on unlock (D-170)"
+    );
+  }
+  const KEY = keyFor(scope);
+
   async function read() {
     const held = await storage.get(KEY);
     return Array.isArray(held) ? held : [];

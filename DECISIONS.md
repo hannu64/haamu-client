@@ -5546,6 +5546,155 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-170. ⭐⭐⭐⭐⭐ Going to fix the sentence for a damaged record found the reason there was one: the vault encrypts per identity and ADDRESSES per browser
+
+**2026-08-27, later the same day as D-169.** Hannu came back and asked what the Firefox
+decision actually was — *"I may not fully comprehend that situation"* — and, having heard it,
+chose the split: refetch what can be refetched, refuse on what may not be, and give the refusal
+a sentence and a way out. Building it went looking for which records the unlock path reads, and
+found that two of them are **not addressed per identity at all**.
+
+⛔⛔ **ENCRYPTING PER IDENTITY IS NOT ISOLATING PER IDENTITY.** One browser holds ONE database.
+`openVault` hands out a `conversation` and a `durable` that are this identity's in the sense
+that they are sealed under its `local_key` — and the address space is the whole browser's.
+`slot()` binds the store and the record's name into the AAD, which makes *"it opened"* a
+statement about this row; **nothing was making it a statement about whose row it is**, and
+nothing else was doing that job either.
+
+➡️ **A KEY THAT DOES NOT NAME THE IDENTITY IS A KEY EVERY IDENTITY OWNS.**
+
+#### The two records, and their faults are opposites
+
+Reproduced against the real code before either was touched
+(`~/lpm-probes/probe-two-identities-one-browser.mjs`, `probe-two-identities-inflight.mjs`) —
+two `openVault`s over one `memoryDatabase`, which is exactly what a browser holding two KEYs
+is, and nothing in the tree had ever built it.
+
+1. **`lpm.quarantine` — a LOUD failure at the worst moment.** §7.3.1a's list lived at one name
+   for the whole browser. `quarantine.sweep()` runs on **every unlock**, and the record layer
+   throws on a record it cannot open — so an identity that had never quarantined anything was
+   **refused entry to its own conversations** because a *different* identity had. What it threw
+   was `OperationError`. What the person read was *"Something went wrong, and this device could
+   not say what."*
+
+2. **`pairing-in-progress-v1` — a SILENT failure.** In Kept mode `pairingStore()` is
+   `vault.conversation`, so this record is in IndexedDB and not, as `ARCHITECTURE.md` §4.1's row
+   implies, in `sessionStorage`. Starting a pairing on one identity therefore **overwrote**
+   another's in-flight record, ephemeral private key and all — the only value matching the
+   published commitment (§3.4.1). `loadInFlight` then did the right thing with a record it could
+   not open and returned `null`, so nothing failed loudly: the other identity was simply **no
+   longer pairing**.
+
+⭐ **The second one is why the fix is structural and not two patches.** Each name was reasonable
+when it was written; they were added a year apart; and the review that would have caught them is
+a table of what is stored, which **did not have the quarantine in it at all**. ➡️ **A STORE THAT
+IS NOT IN THE STORAGE TABLE IS A STORE NOBODY REVIEWS.**
+
+#### ⛔⛔ AND IT IS NOT WHAT HE SAW — his own numbers rule it out
+
+I had a mechanism that produced `OperationError` on the unlock path, matched *"private windows
+work"*, matched *"clear.html fixed it"*, and matched his own account of having jammed those KEYs
+with testing. Then he answered the question that had been put to him:
+
+> *"I have 7 different KEYs… Out of those 7 three KEYs did not work on Firefox normal window but
+> worked in private. Four worked in Firefox normal window ok."*
+
+**Four of seven, in one profile.** Under this defect exactly ONE identity keeps working — the one
+that wrote the shared row — and every other fails. Four cannot. So the two faults above are real,
+proven and worth every line of the fix, **and they are not the thing that happened to him.**
+
+➡️ **A MECHANISM THAT PRODUCES THE RIGHT ERROR IS NOT THEREBY THE RIGHT MECHANISM.** This is
+D-169's own lesson turned around and pointed at my own finding: *a report that cannot be true as
+written is a question, not a finding* — and so is an explanation that cannot be true as measured.
+The tempting move was to note that he *"did not test each one in both"* and let the story stand.
+
+⏭️ **SO THE FIREFOX CAUSE IS STILL OPEN, and this round is what makes the next occurrence
+readable rather than mysterious.** What is known: `key 443 ms` says Argon2 finished, and
+`aead.open` raises `RangeError` on a wrong-shaped record and `OperationError` only on a genuine
+authentication failure — so it was a well-formed record that did not authenticate under that
+identity's own `local_key` and slot. Per-identity names cannot collide, so a jammed row of that
+shape should not be reachable at all, which is the part nothing yet explains. The evidence is
+gone: `lab/clear.html` cleared it and all seven KEYs then worked.
+
+#### What ships
+
+**The naming, and one derivation for it.** `storage/vault.js` gains `identityDigest(roster_id)`
+— deliberately the digest `flow/roster.js` has always used, so **no existing key moves**, which
+it must not: §7.3.2's high-water mark at a new address is a mark that has vanished, and that is
+the one thing §7.3.2 may not do. The quarantine takes `scope` as a **required** argument that
+throws when absent, so the fault cannot come back by omission.
+
+**Two migrations, and neither deletes what it cannot read.** `storage/vault.js` states that rule
+once — *deleting what we cannot read would let any identity wipe another's history* — and this is
+its third call site. A row at an old shared name is **moved** when it opens under this identity
+and **left exactly where it is** when it does not. Write-then-delete, so an interrupted move
+costs nothing. ⭐ The pairing record is MOVED rather than dropped because §3.4.1b rule 6's
+`DELETE` is owed to the server and only the record can pay it (D-165) — deleting the row locally
+would discharge nothing and leave a link claimable for its full ten minutes.
+
+**Hannu's split, on the unreadable record.** `records.attempt()` answers in three states rather
+than two — nothing there, ours, and **found but not ours** — because the middle case is the one a
+two-state answer loses. Then:
+
+- the **cached roster blob** is treated as absent and refetched. It is a copy of something the
+  server still holds, "absent" is a state every new device is in, and it **heals**: the next
+  successful fetch writes over the row that would not open.
+- **§7.3.2's mark** refuses, and `PROTOCOL.md` §7.3.2 rule 5 now says so (0.9.28). The section's
+  own sentence is the argument: *"a device unlocking with no local history has no high-water
+  mark, which is exactly where the attack aims."* Reading a damaged mark as *no mark* is not
+  recovering from damage, it is **manufacturing the attack's precondition on every unlock**.
+
+⭐⭐ **THE REFUSAL WAS ALREADY CORRECT. WHAT WAS WRONG IS THAT IT LOOKED LIKE A CRASH.** It now
+has a reason (`record_unreadable`), a sentence in both languages, a diagnostics row naming the
+record (`problem record_unreadable/hwm ×1`) and a control that clears exactly this identity's
+three roster records and nothing else.
+
+⛔⛔ **The control DELETES A SECURITY PROTECTION and the panel says so in the words
+`ending.thoroughConfirm` already uses for the same loss** — *"It resets the check that would
+notice an out-of-date conversation list. Your list itself is safe under your KEY and comes back
+when you type it."* They are a pair now and neither may change alone. D-150's ruling covers both:
+shortening a true sentence is safe; deleting the only true sentence about a security downgrade is
+not.
+
+⚠️ **The way out needs no key, and that is the whole reason there can be one.** The person is
+locked out *because* `local_key` will not open those rows; deleting by NAME is safe here for a
+reason that does not generalise and must never be copied to the message store — each of those
+three names contains `identityDigest(roster_id)`, so **the owner is in the address**.
+
+#### The instrument, and it caught itself
+
+`client/test/storage.mjs` gains a section built the only honest way: two vaults over one database,
+running the shapes a real unlock runs. Plus a scan that fails on a **third** bare record name.
+
+⚠️⚠️ **THE FIRST VERSION OF THAT SCAN PASSED WHILE THE BUG WAS PRESENT.** It classified names by
+shape — *this product spells record names with dots and HKDF `info` strings with hyphens* — which
+is true, and which classified `pairing-in-progress-v1`, one of the two names the whole round is
+about, as an `info` string. ➡️ **A GUARD THAT INFERS THE CATEGORY IT IS GUARDING CAN INFER ITSELF
+PAST THE ANSWER.** It reads declarations now, and the expected set is written out with each name's
+reason for being bare.
+
+#### What was proved, and where
+
+* **`client/test/storage.mjs`** — 30 new checks. Six mutations watched failing: reverting the
+  fail-closed rule (4 checks fail), routing the cache through it too, un-naming the quarantine
+  key, `forgetLocalHistory` reaching one row too far, `adoptLegacy` deleting a row it cannot
+  read, and a third bare name appearing. ⭐ The un-naming mutation fails with
+  `OperationError — the lockout, reproduced`: **the suite now says Hannu's error out loud when
+  the fix is removed.**
+* **`client/test/elsewhere.mjs`** — 8 new checks for the split, with a fake whose `get` throws on
+  a jammed row exactly as the real one does. A fake that sailed past the case would have let the
+  fix be reverted with every check still green.
+* **`~/lpm-probes/probe-damaged-record.mjs`** — new, a real browser. The mark's bytes are replaced
+  from the page and the row is found by **enumerating** the store rather than deriving its name,
+  because deriving it needs `roster_id`, which needs the KEY, which is what a locked browser does
+  not have — a probe that had to cheat to reach the state would describe a state the product
+  cannot reach either. It watches the refusal, the named sentence, the panel in both languages,
+  the diagnostics row, the button, and the same KEY opening afterwards. Canary: an intact device
+  is told nothing.
+* **D-168 and D-169 still hold** — `probe-elsewhere-browser.mjs`, `probe-elsewhere-return.mjs`,
+  `probe-elsewhere-tabs.mjs` and `probe-notice-language.mjs` all re-run green.
+* 1183 checks in the suite, all passing.
+
 ### D-169. ⭐⭐⭐⭐⭐ His device run of D-168: the alarm reached a browser that held a KEY nobody else held — and the caveat I had written down an hour earlier was the bug
 
 **2026-08-27.** Hannu ran the four steps D-168 shipped with, on three browsers and in both
@@ -5664,6 +5813,19 @@ told the truth.**
 tried and eliminated first — two overlapping writes from one device, and a read racing a write —
 before the third reproduced it exactly. A guess that had gone straight to a fix would have
 "fixed" a mechanism that was not the one on his screen.
+
+#### ✅ And the sentence is now IN the specification — PROTOCOL 0.9.27
+
+**2026-08-27, later the same day.** Hannu approved the wording when D-168 shipped and it was
+still only in the client and in this file; §7.3.1 now carries it as a MUST, with the MUST NOT
+that bounds the other direction, the ban on polling to widen it, and the ban on offering a
+remedy the protocol cannot deliver.
+
+⚠️ **The gap it closes is a specific one and worth naming.** The code did this and the document
+did not ask for it, so the next implementer — or the next reviewer — would have found a client
+warning about something no requirement mentions. ➡️ **A BEHAVIOUR THAT ONLY THE CODE KNOWS ABOUT
+IS A BEHAVIOUR THE NEXT ROUND CAN REMOVE BY ACCIDENT.** Nothing on the wire changed and the
+frozen vectors are untouched; the requirement is entirely about what a client tells its user.
 
 #### Still open — Firefox, and the sentence that is right for the person and useless for the report
 

@@ -13,6 +13,10 @@ import { utf8Bytes } from "../src/crypto/bytes.js";
 import * as db from "../src/storage/db.js";
 import * as vault from "../src/storage/vault.js";
 import * as sessions from "../src/storage/sessions.js";
+import * as quarantine from "../src/flow/quarantine.js";
+import * as pair from "../src/flow/pair.js";
+import * as rosterFlow from "../src/flow/roster.js";
+import { readFileSync } from "node:fs";
 import { check, equal, rejects, section, done } from "./harness.mjs";
 
 const localKey = randomBytes(32);
@@ -476,6 +480,181 @@ section("§6, 0.8.12 — the store is shared between tabs, and a lost update is 
   const log = await v.messages.list("other");
   equal("⭐⭐ and both messages survive", log.map((m) => m.text).sort().join(","), "first,second");
   equal("at distinct sequence numbers", log.map((m) => m.seq).join(","), "0,1");
+}
+
+
+// ====================================== D-170 — one browser is ONE database
+
+section("D-170 — a record's name has to say whose record it is");
+
+/**
+ * ⚠️⚠️ THE FAKE HERE IS NOTHING. Two `openVault`s over ONE `memoryDatabase` is
+ * exactly what a browser holding two KEYs has, and every fault below was found by
+ * building it — not by reading. `~/lpm-probes/probe-two-identities-one-browser.mjs`
+ * is the same construction outside the suite.
+ */
+const twoIdentities = () => {
+  const shared = db.memoryDatabase();
+  return [
+    vault.openVault({ db: shared, localKey: randomBytes(32) }),
+    vault.openVault({ db: shared, localKey: randomBytes(32) }),
+    shared,
+  ];
+};
+
+{
+  const [A, B] = twoIdentities();
+  await A.conversation.set("shared-name", { mine: true });
+
+  const seen = await B.conversation.attempt("shared-name");
+  check("⭐ `attempt` has THREE answers, and this is the one two states lose", seen.found && !seen.ours,
+    `found=${seen.found} ours=${seen.ours}`);
+  const nothing = await B.conversation.attempt("never-written");
+  check("nothing there is not the same answer as somebody else's", !nothing.found && !nothing.ours);
+  const mine = await A.conversation.attempt("shared-name");
+  check("and our own record still reads as ours", mine.ours && mine.value.mine === true);
+
+  await rejects("⚠️ `get` still THROWS, which is right for every caller that has not decided",
+    () => B.conversation.get("shared-name"), /.*/);
+}
+
+{
+  // ⛔⛔ THE LOCKOUT ITSELF. Before D-170 the quarantine lived at one name for the
+  // whole browser, `sweep()` runs on every unlock, and `records.get` throws on a
+  // record it cannot open — so identity A quarantining a conversation refused
+  // identity B entry to its own.
+  const [A, B] = twoIdentities();
+  const qa = quarantine.openQuarantine({ storage: A.conversation, scope: "AAAA", unixSeconds: () => 1000 });
+  const qb = quarantine.openQuarantine({ storage: B.conversation, scope: "BBBB", unixSeconds: () => 1000 });
+
+  await qa.hold([{ root: "aaa", name: "A's chat" }]);
+  // ⚠️ CAUGHT RATHER THAN LET FLY, so that reverting the fix reads as a named failure
+  // instead of killing the runner. What it throws when it is broken is the very
+  // `OperationError` Hannu's Firefox panel showed.
+  let swept = null;
+  let threw = null;
+  try {
+    swept = await qb.sweep();
+  } catch (err) {
+    threw = err;
+  }
+  check("⛔⛔ the OTHER identity's unlock sweep no longer throws", threw === null,
+    threw ? `${threw.name} — the lockout, reproduced` : "clean");
+  equal("and finds nothing, because the other identity's list is not addressed at all",
+    String(swept?.length ?? -1), "0");
+  equal("⭐ and A still has what it quarantined", (await qa.list()).map((e) => e.root).join(","), "aaa");
+
+  await qb.hold([{ root: "bbb", name: "B's chat" }]);
+  equal("⭐⭐ two identities, two quarantines, neither reaching the other (A)",
+    (await qa.list()).map((e) => e.root).join(","), "aaa");
+  equal("⭐⭐ two identities, two quarantines, neither reaching the other (B)",
+    (await qb.list()).map((e) => e.root).join(","), "bbb");
+}
+
+await rejects(
+  "⚠️⚠️ and a quarantine with no scope is refused rather than defaulted — the fault could not come back quietly",
+  async () => quarantine.openQuarantine({ storage: (await twoIdentities())[0].conversation }),
+  /scope/
+);
+
+{
+  // The migration: a list written before D-170 belongs to whoever can open it.
+  const [A, B] = twoIdentities();
+  await A.conversation.set("lpm.quarantine", [{ root: "old", name: "from before", state: "held", expiresAt: 9e9 }]);
+
+  equal("⛔ the identity that CANNOT open the old list leaves it alone",
+    await quarantine.adoptLegacy(B.conversation, "BBBB"), "not-ours");
+  const stillThere = await A.conversation.attempt("lpm.quarantine");
+  check("⭐⭐ so it is still there for its owner — deleting what we cannot read is how one identity wipes another",
+    stillThere.found && stillThere.ours);
+
+  equal("⭐ and the owner moves it", await quarantine.adoptLegacy(A.conversation, "AAAA"), "moved");
+  const qa = quarantine.openQuarantine({ storage: A.conversation, scope: "AAAA", unixSeconds: () => 1000 });
+  equal("with the entry intact at the new name", (await qa.list()).map((e) => e.root).join(","), "old");
+  check("and nothing left at the old one", !(await A.conversation.attempt("lpm.quarantine")).found);
+  equal("⚠️ running it twice is a no-op, so an interrupted move costs nothing",
+    await quarantine.adoptLegacy(A.conversation, "AAAA"), "nothing-there");
+}
+
+{
+  // ⛔⛔ THE SECOND FIXED NAME, AND ITS FAULT IS SILENT RATHER THAN LOUD: in Kept mode
+  // `pairingStore()` is `vault.conversation`, so one identity starting a pairing
+  // OVERWROTE another's in-flight record — the ephemeral private key with it.
+  const [A, B] = twoIdentities();
+  const inflight = (role) => ({ v: 1, role, l: "AAAAAAAAAAAAAAAAAAAAAA", priv: "A".repeat(43), expires_at: 4e12 });
+  const sa = pair.scopedStore(A.conversation, "AAAA");
+  const sb = pair.scopedStore(B.conversation, "BBBB");
+
+  await sa.set(pair.INFLIGHT_KEY, inflight("I"));
+  await sb.set(pair.INFLIGHT_KEY, inflight("J"));
+  check("⛔⛔ B starting a pairing no longer reaches A's record", (await pair.loadInFlight(sa)) !== null);
+  check("and B has its own", (await pair.loadInFlight(sb)) !== null);
+  check("⭐ they are not the same record", (await pair.loadInFlight(sa)).role !== (await pair.loadInFlight(sb)).role);
+
+  // ⚠️ MOVED AND NOT DELETED — §3.4.1b rule 6's `DELETE` is owed and only the record
+  // can pay it, so the migration hands it to the code that already knows that.
+  const [C, D] = twoIdentities();
+  await C.conversation.set(pair.INFLIGHT_KEY, inflight("I"));
+  equal("⛔ a pre-D-170 record another identity cannot open is left where it is",
+    await pair.adoptLegacyInFlight(D.conversation, "DDDD"), "not-ours");
+  equal("⭐ and its owner moves it rather than dropping it", await pair.adoptLegacyInFlight(C.conversation, "CCCC"), "moved");
+  check("so rule 6 still has a record to send its DELETE from",
+    (await pair.loadInFlight(pair.scopedStore(C.conversation, "CCCC"))) !== null);
+}
+
+{
+  // The way out of an unreadable §7.3.2 mark: it needs no key, and it takes exactly
+  // three rows.
+  const [A] = twoIdentities();
+  const k = `lpm.roster.${await vault.identityDigest(new Uint8Array([9, 9, 9]))}`;
+  const scope = k.slice("lpm.roster.".length);
+  await A.durable.set(`${k}.hwm`, 7);
+  await A.durable.set(`${k}.sent`, "abc");
+  await A.conversation.set(`${k}.blob`, { blob: "x", outer: 1 });
+  await A.conversation.set("lpm.roster.SOMEBODY-ELSE.blob", { blob: "y", outer: 1 });
+
+  await rosterFlow.forgetLocalHistory(A.db, scope);
+  check("⛔⛔ the way out takes §7.3.2's mark — which is the security it costs", !(await A.durable.attempt(`${k}.hwm`)).found);
+  check("and the note about our own last write", !(await A.durable.attempt(`${k}.sent`)).found);
+  check("and the cached list, so the button does not have to be pressed twice", !(await A.conversation.attempt(`${k}.blob`)).found);
+  check("⭐⭐ and NOTHING that belongs to another identity", (await A.conversation.attempt("lpm.roster.SOMEBODY-ELSE.blob")).found);
+}
+
+{
+  // ⚠️⚠️ THE INSTRUMENT, because two fixed names were added a year apart and each was
+  // reasonable on its own. A THIRD must not be able to arrive quietly.
+  //
+  // ⭐ It reads DECLARATIONS rather than guessing at shapes. The first version of this
+  // check filtered by "dots are record names, hyphens are HKDF `info` strings", which
+  // is true of this product and still classified `pairing-in-progress-v1` — one of the
+  // two names the whole round is about — as an `info` string and passed. ➡️ **A GUARD
+  // THAT INFERS THE CATEGORY IT IS GUARDING CAN INFER ITSELF PAST THE ANSWER.**
+  const named = new Map();
+  const declared = /(?:const|let|var)\s+\w*(?:[Kk][Ee][Yy]|PREFIX|Prefix)\w*\s*=\s*"([^"]+)"/g;
+  const inlined = /\.(?:get|set|delete|attempt)\(\s*"([^"]+)"/g;
+  for (const f of ["src/flow/quarantine.js", "src/flow/pair.js", "src/flow/roster.js",
+                   "src/storage/vault.js", "src/storage/sessions.js"]) {
+    const src = readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
+    for (const r of [declared, inlined]) for (const m of src.matchAll(r)) named.set(m[1], f);
+  }
+
+  // Each of these is bare for a reason, and the reason is that nothing about it is
+  // one identity's — or that it is retired and read only to be moved:
+  //   lpm.quarantine              retired; `adoptLegacy` reads it and nothing else
+  //   pairing-in-progress-v1      the name INSIDE a store; `scopedStore` prefixes it
+  //                               in Kept, and Ghost's store is one tab's already
+  //   lpm.pairing-in-progress.v1  Web Storage (§3.4.1), per tab
+  //   lpm.ghost.                  Web Storage prefix (§7.6), per tab
+  equal(
+    "⛔⛔ every name a record is stored under names its identity, and these four are why the other four do not",
+    [...named.keys()].sort().join(" "),
+    "lpm.ghost. lpm.pairing-in-progress.v1 lpm.quarantine pairing-in-progress-v1"
+  );
+  check(
+    "⚠️ the scan still finds names, so an empty result would mean a broken regex rather than a clean tree",
+    named.size === 4,
+    `${named.size} declarations seen`
+  );
 }
 
 done();

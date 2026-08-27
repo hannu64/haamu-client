@@ -35,6 +35,10 @@ function memStorage() {
     get: async (k) => (m.has(k) ? m.get(k) : null),
     set: async (k, v) => m.set(k, v),
     delete: async (k) => m.delete(k),
+    // D-170: `storage/vault.js`'s three-state read. A Map has no record it cannot
+    // open, so every answer here is `found`/`ours` or nothing there — which is what
+    // a healthy device has, and what these suites are about.
+    attempt: async (k) => (m.has(k) ? { found: true, ours: true, value: m.get(k) } : { found: false, ours: false, value: null }),
     // Not part of the interface the flow module uses — it is here so a test can ask
     // what ended up on disk without reconstructing the key, which is deliberately a
     // hash of `roster_id` and not the identifier itself.

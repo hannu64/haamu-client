@@ -354,7 +354,7 @@ section("§7.3.1a — seven days, and what an undo can actually undo");
     set: async (k, v) => m.set(k, v),
     delete: async (k) => m.delete(k),
   };
-  const q = quarantine.openQuarantine({ storage, unixSeconds: () => now });
+  const q = quarantine.openQuarantine({ storage, scope: "test", unixSeconds: () => now });
 
   await q.hold([channel(1), channel(2)]);
   equal("both entries are held", String((await q.pending()).length), "2");
