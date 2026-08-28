@@ -242,18 +242,55 @@ function messageLog(db, localKey) {
       throw new Error(`vault: ${MAX_APPEND_ATTEMPTS} message slots in a row were taken while appending`);
     },
 
-    /** Everything held for one channel, in arrival order. */
+    /**
+     * Everything held for one channel, in arrival order.
+     *
+     * ⚠️⚠️ IT SKIPS WHAT IT CANNOT OPEN, AND `sweep()` FOUR METHODS DOWN HAS SAID SO
+     * SINCE THE FILE WAS WRITTEN (D-171). The key here is `[channelHash, seq]` and
+     * `channelHash` is §7.3's commitment to the channel ROOT — which §3 gives to BOTH
+     * ends of the channel. So a browser holding both ends of one pairing has two
+     * identities appending into one keyspace, and this method used to open every row
+     * in it under one `local_key` and throw on the first that was not ours.
+     *
+     * ⛔ THE HARM RAN BOTH WAYS, WHICH IS WHY IT IS NOT MERELY UNTIDY: it is `renderLog`
+     * that calls this, so **neither** identity could draw the conversation — not just
+     * the newcomer, but the one whose history it was.
+     *
+     * ⭐ A RANGE CAN HOLD BOTH, SO SKIPPING IS THE WHOLE FIX AND NOTHING MOVES. Where
+     * one NAME holds one row — the session record, the closed marker — skipping cannot
+     * work and the name has to carry the identity instead; see `storage/sessions.js`.
+     * `append` already coped: it uses `add`, so a taken `seq` is refused and retried.
+     */
     async list(channelHash) {
       const rows = await db.list(MESSAGES, prefixRange([channelHash]));
       const out = [];
       for (const [k, blob] of rows) {
-        out.push(JSON.parse(utf8String(await aead.open(localKey, blob, slot(MESSAGES, k)))));
+        try {
+          out.push(JSON.parse(utf8String(await aead.open(localKey, blob, slot(MESSAGES, k)))));
+        } catch {
+          // Not ours — another identity in this browser holding the other end of this
+          // same channel, or a corrupted record. Showing the messages we can read is
+          // the honest answer; showing none of them was not.
+        }
       }
       return out;
     },
 
+    /**
+     * ⚠️⚠️ IT DELETES WHAT OPENS, NOT WHAT MATCHES THE NAME (D-171). `deleteRange`
+     * removes every row under the channel prefix, and the prefix is the channel's and
+     * not this identity's — so removing a conversation on one KEY silently deleted the
+     * OTHER end's whole history when both ends lived in this browser. That is the same
+     * fault as the ordinary ending's `db.clear` (2026-08-24), in a different method,
+     * against the same rule `sweep()` states out loud.
+     *
+     * ⚠️ A row it cannot open is left exactly where it is. Deleting on any weaker test
+     * than "it opened" is how one identity wipes another's.
+     */
     async forget(channelHash) {
-      await db.deleteRange(MESSAGES, prefixRange([channelHash]));
+      for (const [k, blob] of await db.list(MESSAGES, prefixRange([channelHash]))) {
+        if (await opens(localKey, MESSAGES, k, blob)) await db.delete(MESSAGES, k);
+      }
     },
 
     /**

@@ -94,6 +94,7 @@ function envelopeFrom(text, sealedGeneration, claimedGeneration = sealedGenerati
 function receiver(body) {
   const roster = { generation: 0, writes: [] };
   const channel = messageFlow.openChannel({
+    scope: "test",
     api: mailboxHolding(body),
     backend: store.memoryBackend(),
     pickleKey: store.randomPickleKey(),

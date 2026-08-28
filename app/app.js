@@ -552,6 +552,25 @@ const api = createApi();
  * interface `storage/sessions.js` defined is the same either way.
  */
 let session = null; // { mode, tabs, backend, pickleKey, messages, ... }
+
+/**
+ * §7.6 has one identity per tab and no `roster_id` to name it with, so its records
+ * are named for the mode. ⚠️ THAT IS A TRUE EXEMPTION AND NOT A CONVENIENT ONE, and
+ * D-171 exists because the last one was written the other way round: Ghost's store is
+ * `sessionStorage`, which is per-tab, so no second identity can reach these names —
+ * whereas a channel root, which §4.1.1 exempted for being "one identity's by
+ * construction", is held by BOTH ENDS of the channel by construction.
+ */
+const GHOST_RECORD_SCOPE = "ghost";
+
+/**
+ * Whose records these are — the value every stored name carries (ARCHITECTURE §4.1.1).
+ *
+ * ⚠️ NOT USABLE BEFORE `session` IS SET. The unlock path assigns `session` only after
+ * `run()` has returned, and `onDisappeared` can fire inside it — so the paths that run
+ * during construction are handed the scope explicitly instead of reaching for this.
+ */
+const scopeOfRecords = () => session?.recordScope ?? GHOST_RECORD_SCOPE;
 let openEntry = null; // the conversation on screen
 let channel = null; // its message flow — this tab's, for SENDING
 let seen = new Map(); // channelHash → msg ids already in the log
@@ -850,7 +869,7 @@ async function withIdentity(phrase, run) {
       keys,
       storage: vault.conversation,
       durable: vault.durable,
-      onDisappeared: (change) => absorb(change, quarantine, vault),
+      onDisappeared: (change) => absorb(change, quarantine, vault, recordScope),
     });
     // ⚠️⚠️ ASKED BEFORE `openTabs` AND NOT AFTER — ARCHITECTURE §4.2.2. Since §4.2.1 a
     // visible tab steals leadership as it is constructed, so asking afterwards would
@@ -911,6 +930,10 @@ async function withIdentity(phrase, run) {
     // identity's and not this one's to remove.
     await quarantineFlow.adoptLegacy(vault.conversation, recordScope);
     await flow.adoptLegacyInFlight(vault.conversation, recordScope);
+    // D-171's third: the session record and the closed marker were named for the
+    // CHANNEL, and §3 gives both ends of a channel the same root. Unlike the two
+    // above there is no fixed name to look for, so it lists.
+    await store.adoptLegacyChannelRecords(db, vault.conversation, recordScope);
 
     // §6.6 and §7.3.1a, both on the same occasion and for the same reason: these
     // are the only two timers in the client, they both need `local_key`, and the
@@ -1053,6 +1076,7 @@ async function enterGhost() {
   session = {
     mode: "ghost",
     ghost, tabs,
+    recordScope: GHOST_RECORD_SCOPE,
     backend: ghost.store,
     pickleKey: ghost.pickleKey,
     messages: ghost.messages,
@@ -1853,6 +1877,10 @@ async function tellThemAll(entries) {
         messageFlow.openChannel({
           api,
           backend,
+          // A throwaway `memoryBackend()` that dies with this call, so nothing is
+          // addressed by this name — but `openChannel` refuses an absent scope on
+          // purpose, and answering it honestly costs one line.
+          scope: scopeOfRecords(),
           pickleKey,
           channelRoot: rootBytesOf(entry),
           role: entry.role,
@@ -1968,12 +1996,12 @@ function describeIdentity(err) {
  * crash here leaves the device holding the old list rather than a deletion it
  * never recorded. Same rule as §5.4.3's "persist before you acknowledge".
  */
-async function absorb(change, quarantine, vault) {
+async function absorb(change, quarantine, vault, scope) {
   if (change.kind === "purged") {
     // The panic action, and the case it exists for is a device that is gone: it
     // must beat an attacker who reaches the lost one later. Immediate,
     // irreversible, no quarantine, and a plain notice.
-    for (const entry of change.removed) await forgetLocally(entry, vault);
+    for (const entry of change.removed) await forgetLocally(entry, vault, scope);
     await quarantine.purge();
     notice("purged", () => ({ body: copy.deletion.purged, alarm: true }));
     return;
@@ -1982,7 +2010,7 @@ async function absorb(change, quarantine, vault) {
     // Ordinary use. §7.3.1a: permanent, with no undo — the cost of a mistake is
     // re-pairing one channel, and pretending otherwise would be the undeletable
     // contact list Rule 1 exists to prevent.
-    for (const entry of change.removed) await forgetLocally(entry, vault);
+    for (const entry of change.removed) await forgetLocally(entry, vault, scope);
     return;
   }
   if (change.kind === "suspect") {
@@ -1994,15 +2022,15 @@ async function absorb(change, quarantine, vault) {
 }
 
 /** Local data for a channel that is not coming back. */
-async function forgetLocally(entry, vault) {
+async function forgetLocally(entry, vault, scope) {
   const root = rootBytesOf(entry);
-  await store.forgetChannel(vault.conversation, root);
+  await store.forgetChannel(vault.conversation, scope, root);
   await vault.messages.forget(await rosters.rootHash(root));
 }
 
 async function forgetExpiredQuarantine() {
   const dropped = await session.quarantine.sweep();
-  for (const entry of dropped) await forgetLocally(entry, session.vault);
+  for (const entry of dropped) await forgetLocally(entry, session.vault, scopeOfRecords());
   return dropped.length;
 }
 
@@ -2130,7 +2158,7 @@ async function renderQuarantine() {
             label: `${copy.deletion.agree}: ${entry.name || "unnamed"}`,
             className: "secondary",
             onClick: async () => {
-              await forgetLocally(entry, session.vault);
+              await forgetLocally(entry, session.vault, scopeOfRecords());
               await session.quarantine.forget(entry.root);
               await renderQuarantine();
               await openHome();
@@ -2357,6 +2385,7 @@ function openChannelFor(entry) {
   return messageFlow.openChannel({
     api,
     backend: session.backend,
+    scope: scopeOfRecords(),
     pickleKey: session.pickleKey,
     channelRoot: root,
     role: entry.role,
@@ -2576,12 +2605,12 @@ async function neverHeldHere(entry) {
   // so neither can be reached by opening a second browser at all.
   if (isGhost() || entry.local) return false;
   if (!(entry.generation > 0)) return false;
-  const { record } = await store.loadRecord(session.backend, rootBytesOf(entry));
+  const { record } = await store.loadRecord(session.backend, scopeOfRecords(), rootBytesOf(entry));
   return Object.keys(record.sessions).length === 0;
 }
 
 async function showConversationState(entry) {
-  const closed = await store.loadClosed(session.backend, rootBytesOf(entry));
+  const closed = await store.loadClosed(session.backend, scopeOfRecords(), rootBytesOf(entry));
 
   // ⚠️ NOT WHILE CLOSED. §6.7.1's banner says the other person has gone; inviting
   // a message to reconnect underneath it would be advice that cannot work.
@@ -2708,8 +2737,8 @@ async function storeIncoming(hash, entry, messages) {
     stored++;
   }
 
-  if (root && closes === true) await store.markClosed(session.backend, root, epochs.nowSeconds());
-  if (root && closes === false) await store.clearClosed(session.backend, root);
+  if (root && closes === true) await store.markClosed(session.backend, scopeOfRecords(), root, epochs.nowSeconds());
+  if (root && closes === false) await store.clearClosed(session.backend, scopeOfRecords(), root);
   return stored;
 }
 
@@ -3021,7 +3050,7 @@ async function removeConversation(entry, { tell = true } = {}) {
 
   // The mode-agnostic pair rather than `vault.*`: Ghost mode has no vault, and
   // this path is now reached from the SAS screen in both modes.
-  await store.forgetChannel(session.backend, rootBytesOf(entry));
+  await store.forgetChannel(session.backend, scopeOfRecords(), rootBytesOf(entry));
   await session.messages.forget(hash);
   seen.delete(hash);
   session.tabs.announce("roster", { id: TAB_ID });

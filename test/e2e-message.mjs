@@ -73,6 +73,7 @@ async function pairTwoClients() {
  */
 function device(side, roster = { generation: 0 }) {
   return messageFlow.openChannel({
+    scope: "test",
     api,
     backend: store.memoryBackend(),
     pickleKey: store.randomPickleKey(),
@@ -292,7 +293,7 @@ section("§5.4.1/§5.4.2 — a crash between decrypting and acknowledging");
   const batch = await messageFlow.receive(J);
   equal("read once", texts(batch).join(), "toinen kirje");
 
-  const key = await store.channelKey(J.channelRoot);
+  const key = await store.channelKey("test", J.channelRoot);
   const record = await J.backend.get(key);
   record.staged = [];
   await J.backend.set(key, record);
@@ -489,7 +490,7 @@ section("§6 — a send that never left the device");
   const opening = await messageFlow.receive(B);
   await opening.settle();
 
-  const key = await store.channelKey(B.channelRoot);
+  const key = await store.channelKey("test", B.channelRoot);
   const before = JSON.stringify((await B.backend.get(key)).sessions);
 
   const aborted = new AbortController();
@@ -616,6 +617,7 @@ section("§6.3 — a device whose storage came BACK does not spend a generation"
   const roster = { generation: 0 };
   const open = () =>
     messageFlow.openChannel({
+      scope: "test",
       api,
       backend: vault.conversation,
       pickleKey,
@@ -660,6 +662,7 @@ section("§6.3 — a device whose storage came BACK does not spend a generation"
   // store rather than the arithmetic: the same channel with an EMPTY store does
   // still spend a generation, which is §6.3 working exactly as before.
   const forgotten = messageFlow.openChannel({
+    scope: "test",
     api,
     backend: vaults.openVault({ db: db.memoryDatabase(), localKey: crypto.getRandomValues(new Uint8Array(32)) })
       .conversation,
@@ -700,6 +703,7 @@ section("§6, 0.8.12 — two TABS of one device, over one store");
   const roster = { generation: 0 };
   const tab = () =>
     messageFlow.openChannel({
+      scope: "test",
       api,
       backend: vault.conversation,
       pickleKey,
@@ -801,6 +805,7 @@ section("§7.8, 0.8.13 — clearing the store while a drain is still in flight")
   const vault = vaults.openVault({ db: disk, localKey: crypto.getRandomValues(new Uint8Array(32)) });
   const pickleKey = crypto.getRandomValues(new Uint8Array(32));
   const mine = messageFlow.openChannel({
+    scope: "test",
     api,
     backend: vault.conversation,
     pickleKey,
@@ -835,7 +840,7 @@ section("§7.8, 0.8.13 — clearing the store while a drain is still in flight")
   // advanced session and the ids safe to delete to be ONE write — so the record
   // left behind holds the message itself, sealed under `local_key`, which comes
   // back with the passphrase. The ending said "removes it from this browser now".
-  const survivor = await store.loadRecord(vault.conversation, i5.channelRoot);
+  const survivor = await store.loadRecord(vault.conversation, "test", i5.channelRoot);
   const stranded = survivor.record.staged.map((s) => s.payload?.text).filter(Boolean);
   check(
     "⭐⭐⭐ and what survives includes the PLAINTEXT, not just the session",
@@ -848,6 +853,7 @@ section("§7.8, 0.8.13 — clearing the store while a drain is still in flight")
   const disk2 = db.memoryDatabase();
   const vault2 = vaults.openVault({ db: disk2, localKey: crypto.getRandomValues(new Uint8Array(32)) });
   const mine2 = messageFlow.openChannel({
+    scope: "test",
     api,
     backend: vault2.conversation,
     pickleKey,

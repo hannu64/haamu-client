@@ -403,6 +403,8 @@ section("§7.8 step 1 — `startLive().stop()` does not resolve until the drain 
   };
 
   const channel = messageFlow.openChannel({
+
+    scope: "test",
     api,
     backend: sessionStore.memoryBackend(),
     pickleKey: sessionStore.randomPickleKey(),
@@ -472,6 +474,8 @@ section("§7.8 step 1 — and the wake-path drain, which no loop is holding");
   };
 
   const channel = messageFlow.openChannel({
+
+    scope: "test",
     api,
     backend: sessionStore.memoryBackend(),
     pickleKey: sessionStore.randomPickleKey(),

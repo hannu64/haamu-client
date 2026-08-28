@@ -16,6 +16,7 @@ import * as sessions from "../src/storage/sessions.js";
 import * as quarantine from "../src/flow/quarantine.js";
 import * as pair from "../src/flow/pair.js";
 import * as rosterFlow from "../src/flow/roster.js";
+import * as rosters from "../src/protocol/roster.js";
 import { readFileSync } from "node:fs";
 import { check, equal, rejects, section, done } from "./harness.mjs";
 
@@ -315,26 +316,27 @@ section("§6.3, §5.4.2 — the channel record over a real backend");
 {
   const v = open();
   const root = randomBytes(32);
-  const empty = await sessions.loadRecord(v.conversation, root);
+  const empty = await sessions.loadRecord(v.conversation, "test", root);
   equal("an untouched channel reads as an empty record", String(empty.record.generation), "0");
   equal("with no token, meaning “there must be nothing here”", String(empty.token), "null");
 
   await sessions.saveRecord(
     v.conversation,
+    "test",
     root,
     { ...empty.record, generation: 4, sessions: { s: { pickle: "P" } } },
     empty.token
   );
-  const back = await sessions.loadRecord(v.conversation, root);
+  const back = await sessions.loadRecord(v.conversation, "test", root);
   equal("⭐ and it survives, which is what a reload needed", String(back.record.generation), "4");
 
-  const key = await sessions.channelKey(root);
+  const key = await sessions.channelKey("test", root);
   check("under a hash of the root and never the root itself", !key.includes(Buffer.from(root).toString("base64")), key);
 
-  await sessions.forgetChannel(v.conversation, root);
+  await sessions.forgetChannel(v.conversation, "test", root);
   equal(
     "forgetting a channel empties it",
-    String((await sessions.loadRecord(v.conversation, root)).record.generation),
+    String((await sessions.loadRecord(v.conversation, "test", root)).record.generation),
     "0"
   );
 }
@@ -351,36 +353,36 @@ section("§6.7.1 — the closed marker outlives the session record");
   const v = open();
   const root = randomBytes(32);
 
-  equal("a channel starts open", String(await sessions.loadClosed(v.conversation, root)), "null");
+  equal("a channel starts open", String(await sessions.loadClosed(v.conversation, "test", root)), "null");
 
-  await sessions.markClosed(v.conversation, root, 1754000000);
+  await sessions.markClosed(v.conversation, "test", root, 1754000000);
   equal(
     "and remembers when the other person left",
-    String((await sessions.loadClosed(v.conversation, root)).at),
+    String((await sessions.loadClosed(v.conversation, "test", root)).at),
     "1754000000"
   );
 
   // The session record being replaced is ordinary §6.3 behaviour, and it must not
   // reopen a conversation whose other end is gone.
-  const held = await sessions.loadRecord(v.conversation, root);
-  await sessions.saveRecord(v.conversation, root, { ...held.record, generation: 7 }, held.token);
-  check("⭐ rewriting the session record does not clear it", await sessions.loadClosed(v.conversation, root));
+  const held = await sessions.loadRecord(v.conversation, "test", root);
+  await sessions.saveRecord(v.conversation, "test", root, { ...held.record, generation: 7 }, held.token);
+  check("⭐ rewriting the session record does not clear it", await sessions.loadClosed(v.conversation, "test", root));
 
   // §6.7.1 rule 8: a client of this protocol cannot send after closing, so anything
   // arriving afterwards is a hostile or broken peer — and hiding it behind "they
   // have left" would be the client lying about its own screen.
-  await sessions.clearClosed(v.conversation, root);
+  await sessions.clearClosed(v.conversation, "test", root);
   equal(
     "⭐ and a later message from that peer reopens it",
-    String(await sessions.loadClosed(v.conversation, root)),
+    String(await sessions.loadClosed(v.conversation, "test", root)),
     "null"
   );
 
-  await sessions.markClosed(v.conversation, root, 1754000000);
-  await sessions.forgetChannel(v.conversation, root);
+  await sessions.markClosed(v.conversation, "test", root, 1754000000);
+  await sessions.forgetChannel(v.conversation, "test", root);
   equal(
     "⚠️ deleting the conversation takes the marker with it, not only the record",
-    String(await sessions.loadClosed(v.conversation, root)),
+    String(await sessions.loadClosed(v.conversation, "test", root)),
     "null"
   );
 }
@@ -388,10 +390,10 @@ section("§6.7.1 — the closed marker outlives the session record");
 {
   const v = open();
   const root = randomBytes(32);
-  await v.conversation.set(await sessions.channelKey(root), { v: 99, generation: 1 });
+  await v.conversation.set(await sessions.channelKey("test", root), { v: 99, generation: 1 });
   await rejects(
     "a record from a future version of this app is refused, not guessed at",
-    () => sessions.loadRecord(v.conversation, root),
+    () => sessions.loadRecord(v.conversation, "test", root),
     /unsupported record version/
   );
 }
@@ -410,30 +412,30 @@ section("§6, 0.8.12 — the store is shared between tabs, and a lost update is 
   // crash, and no ordering addresses it.
   const v = open();
   const root = randomBytes(32);
-  await sessions.saveRecord(v.conversation, root, { ...sessions.emptyRecord(), generation: 1 }, null);
+  await sessions.saveRecord(v.conversation, "test", root, { ...sessions.emptyRecord(), generation: 1 }, null);
 
-  const tabA = await sessions.loadRecord(v.conversation, root);
-  const tabB = await sessions.loadRecord(v.conversation, root);
+  const tabA = await sessions.loadRecord(v.conversation, "test", root);
+  const tabB = await sessions.loadRecord(v.conversation, "test", root);
   equal("two tabs read the same record", tabA.token.length === tabB.token.length ? "same" : "different", "same");
 
-  await sessions.saveRecord(v.conversation, root, { ...tabA.record, generation: 2 }, tabA.token);
+  await sessions.saveRecord(v.conversation, "test", root, { ...tabA.record, generation: 2 }, tabA.token);
   await rejects(
     "⭐⭐ and the second write is REFUSED rather than silently winning",
-    () => sessions.saveRecord(v.conversation, root, { ...tabB.record, generation: 99 }, tabB.token),
+    () => sessions.saveRecord(v.conversation, "test", root, { ...tabB.record, generation: 99 }, tabB.token),
     /changed under this write/
   );
   equal(
     "the first tab's advance is still there",
-    String((await sessions.loadRecord(v.conversation, root)).record.generation),
+    String((await sessions.loadRecord(v.conversation, "test", root)).record.generation),
     "2"
   );
 
   // And the refusal is answerable: read again, and the write lands.
-  const again = await sessions.loadRecord(v.conversation, root);
-  await sessions.saveRecord(v.conversation, root, { ...again.record, generation: 3 }, again.token);
+  const again = await sessions.loadRecord(v.conversation, "test", root);
+  await sessions.saveRecord(v.conversation, "test", root, { ...again.record, generation: 3 }, again.token);
   equal(
     "⭐ re-reading is the whole of the fix — this is what flow/message.js does",
-    String((await sessions.loadRecord(v.conversation, root)).record.generation),
+    String((await sessions.loadRecord(v.conversation, "test", root)).record.generation),
     "3"
   );
 }
@@ -655,6 +657,161 @@ await rejects(
     named.size === 4,
     `${named.size} declarations seen`
   );
+}
+
+
+section("D-171 — the exemption was the defect: a channel root belongs to BOTH ends");
+
+/**
+ * ⛔⛔⛔ THE GUARD ABOVE COULD NOT HAVE FOUND THIS, AND THAT IS THE LESSON.
+ *
+ * D-170's scan reads DECLARED string literals. `lpm.session.${await rootHash(root)}`
+ * is computed at the call, and the message log's key is an ARRAY and never a string
+ * at all — so the two largest stores in the client were invisible to the instrument
+ * written to certify exactly this property. It certified four names and was blind to
+ * the ones that mattered.
+ *
+ * Worse, `ARCHITECTURE.md` §4.1.1 exempted "a hash of the channel root, which is one
+ * identity's by construction" — and §3 gives BOTH ends of a channel the same root, so
+ * the clause is false and it is the clause that permitted the bug. **The rule, the
+ * guard and the specification agreed with each other and all three were wrong.**
+ *
+ * ➡️ SO THIS ONE READS WHAT THE CODE DID, NOT WHAT IT LOOKS LIKE. It drives the real
+ * writers with two identities over one database and then reads back every name that
+ * actually reached the store. A name that carries neither identity's scope is a name
+ * both of them address, whatever it was spelled with.
+ */
+/**
+ * ⚠️ CAUGHT RATHER THAN LET FLY — the rule the D-170 section above set, and these two
+ * needed it most. Reverting either fix throws the exact error the real fault threw:
+ * `WriteConflict` where the second end could never write, and `OperationError` where
+ * neither end could draw its own log. Unwrapped, both kill the runner and the section
+ * says nothing about which property broke.
+ */
+const caught = async (fn) => {
+  try {
+    return { value: await fn(), err: null };
+  } catch (err) {
+    return { value: null, err };
+  }
+};
+
+{
+  const shared = db.memoryDatabase();
+  const SA = "sc0peAAAAAAAAAAAAAAAAA";
+  const SB = "sc0peBBBBBBBBBBBBBBBBB";
+  const A = vault.openVault({ db: shared, localKey: randomBytes(32) });
+  const B = vault.openVault({ db: shared, localKey: randomBytes(32) });
+  // ⚠️ ONE root, held by BOTH — this line IS §3's pairing, and it is the whole defect.
+  const R = randomBytes(32);
+
+  await sessions.saveRecord(A.conversation, SA, R, { ...sessions.emptyRecord(), generation: 1 }, null);
+  const second = await caught(() =>
+    sessions.saveRecord(B.conversation, SB, R, { ...sessions.emptyRecord(), generation: 2 }, null));
+  check("⛔⛔ the OTHER end of this same channel can write its own record at all",
+    second.err === null, second.err ? `${second.err.name} — the deadlock, reproduced` : "clean");
+  await sessions.markClosed(A.conversation, SA, R, 1000);
+  await sessions.markClosed(B.conversation, SB, R, 2000);
+  await quarantine.openQuarantine({ storage: A.conversation, scope: SA, unixSeconds: () => 1000 })
+    .hold([{ root: "aaa", name: "A's chat" }]);
+  await pair.scopedStore(A.conversation, SA).set(pair.INFLIGHT_KEY, { v: 1, role: "I" });
+  await pair.scopedStore(B.conversation, SB).set(pair.INFLIGHT_KEY, { v: 1, role: "J" });
+  await A.durable.set(`lpm.roster.${SA}.hwm`, 3);
+  await B.durable.set(`lpm.roster.${SB}.hwm`, 4);
+
+  const bare = [];
+  for (const store of [db.CONVERSATION, db.DURABLE]) {
+    for (const [key] of await shared.list(store, undefined)) {
+      if (typeof key === "string" && !key.includes(SA) && !key.includes(SB)) bare.push(`${store}/${key}`);
+    }
+  }
+  equal("⛔⛔ every name these writers actually left in the store says whose record it is",
+    bare.sort().join(" "), "");
+  check("⚠️ and the sweep saw real rows, so an empty store cannot read as a clean one",
+    (await shared.list(db.CONVERSATION, undefined)).length >= 6,
+    `${(await shared.list(db.CONVERSATION, undefined)).length} rows in conversation`);
+
+  // ⭐ The two ends now COEXIST, which is the point: one name held one row before.
+  const gens = await caught(async () =>
+    `${(await sessions.loadRecord(A.conversation, SA, R)).record.generation}` +
+    `/${(await sessions.loadRecord(B.conversation, SB, R)).record.generation}`);
+  equal("⭐ both ends of the one channel keep their own ratchet",
+    gens.err ? `${gens.err.name} — one name held one row` : gens.value, "1/2");
+  const marks = await caught(async () =>
+    `${(await sessions.loadClosed(A.conversation, SA, R)).at}/${(await sessions.loadClosed(B.conversation, SB, R)).at}`);
+  equal("⭐ and their own closed markers",
+    marks.err ? `${marks.err.name} — the second end overwrote the first's` : marks.value, "1000/2000");
+}
+
+{
+  // ⛔ THE MESSAGE LOG IS KEYED BY A RANGE, SO IT NEEDS NO MIGRATION AND GETS NONE.
+  // `[channelHash, seq]` can hold both ends' rows at once — what was wrong was that
+  // `list()` opened all of them under one key and threw, so NEITHER identity could
+  // draw the conversation, and `forget()` deleted by name rather than by "it opened".
+  const shared = db.memoryDatabase();
+  const A = vault.openVault({ db: shared, localKey: randomBytes(32) });
+  const B = vault.openVault({ db: shared, localKey: randomBytes(32) });
+  const h = "channelHashAAAAAAAAAAA";
+  await A.messages.append(h, { dir: "in", text: "A's", firstSeen: 1000, msgId: "a1" });
+  await B.messages.append(h, { dir: "in", text: "B's", firstSeen: 1000, msgId: "b1" });
+
+  equal("both ends' rows sit in the one range", String((await shared.list(db.MESSAGES, undefined)).length), "2");
+  const drawnA = await caught(async () => (await A.messages.list(h)).map((m) => m.text).join(","));
+  const drawnB = await caught(async () => (await B.messages.list(h)).map((m) => m.text).join(","));
+  equal("⛔⛔ list() shows this identity's messages instead of throwing on the other's",
+    drawnA.err ? `${drawnA.err.name} — the lockout, reproduced` : drawnA.value, "A's");
+  equal("⭐ and the one whose history it was is not locked out of it either",
+    drawnB.err ? `${drawnB.err.name} — and it broke BOTH ends, not only the newcomer` : drawnB.value, "B's");
+  const seqs = await caught(async () =>
+    (await A.messages.list(h)).map((m) => m.seq).join(",") + "|" + (await B.messages.list(h)).map((m) => m.seq).join(","));
+  equal("⚠️ append kept both, because `add` refuses a taken seq rather than replacing",
+    seqs.err ? `${seqs.err.name}` : seqs.value, "0|1");
+
+  await A.messages.forget(h);
+  equal("⛔⛔ forget() removes only what opens under THIS key", String((await shared.list(db.MESSAGES, undefined)).length), "1");
+  const survived = await caught(async () => (await B.messages.list(h)).map((m) => m.text).join(","));
+  equal("⭐ so removing a conversation on one KEY leaves the other end's history alone",
+    survived.err ? `${survived.err.name}` : survived.value, "B's");
+}
+
+{
+  // The migration: it MOVES what opens and leaves what it cannot read exactly alone.
+  const shared = db.memoryDatabase();
+  const SA = "sc0peAAAAAAAAAAAAAAAAA";
+  const SB = "sc0peBBBBBBBBBBBBBBBBB";
+  const A = vault.openVault({ db: shared, localKey: randomBytes(32) });
+  const B = vault.openVault({ db: shared, localKey: randomBytes(32) });
+  const R = randomBytes(32);
+  const legacySession = `lpm.session.${await rosters.rootHash(R)}`;
+  const legacyClosed = `lpm.closed.${await rosters.rootHash(R)}`;
+
+  await A.conversation.set(legacySession, { ...sessions.emptyRecord(), generation: 7 });
+  await A.conversation.set(legacyClosed, { v: 1, at: 4242 });
+  await B.conversation.set("lpm.session.someoneElsesChannelHash", { theirs: true });
+
+  const moved = await sessions.adoptLegacyChannelRecords(shared, A.conversation, SA);
+  equal("both of this identity's legacy channel records move", String(moved.moved), "2");
+  equal("⛔⛔ and the one it cannot open is LEFT, because it is the other end's live ratchet",
+    String(moved.left), "1");
+  equal("⭐ the ratchet survives the move under the new name",
+    String((await sessions.loadRecord(A.conversation, SA, R)).record.generation), "7");
+  const kept = await caught(async () => String((await sessions.loadClosed(A.conversation, SA, R)).at));
+  equal("⭐ and so does the closed marker", kept.err ? `${kept.err.name}` : kept.value, "4242");
+  check("the old names are gone for the identity that owned them",
+    !(await A.conversation.attempt(legacySession)).found && !(await A.conversation.attempt(legacyClosed)).found);
+  check("⚠️ but the other identity's record is exactly where it was",
+    (await B.conversation.attempt("lpm.session.someoneElsesChannelHash")).ours === true);
+
+  const again = await sessions.adoptLegacyChannelRecords(shared, A.conversation, SA);
+  equal("⚠️ running it a second time moves nothing — a migrated name has a dot the legacy one has not",
+    String(again.moved), "0");
+}
+
+{
+  await rejects("⛔ a record cannot be named without saying whose it is",
+    () => sessions.channelKey(undefined, randomBytes(32)), /must say whose it is/);
+  await rejects("⛔ nor with an empty scope, which is the same fault spelled quietly",
+    () => sessions.closedKey("", randomBytes(32)), /must say whose it is/);
 }
 
 done();

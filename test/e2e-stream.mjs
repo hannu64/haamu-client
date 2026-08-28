@@ -116,6 +116,7 @@ async function pairTwoClients() {
 
 function device(side, roster = { generation: 0 }) {
   return messageFlow.openChannel({
+    scope: "test",
     api,
     backend: store.memoryBackend(),
     pickleKey: store.randomPickleKey(),

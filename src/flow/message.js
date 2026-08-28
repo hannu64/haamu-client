@@ -113,6 +113,7 @@ export const TAMPERED = "tampered";
 export function openChannel({
   api,
   backend,
+  scope,
   pickleKey,
   channelRoot,
   role,
@@ -120,7 +121,13 @@ export function openChannel({
   onGeneration,
   guard = (_channelHash, fn) => fn(),
 }) {
-  return { api, backend, pickleKey, channelRoot, role, generation, onGeneration, guard };
+  // ⛔ D-171: the stored record's name has to say whose it is, and only a caller knows.
+  // `storage/sessions.js` refuses an absent scope; failing HERE instead names the
+  // channel that was opened without one, which is the thing a reader needs.
+  if (typeof scope !== "string" || scope.length === 0) {
+    throw new RangeError("message flow: a channel needs the identity scope its records are named with");
+  }
+  return { api, backend, scope, pickleKey, channelRoot, role, generation, onGeneration, guard };
 }
 
 /** §7.3's 128-bit commitment to the root — the name the guard locks on. */
@@ -236,7 +243,7 @@ async function sendOnce(channel, text, { signal, unixSeconds, kind = payloads.KI
   const now = unixSeconds ?? epochs.nowSeconds();
   const epoch = await epochs.currentEpoch(channel.channelRoot, now);
 
-  const loaded = await store.loadRecord(channel.backend, channel.channelRoot);
+  const loaded = await store.loadRecord(channel.backend, channel.scope, channel.channelRoot);
   let record = sessionRules.prune(withFloor(channel, loaded.record), epoch).state;
 
   const existing = record.sending ? record.sessions[record.sending] : null;
@@ -269,7 +276,7 @@ async function sendOnce(channel, text, { signal, unixSeconds, kind = payloads.KI
   // The token is what makes it a persist rather than an overwrite: if another tab
   // advanced this channel while the lines above ran, this throws and `send` starts
   // again, and the envelope built here is discarded unsent.
-  await store.saveRecord(channel.backend, channel.channelRoot, record, loaded.token);
+  await store.saveRecord(channel.backend, channel.scope, channel.channelRoot, record, loaded.token);
 
   const sent = await mailboxFlow.sendToPeer(channel.api, channel.channelRoot, channel.role, toWire(envelope), {
     signal,
@@ -336,7 +343,7 @@ async function receiveOnce(channel, { signal, unixSeconds } = {}) {
   let refused = [];
   const record = await attempts("receive", async () => {
     refused = [];
-    const loaded = await store.loadRecord(channel.backend, channel.channelRoot);
+    const loaded = await store.loadRecord(channel.backend, channel.scope, channel.channelRoot);
     let next = sessionRules.prune(withFloor(channel, loaded.record), epoch).state;
 
     const staged = new Set(next.staged.map((s) => s.msgId));
@@ -355,7 +362,7 @@ async function receiveOnce(channel, { signal, unixSeconds } = {}) {
     await raise(channel, next.generation);
 
     // ⚠️ ONE WRITE: advanced ratchets, plaintexts and the ids now safe to delete.
-    await store.saveRecord(channel.backend, channel.channelRoot, next, loaded.token);
+    await store.saveRecord(channel.backend, channel.scope, channel.channelRoot, next, loaded.token);
     return next;
   });
 
@@ -648,9 +655,9 @@ async function settle(channel, messages, { signal } = {}) {
   // list is the same operation however many times another tab has done it too.
   const settled = new Set(messages.map((m) => m.msgId));
   await attempts("settle", async () => {
-    const loaded = await store.loadRecord(channel.backend, channel.channelRoot);
+    const loaded = await store.loadRecord(channel.backend, channel.scope, channel.channelRoot);
     const record = { ...loaded.record, staged: loaded.record.staged.filter((s) => !settled.has(s.msgId)) };
-    await store.saveRecord(channel.backend, channel.channelRoot, record, loaded.token);
+    await store.saveRecord(channel.backend, channel.scope, channel.channelRoot, record, loaded.token);
   });
 
   return { deleted };

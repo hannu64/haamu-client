@@ -5546,6 +5546,80 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-171. ⭐⭐⭐⭐⭐ The exemption I wrote into the rule yesterday was today's defect: a channel root belongs to BOTH ends
+
+**2026-08-28, the morning after D-170.** D-170 ended by writing the rule into
+`ARCHITECTURE.md` §4.1.1 — *every record's NAME must say whose record it is* — and by adding a
+guard for it. The rule shipped with an exemption:
+
+> "…named with `identityDigest(roster_id)` … **or with a hash of the channel root, which is one
+> identity's by construction**."
+
+⛔⛔⛔ **THAT CLAUSE IS FALSE, AND IT IS THE CLAUSE THAT PERMITTED THE NEXT THREE DEFECTS.** §3
+gives BOTH ends of a channel the same `R`. A hash of the channel root is the one name in this
+client that is, *by construction*, **two** identities' — the exact opposite of what the
+exemption asserts. One browser holding both ends of one pairing is not exotic: it is what
+testing a messenger alone looks like, and it is two identities on one laptop messaging each
+other.
+
+**The three records, and they failed in two different ways.**
+
+| record | what happened |
+|---|---|
+| `lpm.session.<rootHash>` | one name, one row, and the write is a compare-and-swap — so the row went to whichever end wrote FIRST and the other was **permanently deadlocked** on that channel: could not read (`OperationError`), could not write (`WriteConflict`) |
+| `lpm.closed.<rootHash>` | §6.7.1's marker, the same way — and `loadClosed` uses the throwing read, so the second end's `markClosed` made the first end's read **throw** |
+| message log, `[rootHash, seq]` | `list()` opened every row under the channel prefix, so **NEITHER** identity could draw the conversation — not only the newcomer but the one whose history it was — and `forget()` deleted the whole range, so removing a conversation on one KEY **silently destroyed the other end's messages** |
+
+⭐⭐⭐ **A RANGE CAN HOLD BOTH; A NAME HOLDS ONE.** That is what decides the repair, and it is
+the useful general form. The message log is addressed by RANGE, so both ends' rows already
+coexist in it and skipping what does not open is the entire fix — **nothing moves, and there is
+no migration.** `append` had coped all along, because it uses `add` and retries a taken `seq`.
+The other two are addressed by NAME, so skipping cannot help: the name has to carry the
+identity, and the records have to be moved onto it. The migration moves what opens and leaves
+what it cannot read exactly where it is — `vault.js`'s rule reaching its fifth call site,
+because a row it cannot read is the other end's live ratchet.
+
+⛔ **A MISSING SCOPE THROWS RATHER THAN DEFAULTING.** A default would put the old shared name
+back at whichever call site forgot, which is the shape D-165 has now cost four rounds.
+
+### ⛔⛔⛔ The lesson, and it is about the instrument and not the code
+
+**A GUARD WRITTEN FROM A RULE CANNOT FIND THE RULE'S OWN EXEMPTION.** Yesterday's scan reads
+DECLARED string literals. `lpm.session.${await rootHash(root)}` is computed at the call, and the
+message log's key is an ARRAY and never a string at all — so the instrument built to certify
+*exactly this property* could not see the two largest stores in the client. It certified four
+names and passed, on a tree with three shared names in it.
+
+➡️ **The rule, the guard and the specification agreed with each other, and all three were
+wrong.** This is D-165's *"a rule stated at one call site is not a rule"* and the review
+lesson *"a guard and the thing it guards can agree with each other and both disagree with the
+specification"* — except here there was no third document to disagree with, because I had
+written the specification too, an hour earlier, in the same breath as the guard.
+
+➡️ **SO THE GUARD NOW READS BEHAVIOUR, NOT SHAPE.** It drives the real writers with two
+identities over one database and reads back every name that actually reached the store; a name
+carrying neither scope fails it whatever it was spelled with. The declaration scan stays beside
+it — it is cheap, and it is no longer the one that decides.
+
+⭐ **And §4.1's storage table gained the column it never had: what each record is NAMED for.**
+D-170's lesson was *"a store that is not in the storage table is a store nobody reviews"*; the
+table did list all three of these records and still showed nothing, because it had columns for
+*where* and *how long* and none for *whose*. A column of per-identity entries with three
+outliers in it is a defect anyone can see.
+
+⚠️ **NOT THE FIREFOX CAUSE, AND THIS TIME I CHECKED BEFORE SAYING SO.** These fail when a
+conversation is opened or a message moves — `openHome()` touches neither store — so they cannot
+produce a failure at unlock, and they would fail identically in Chrome. D-170's lesson applied
+to my own next finding: **a mechanism that produces a real defect is not thereby the reported
+one.**
+
+**Proven:** 1469 client checks and 281 end-to-end, six mutations each watched failing and then
+reverted, plus a canary. Reverting `channelKey` reproduces `WriteConflict — the deadlock`;
+reverting `list()` reproduces `OperationError — the lockout`. `PROTOCOL.md` is unchanged: record
+naming is `ARCHITECTURE.md`'s, and nothing here needed a construction the protocol does not have.
+
+---
+
 ### D-170. ⭐⭐⭐⭐⭐ Going to fix the sentence for a damaged record found the reason there was one: the vault encrypts per identity and ADDRESSES per browser
 
 **2026-08-27, later the same day as D-169.** Hannu came back and asked what the Firefox

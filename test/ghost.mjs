@@ -65,7 +65,7 @@ section("§7.6 — the storage rule, including the item its list omitted (D-072)
   // sessions.js` never learns which backend it has; that is the point of the two
   // modes sharing one `openChannel`.
   const record = { ...store.emptyRecord(), generation: 3, staged: [{ text: "the plaintext" }] };
-  await store.saveRecord(ghost.store, ROOT, record, null);
+  await store.saveRecord(ghost.store, "test", ROOT, record, null);
 
   await ghost.messages.append("cafe", { dir: "in", text: "a message somebody typed", firstSeen: 1000 });
 
@@ -227,12 +227,12 @@ section("one interface, two backends — `storage/sessions.js` never learns whic
   const sessionStorage = fakeSession();
   const ghost = await ghosts.openGhost({ sessionStorage });
 
-  const { record, token } = await store.loadRecord(ghost.store, ROOT);
+  const { record, token } = await store.loadRecord(ghost.store, "test", ROOT);
   equal("an untouched channel reads as empty", String(record.generation), "0");
   equal("with no token, because there is nothing there yet", String(token), "null");
 
-  const first = await store.saveRecord(ghost.store, ROOT, { ...record, generation: 1 }, null);
-  const reread = await store.loadRecord(ghost.store, ROOT);
+  const first = await store.saveRecord(ghost.store, "test", ROOT, { ...record, generation: 1 }, null);
+  const reread = await store.loadRecord(ghost.store, "test", ROOT);
   equal("what was written is what comes back", String(reread.record.generation), "1");
   equal("and the token is the stored value itself", reread.token, first);
 
@@ -243,12 +243,12 @@ section("one interface, two backends — `storage/sessions.js` never learns whic
   // for that case, which is why `flow/ghost.js` builds a lock name.
   let refused = false;
   try {
-    await store.saveRecord(ghost.store, ROOT, { ...record, generation: 99 }, null);
+    await store.saveRecord(ghost.store, "test", ROOT, { ...record, generation: 99 }, null);
   } catch (err) {
     refused = store.isConflict(err);
   }
   check("⭐ a stale write is refused inside one document", refused);
-  equal("and the refusal changed nothing", String((await store.loadRecord(ghost.store, ROOT)).record.generation), "1");
+  equal("and the refusal changed nothing", String((await store.loadRecord(ghost.store, "test", ROOT)).record.generation), "1");
 }
 
 // ==================================================================== leaving it

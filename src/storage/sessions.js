@@ -14,6 +14,7 @@
 
 import { randomBytes } from "../crypto/random.js";
 import { rootHash } from "../protocol/roster.js";
+import { CONVERSATION } from "./db.js";
 
 export const RECORD_V = 1;
 
@@ -85,15 +86,39 @@ export function emptyRecord() {
 }
 
 /**
+ * ⛔⛔ THE SCOPE IS NOT OPTIONAL AND A DEFAULT WOULD BE THE BUG (D-171).
+ *
+ * `ARCHITECTURE.md` §4.1.1 requires every record's NAME to say whose record it is,
+ * and until D-171 it exempted "a hash of the channel root, which is one identity's
+ * by construction". **That clause is false.** §3 gives BOTH ends of a channel the
+ * same `R`, so both compute the same hash — and a browser holding both ends of one
+ * pairing addressed one row with two identities. The exemption I wrote was the
+ * defect, and the guard was written from the exemption, so it could not see it.
+ *
+ * A missing scope therefore throws rather than defaulting. A default would put the
+ * old shared name back at whichever call site forgot, which is precisely the shape
+ * D-165 has now cost four rounds.
+ */
+function requireScope(scope) {
+  if (typeof scope !== "string" || scope.length === 0) {
+    throw new RangeError(
+      "session store: every record's name must say whose it is — pass the identity scope (ARCHITECTURE.md §4.1.1)"
+    );
+  }
+  return scope;
+}
+
+/**
  * The storage key for a channel.
  *
  * `R` itself is never a key. Storage keys leak more readily than values — they
  * appear in indexes, in developer tools, in a database dump taken without the
  * values — and §7.3 already defines a 128-bit commitment to a root for exactly
- * this kind of reference.
+ * this kind of reference. ⚠️ That commitment says WHICH channel and cannot say
+ * WHOSE side of it — see `requireScope` above.
  */
-export async function channelKey(channelRoot) {
-  return `lpm.session.${await rootHash(channelRoot)}`;
+export async function channelKey(scope, channelRoot) {
+  return `lpm.session.${requireScope(scope)}.${await rootHash(channelRoot)}`;
 }
 
 /**
@@ -107,8 +132,8 @@ export async function channelKey(channelRoot) {
  * would be four files away. Threading it by hand is more typing and cannot be
  * forgotten quietly: the call site does not compile in the reader's head without it.
  */
-export async function loadRecord(backend, channelRoot) {
-  const { value, token } = await backend.read(await channelKey(channelRoot));
+export async function loadRecord(backend, scope, channelRoot) {
+  const { value, token } = await backend.read(await channelKey(scope, channelRoot));
   if (!value) return { record: emptyRecord(), token: null };
   if (value.v !== RECORD_V) throw new RangeError(`session store: unsupported record version ${value.v}`);
   return { record: value, token };
@@ -133,8 +158,8 @@ export async function loadRecord(backend, channelRoot) {
  * read. Refusing is safe wherever it can happen, because `flow/message.js` puts
  * every irreversible act — the transmission, the acknowledgement — AFTER this line.
  */
-export async function saveRecord(backend, channelRoot, record, token = null) {
-  return backend.write(await channelKey(channelRoot), record, token);
+export async function saveRecord(backend, scope, channelRoot, record, token = null) {
+  return backend.write(await channelKey(scope, channelRoot), record, token);
 }
 
 /**
@@ -158,9 +183,9 @@ export function isConflict(err) {
   return err?.reason === "record_conflict";
 }
 
-export async function forgetChannel(backend, channelRoot) {
-  await backend.delete(await channelKey(channelRoot));
-  await backend.delete(await closedKey(channelRoot));
+export async function forgetChannel(backend, scope, channelRoot) {
+  await backend.delete(await channelKey(scope, channelRoot));
+  await backend.delete(await closedKey(scope, channelRoot));
 }
 
 // -------------------------------------------------- §6.7.1 — the closed marker
@@ -180,17 +205,17 @@ export async function forgetChannel(backend, channelRoot) {
  * session record is rotated, pruned and rebuilt by §6.3's rules and this outlives
  * all of that: a peer who left is still gone after a session rotation.
  */
-export async function closedKey(channelRoot) {
-  return `lpm.closed.${await rootHash(channelRoot)}`;
+export async function closedKey(scope, channelRoot) {
+  return `lpm.closed.${requireScope(scope)}.${await rootHash(channelRoot)}`;
 }
 
 /** `{ at }` in unix seconds, or null. */
-export async function loadClosed(backend, channelRoot) {
-  return (await backend.get(await closedKey(channelRoot))) ?? null;
+export async function loadClosed(backend, scope, channelRoot) {
+  return (await backend.get(await closedKey(scope, channelRoot))) ?? null;
 }
 
-export async function markClosed(backend, channelRoot, at) {
-  await backend.set(await closedKey(channelRoot), { v: 1, at });
+export async function markClosed(backend, scope, channelRoot, at) {
+  await backend.set(await closedKey(scope, channelRoot), { v: 1, at });
 }
 
 /**
@@ -202,6 +227,58 @@ export async function markClosed(backend, channelRoot, at) {
  * hide content. Leaving "they have left" over a screen that is receiving messages
  * would be the client lying about what is in front of it.
  */
-export async function clearClosed(backend, channelRoot) {
-  await backend.delete(await closedKey(channelRoot));
+export async function clearClosed(backend, scope, channelRoot) {
+  await backend.delete(await closedKey(scope, channelRoot));
+}
+
+// --------------------------------------------- D-171 — the two names that were the channel's
+
+/** The record families whose names used to say WHICH channel and not WHOSE side of it. */
+export const LEGACY_CHANNEL_PREFIXES = Object.freeze(["lpm.session.", "lpm.closed."]);
+
+/**
+ * Move this identity's channel records onto names that say they are this identity's.
+ *
+ * ⚠️⚠️ IT MOVES WHAT OPENS AND LEAVES EVERYTHING ELSE EXACTLY WHERE IT IS — the rule
+ * `vault.js` states at `sweep()`, reaching its fifth call site. A row at one of these
+ * old names belongs to whichever end of the channel wrote it FIRST (the write is a
+ * compare-and-swap, so the second end was refused and never had a row at all). For
+ * that other identity this row is live data: an Olm ratchet and, with it, every message
+ * still in flight. Deleting it because we cannot read it is how one identity destroys
+ * another's conversation.
+ *
+ * ⚠️ TELLING A MIGRATED NAME FROM A LEGACY ONE IS A DOT. Both the scope and the channel
+ * hash are base64url, which has no `.` in its alphabet — so `lpm.session.<hash>` has no
+ * dot after the prefix and `lpm.session.<scope>.<hash>` has exactly one. No version
+ * marker is needed and none is invented.
+ *
+ * ⚠️ THE LISTING IS BY NAME AND THE DECISION IS BY KEY. `db.list` gives names without
+ * decrypting anything; `storage.attempt` is what answers "is this ours", and it is the
+ * only thing that may.
+ */
+export async function adoptLegacyChannelRecords(db, storage, scope) {
+  if (typeof storage?.attempt !== "function") return { moved: 0, left: 0, supported: false };
+  requireScope(scope);
+  let moved = 0;
+  let left = 0;
+  for (const [key] of await db.list(CONVERSATION, undefined)) {
+    if (typeof key !== "string") continue;
+    const prefix = LEGACY_CHANNEL_PREFIXES.find((pre) => key.startsWith(pre));
+    if (!prefix || key.slice(prefix.length).includes(".")) continue;
+    const held = await storage.attempt(key);
+    if (!held.found || !held.ours) {
+      // Another identity's — the other end of this channel, living in this browser.
+      // It stays at the old name, which is still a name it alone can read.
+      left++;
+      continue;
+    }
+    const target = `${prefix}${scope}.${key.slice(prefix.length)}`;
+    // ⚠️ The scoped record wins if both exist: it was written by this build and is
+    // therefore the later one. The legacy row is OURS — it opened — so removing it is
+    // this identity discarding its own superseded copy and reaches nobody else.
+    if (!(await storage.attempt(target)).found) await storage.set(target, held.value);
+    await storage.delete(key);
+    moved++;
+  }
+  return { moved, left, supported: true };
 }
