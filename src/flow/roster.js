@@ -909,6 +909,18 @@ async function storageKeyPromise(rosterId) {
  */
 export function describeFailure(err, localSeconds = epochs.nowSeconds()) {
   if (err instanceof RosterFailure) return err;
+
+  // ⚠️⚠️ FEEDBACK 16'S GAP, AT THE SECOND SITE, AND IT HAS BEEN REACHING PEOPLE THE
+  // WHOLE TIME (D-173). `flow/pair.js` maps this and named the lesson — *"the reasons
+  // that go unmapped are the ones the server never gets to name"* — and the fix was
+  // made where it was noticed. A `NetworkError` is not an `ApiError`: nothing answered
+  // at all, so it fell past every branch below carrying no `reason`, and
+  // `describeIdentity` answered **"Something went wrong, and this device could not say
+  // what."** Pressing "check for changes" with no network has said that since the
+  // control existed, and it is what the three controls repaired in D-173 would have
+  // said about a lost connection.
+  if (err?.name === "NetworkError") return new RosterFailure("offline", "nothing answered", err);
+
   if (err?.name !== "ApiError") return err;
 
   if (err.status === 401) {

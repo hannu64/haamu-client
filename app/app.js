@@ -1969,6 +1969,18 @@ setInterval(() => {
  */
 function describeIdentity(err) {
   noteProblem(err);
+  return sentenceFor(err);
+}
+
+/**
+ * The same sentence, without recording the problem a second time.
+ *
+ * ⚠️ IT IS SEPARATE BECAUSE A NOTICE IS BUILT MORE THAN ONCE (D-169). `notice()`
+ * keeps the builder and re-runs it on every language change, so a builder that
+ * called `describeIdentity` would add a row to the diagnostics panel every time
+ * somebody pressed Suomi. The caller records once; this says the words.
+ */
+function sentenceFor(err) {
   // ⚠️ NOT A ROSTER FAILURE AT ALL — `crypto/argon2.js` raises it, and §7.2's 128
   // MiB is the only thing this client asks of a device that a device can refuse.
   if (err?.reason === "memory") return copy.unlock.memory;
@@ -2105,6 +2117,11 @@ function paintNotice(id, build) {
     extra.className = "note";
     extra.textContent = a.note ?? "";
     if (a.note) el.append(extra);
+    // ⚠️ A NOTE WITH NO BUTTONS IS A PANEL SHAPE (D-173). `for (const b of a.buttons)`
+    // threw on it, so the only way to put a second paragraph on a panel was to give
+    // the person something to press — which is the wrong way round for a panel whose
+    // whole content is "this did not happen, and here is what the server said".
+    if (!a.buttons?.length) continue;
     const row = document.createElement("div");
     row.className = "row";
     for (const b of a.buttons) {
@@ -2123,6 +2140,29 @@ const clearNotice = (id) => {
   liveNotices.delete(id);
   document.querySelector(`[data-notice="${id}"]`)?.remove();
 };
+
+/**
+ * A control could not do what it said, and nothing was changed — D-173.
+ *
+ * ⚠️⚠️ THREE CONTROLS AWAITED A ROSTER WRITE AND CAUGHT NOTHING: `#delete`,
+ * `#sas-wrong` and `#rename`. A roster write is an HTTP PUT and can be refused for
+ * four ordinary reasons, and every one of them arrived as an unhandled rejection in
+ * a console nobody has open. This is what they say instead.
+ *
+ * ⚠️ TWO SENTENCES, FROM TWO PLACES, AND THEY ARE NOT INTERCHANGEABLE. `what()` is
+ * this product saying which act did not happen and what is therefore unchanged;
+ * `sentenceFor(err)` is the reason, from the table `flow/roster.js` fills and
+ * `test/copy.mjs` keeps complete. A panel with only the reason would leave the
+ * person to work out what it was the reason FOR.
+ *
+ * ⚠️ `what` IS A FUNCTION because `notice()` re-runs its builder on every language
+ * change (D-169), and a panel that could not be re-said in Finnish is a panel this
+ * file may not make.
+ */
+function sayNothingChanged(err, id, what) {
+  noteProblem(err);
+  notice(id, () => ({ body: what(), alarm: true, actions: [{ note: sentenceFor(err) }] }));
+}
 
 /**
  * Say every panel again, in the language just chosen.
@@ -2967,6 +3007,20 @@ $("composer").addEventListener("submit", async (e) => {
     // whose whole rule is that it types neither. `test/copy.mjs` passed the entire
     // time, because its pattern matched double-quoted, capitalised, twelve-character
     // strings — the shape of the four it caught when it was written.
+    // ⛔⛔ THE WORDS GO BACK IN THE FIELD, AND UNTIL D-173 THEY WENT NOWHERE. `#text`
+    // is cleared before the `await` above, so a send that failed left the sentence in
+    // no field, no log and no record — while the line this writes says **"Try again"**
+    // and the comment above says pressing send again is the right answer. It is, over
+    // an empty box, and `if (!body) return` makes the press do nothing. The person's
+    // only copy of what they wrote was their memory.
+    //
+    // ⚠️ ONLY IF THE BOX IS STILL EMPTY. A send is not instant, the composer is not
+    // disabled while it runs, and somebody who has started the next sentence must not
+    // have it overwritten by the one that failed.
+    if ($("text").value === "") {
+      $("text").value = body;
+      fitComposer();
+    }
     line(store.isConflict(err) ? copy.chat.busyElsewhere : copy.chat.notSent, "bad");
   } finally {
     $("send").disabled = false;
@@ -2990,7 +3044,16 @@ $("back-home").addEventListener("click", () => openHome());
 $("rename").addEventListener("click", async () => {
   const name = prompt(copy.nav.namePrompt, openEntry.name ?? "");
   if (name === null) return;
-  if (!openEntry.local) await session.roster.renameChannel(rootBytesOf(openEntry), name);
+  if (!openEntry.local) {
+    try {
+      await session.roster.renameChannel(rootBytesOf(openEntry), name);
+    } catch (err) {
+      // ⛔ D-173's third. The heading simply did not change, which reads as a control
+      // that does not work rather than as a server that did not answer.
+      return sayNothingChanged(err, "notrenamed", () => copy.nav.notRenamed);
+    }
+  }
+  clearNotice("notrenamed");
   openEntry.name = name;
   text("chat-name", name || copy.list.unnamed);
   text("rename", name ? copy.nav.rename : copy.nav.giveName);
@@ -3034,17 +3097,34 @@ async function tellThemItEnded(entry) {
  * conversation this control just said was gone.
  */
 async function removeConversation(entry, { tell = true } = {}) {
-  const told = tell ? await tellThemItEnded(entry) : null;
-
   const hash = await rosters.rootHash(rootBytesOf(entry));
-  // ⚠️⚠️ AWAITED BEFORE ANYTHING IS DELETED. The two lines below this remove the
-  // channel from the roster or the quarantine; a drain still running against it
-  // finds no session, writes a fresh one, and puts back the conversation this
-  // control has just told the person is gone. See `syncStreams` for the rule.
-  await streams.get(hash)?.live.stop();
-  streams.delete(hash);
-  session.tabs.announce("gone", { id: TAB_ID, channel: hash });
+
   /*
+    ⛔⛔⛔ THE COMMIT POINT COMES FIRST — PROTOCOL §6.7.1 RULE 1a (D-173), AND THIS
+    BLOCK USED TO BE FOUR STEPS FURTHER DOWN.
+
+    In Kept mode a conversation is removed by writing §7.3.1a's tombstone to the
+    roster, and that write is an HTTP PUT that can be refused: §9.2's limit, a stale
+    `if_match`, a 5xx, or no network at all. Nothing in this function caught it and
+    nothing in `#delete` caught it either, so the throw landed in the middle —
+    **after** the closing notice had gone and the stream had been stopped, and before
+    anything local was removed. Measured, with the network up and only the roster PUT
+    refused: the other person's screen said *"This conversation has ended"*, the
+    conversation was still in the list here, and the person who pressed delete was
+    told nothing at all.
+
+    ⚠️ THE ALTERNATIVE WAS RULED OUT RATHER THAN OVERLOOKED. §6.7.1 rule 2 says a
+    network error is not a reason to leave it on the device — but that rule is about
+    the NOTICE. Removing locally without the tombstone is undone by the very next
+    merge (§7.3.1 rule 1 drops only what a tombstone covers), which is
+    `flow/quarantine.js`'s hole exactly: the conversation goes, the person believes
+    it is gone, and it comes back. So the write is the commit, and a refusal
+    abandons the whole act with nothing touched.
+
+    ⚠️ Ghost mode and a local-only entry cannot fail this way — `sessionStorage` and
+    the quarantine are both on this device — but they stay here so that all three
+    modes have one commit point rather than two.
+
     ⚠️⚠️ THREE MODES, THREE BRANCHES. This read `if (entry.local) … else if (!isGhost())
     …` until 2026-08-24 — two branches for three cases, so Ghost mode fell off the end
     and removed nothing. The channel entry survived, `backToStart()` read it, and the
@@ -3058,6 +3138,19 @@ async function removeConversation(entry, { tell = true } = {}) {
   else if (isGhost()) await session.ghost.removeChannel();
   else await session.roster.removeChannel(rootBytesOf(entry));
 
+  // §6.7.1 rule 1: sent BEFORE the local teardown, which destroys the ratchet it
+  // needs. Rule 1a puts the roster write above it and rule 1 still holds — the write
+  // destroys nothing this needs.
+  const told = tell ? await tellThemItEnded(entry) : null;
+
+  // ⚠️⚠️ AWAITED BEFORE ANYTHING IS DELETED. The two lines below this empty the
+  // stores; a drain still running against this channel finds no session, writes a
+  // fresh one, and puts back the conversation this control has just told the person
+  // is gone. See `syncStreams` for the rule.
+  await streams.get(hash)?.live.stop();
+  streams.delete(hash);
+  session.tabs.announce("gone", { id: TAB_ID, channel: hash });
+
   // The mode-agnostic pair rather than `vault.*`: Ghost mode has no vault, and
   // this path is now reached from the SAS screen in both modes.
   await store.forgetChannel(session.backend, scopeOfRecords(), rootBytesOf(entry));
@@ -3070,7 +3163,22 @@ async function removeConversation(entry, { tell = true } = {}) {
 $("delete").addEventListener("click", async () => {
   const name = openEntry.name || copy.list.unnamed;
   if (!confirm(`${copy.deletion.confirmOne(name)}\n\n${copy.deletion.trace}\n\n${copy.closing.willTell}`)) return;
-  const told = await removeConversation(openEntry, { tell: true });
+  let told;
+  try {
+    told = await removeConversation(openEntry, { tell: true });
+  } catch (err) {
+    // ⛔⛔ D-173. This `await` had nothing around it, and a refused roster write left
+    // the person on a conversation they had just confirmed deleting, with no sentence
+    // anywhere and `PUT /api/roster/…: Failed to fetch` in a console nobody has open.
+    // ⚠️ THE SCREEN DOES NOT MOVE. Rule 1a means nothing was removed, so going home
+    // would be the app agreeing that something happened.
+    return sayNothingChanged(err, "notremoved", () => copy.deletion.notRemoved);
+  }
+  // ⭐ THE WAY A PERSON TAKES THIS PANEL DOWN IS TO SUCCEED AT THE THING IT IS ABOUT.
+  // `#notices` carries no dismiss control (D-163's question, still open), so a panel
+  // that outlived its own subject would sit above every screen saying a conversation
+  // was not deleted next to a list it is no longer in.
+  clearNotice("notremoved");
   await openHome();
   // ⚠️ SENT, NOT SEEN. §6.7.1 makes this one bounded attempt and the copy may not
   // promise more than it does.
@@ -3277,10 +3385,23 @@ $("sas-wrong").addEventListener("click", async () => {
   const entry = paired ?? revisiting;
   if (!entry) return backToStart();
   if (!confirm(copy.pairing.wrongConfirm)) return;
+  try {
+    await removeConversation(entry, { tell: false });
+  } catch (err) {
+    // ⛔⛔⛔ THE ONE OF D-173'S THREE THAT MATTERS MOST. This is the control a person
+    // presses having just decided the far end is NOT their friend, and a refused
+    // roster write left them believing they had destroyed a conversation with an
+    // interceptor. They had not, and nothing said so.
+    return sayNothingChanged(err, "notremoved", () => copy.deletion.notRemovedWrong);
+  }
+  // ⚠️ AFTER THE REMOVAL, NOT BEFORE. These three lines stood above the `await` and
+  // that is what made the failure unrecoverable as well as silent: `paired` and
+  // `revisiting` were already `null`, so the verify screen the person was left
+  // standing on no longer knew which conversation its three answers were about.
+  clearNotice("notremoved");
   paired = null;
   revisiting = null;
   show("tripwire", false);
-  await removeConversation(entry, { tell: false });
   await backToStart();
 });
 

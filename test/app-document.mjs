@@ -932,4 +932,100 @@ section("D-172 — the app may not send where the person may not");
   );
 }
 
+section("D-173 — the control that could not do what it said");
+
+/**
+ * ⛔⛔⛔ THREE CONTROLS AWAITED A ROSTER WRITE AND CAUGHT NOTHING.
+ *
+ * `#delete`, `#sas-wrong` and `#rename` each `await` an HTTP PUT that four ordinary
+ * things can refuse — §9.2's limit, a stale `if_match`, a 5xx, no network. Every one
+ * of them arrived as an unhandled rejection in a console nobody has open. Measured on
+ * 2026-08-28 with the network up and only `PUT /api/roster` refused: the other
+ * person's screen said *"This conversation has ended"*, the conversation was still in
+ * the list here, and the person who pressed delete was told nothing at all.
+ *
+ * ⭐ THE ORDER IS HALF THE REPAIR AND THE SENTENCE IS THE OTHER HALF. §6.7.1 rule 1a
+ * makes the roster write the commit point, so a refusal now lands before anything has
+ * been torn down and before the notice has gone — which is what lets the panel say
+ * *"the other person was not told"* and be true.
+ *
+ * ⚠️ SOURCE RULES, AND THEY KNOW IT. `~/lpm-probes/probe-silent-refusal.mjs` is what
+ * measured the behaviour in a real browser; these keep the shape from drifting back.
+ */
+{
+  const src = code("../app/app.js");
+
+  const remove = bodyAfter(src, "async function removeConversation(entry, { tell = true } = {}) {", "\n}\n");
+  check("`removeConversation` still exists to be checked at all", remove.length > 0, `${remove.length} chars`);
+  const rosterAt = remove.indexOf("removeChannel(rootBytesOf(entry))");
+  const tellAt = remove.indexOf("tellThemItEnded(entry)");
+  const stopAt = remove.indexOf("live.stop()");
+  const forgetAt = remove.indexOf("forgetChannel");
+  check(
+    "⛔⛔ §6.7.1 rule 1a — the roster write is the FIRST thing, so a refusal changes nothing",
+    rosterAt !== -1 && tellAt !== -1 && rosterAt < tellAt,
+    `removeChannel@${rosterAt} tellThemItEnded@${tellAt}`
+  );
+  check(
+    "⚠️ and §6.7.1 rule 1 still holds — the notice goes before the teardown that destroys its ratchet",
+    tellAt !== -1 && forgetAt !== -1 && tellAt < forgetAt,
+    `tellThemItEnded@${tellAt} forgetChannel@${forgetAt}`
+  );
+  check(
+    "⚠️ and delivery still stops before the stores are emptied, which is the older rule",
+    stopAt !== -1 && forgetAt !== -1 && stopAt < forgetAt,
+    `live.stop@${stopAt} forgetChannel@${forgetAt}`
+  );
+
+  // ⚠️ THE HANDLER, NOT THE FILE. `sayNothingChanged` appearing somewhere in `app.js`
+  // proves nothing about the control that needed it.
+  for (const [control, header] of [
+    ["delete", '$("delete").addEventListener("click", async () => {'],
+    ["sas-wrong", '$("sas-wrong").addEventListener("click", async () => {'],
+    ["rename", '$("rename").addEventListener("click", async () => {'],
+  ]) {
+    const fn = bodyAfter(src, header, "\n});\n");
+    check(`\`#${control}\`'s handler is still found`, fn.length > 0, `${fn.length} chars`);
+    // ⚠️ THE DETAIL REPORTS THE WHOLE CONDITION, NOT HALF OF IT. A first version said
+    // "guarded" whenever `sayNothingChanged` appeared anywhere in the handler, so a
+    // mutation that removed the `catch` and left the call behind failed with the word
+    // "guarded" beside it. A detail line that contradicts its own verdict is worse
+    // than no detail line.
+    const caught = /catch \(err\)/.test(fn), says = /sayNothingChanged\(/.test(fn);
+    check(
+      `⛔⛔ \`#${control}\` catches what it awaits and says so`,
+      caught && says,
+      caught && says ? "guarded" : `⛔ catch:${caught} sentence:${says} — an unhandled rejection is all the person gets`
+    );
+  }
+
+  // ⭐ `#sas-wrong` HAS A SECOND RULE OF ITS OWN. `paired` and `revisiting` used to be
+  // nulled BEFORE the removal, so a throw left the verify screen standing with its
+  // three answers no longer knowing which conversation they were about.
+  const wrong = bodyAfter(src, '$("sas-wrong").addEventListener("click", async () => {', "\n});\n");
+  const removeAt = wrong.indexOf("removeConversation(");
+  const clearAt = wrong.indexOf("paired = null");
+  check(
+    "⭐ and `#sas-wrong` does not forget which conversation it is about until the removal has happened",
+    removeAt !== -1 && clearAt !== -1 && removeAt < clearAt,
+    `removeConversation@${removeAt} paired=null@${clearAt}`
+  );
+
+  // ⛔ THE COMPOSER, WHICH IS THE SAME QUESTION AT A DIFFERENT CONTROL (D-163's sweep).
+  // `#text` is cleared before the `await`, so a failed send left the sentence nowhere
+  // while the line beneath it said "Try again".
+  const composer = bodyAfter(src, '$("composer").addEventListener("submit", async (e) => {', "\n});\n");
+  const catchBody = bodyAfter(composer, "catch (err) {", "\n  } finally");
+  check("the composer's catch is still found", catchBody.length > 0, `${catchBody.length} chars`);
+  check(
+    '⛔⛔ a send that failed puts the words back in the box it took them from',
+    /\$\("text"\)\.value = body/.test(catchBody),
+    /\$\("text"\)\.value = body/.test(catchBody) ? "restored" : "⛔ the only copy was the person's memory"
+  );
+  check(
+    "⚠️ and only when the box is still empty, so the next sentence is not overwritten",
+    /\$\("text"\)\.value === ""/.test(catchBody)
+  );
+}
+
 done();

@@ -17,6 +17,8 @@
 import { b64uEncode } from "../src/crypto/b64u.js";
 import * as rosters from "../src/protocol/roster.js";
 import * as quarantine from "../src/flow/quarantine.js";
+import { describeFailure } from "../src/flow/roster.js";
+import { NetworkError } from "../src/net/api.js";
 import { check, equal, section, done } from "./harness.mjs";
 
 const root = (n) => new Uint8Array(32).fill(n);
@@ -398,6 +400,41 @@ section("§7.3.1a — seven days, and what an undo can actually undo");
 
   await q.purge();
   equal("§7.3.1a's panic path takes the quarantine with it, kept entries included", String((await q.list()).length), "0");
+}
+
+section("§7.3 — a failure with nobody on the other end still has a reason (D-173)");
+
+/**
+ * ⛔⛔ FEEDBACK 16'S GAP, AT THE SECOND SITE, AND IT HAD BEEN REACHING PEOPLE.
+ *
+ * `flow/pair.js` maps `NetworkError` to a reason and wrote the lesson down —
+ * *"the reasons that go unmapped are the ones the server never gets to name"*. This
+ * file's `describeFailure` opened with `if (err?.name !== "ApiError") return err`, so
+ * the same error fell straight through with no `reason` at all, `describeIdentity`
+ * missed its lookup, and every roster failure caused by being offline arrived as
+ * **"Something went wrong, and this device could not say what."** Pressing "check for
+ * changes" with no network has said that since the control existed.
+ *
+ * ⚠️ THE COMPLETENESS CHECK IN `copy.mjs` COULD NOT SEE THIS. It reads which reasons
+ * the module RAISES and demands a sentence for each — a perfect instrument for a
+ * reason that exists and a blind one for a reason that was never constructed.
+ */
+{
+  const offline = describeFailure(new NetworkError("PUT /api/roster/x: Failed to fetch", new TypeError("Failed to fetch")));
+  equal("⛔⛔ a network error that reached nobody comes back with a reason", offline.reason, "offline");
+  check("⚠️ and it is a RosterFailure, so every caller that switches on the type still works",
+    offline.name === "RosterFailure", offline.name);
+  check("⚠️ and it keeps the original as its cause, for the diagnostics panel",
+    offline.cause instanceof NetworkError);
+
+  // ⚠️ THE THINGS IT MUST NOT SWALLOW. `describeFailure` is the funnel every roster
+  // call goes through, and a mapper that answered "offline" for everything would be
+  // worse than the gap it closes.
+  const already = new Error("something else");
+  check("⚠️ an error that is neither ours nor the API's is still passed through untouched",
+    describeFailure(already) === already, describeFailure(already)?.name ?? "?");
+  const conflict = Object.assign(new Error("409"), { name: "ApiError", status: 409 });
+  equal("⚠️ and the API's own refusals keep their own reasons", describeFailure(conflict).reason, "conflict");
 }
 
 done();

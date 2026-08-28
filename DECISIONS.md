@@ -5546,6 +5546,88 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-173. ⛔⛔⛔⛔⛔ The control that could not do what it said, and said nothing — including the one for "this is not my friend"
+
+**2026-08-28, from the D-163 sweep Hannu chose as the next item.** That sweep asks
+*"how does a person ASK for this?"* of every mechanism the client offers. What it found is a
+different class from the one it was looking for: here the person asks, the control is right
+there, and the answer arrives as **an unhandled rejection in a console nobody has open.**
+
+**The defect.** `#delete`, `#sas-wrong` and `#rename` each `await` a roster write — an HTTP
+PUT that four ordinary things refuse: §9.2's rate limit, a stale `if_match` under §7.3.1, a
+5xx, or no connection. None of the three caught it. `removeConversation` made it worse than a
+no-op by its ORDER: it sent §6.7.1's closing notice, stopped the stream and announced *"gone"*
+to every other tab, and wrote the roster **last** — so the throw landed after the destructive
+half and before the local half.
+
+**Measured, in two real browsers, with the network up and only `PUT /api/roster` refused:**
+
+```
+conversations before 3, after 3        ← still in the list here
+no panel was raised                    ← and nothing said so
+the other person holds 3 conversations; 1 of them now say they ended
+  "This conversation has ended. The other person ended it, and their copy of it is gone."
+```
+
+⭐⭐⭐ **`#sas-wrong` IS THE ONE THAT MATTERS MOST.** It is §3.6.2's third answer — the control
+a person presses having just decided the far end is **not their friend**. Press it with a
+refused write and you believe you have destroyed a conversation with an interceptor. You have
+not, nothing says so, and the conversation is still there ready for the next send. ⚠️ And the
+handler nulled `paired` and `revisiting` **before** the removal, so the failure was
+unrecoverable as well as silent: the verify screen the person was left standing on no longer
+knew which conversation its three answers were about.
+
+⚠️⚠️ **THE FIRST MEASUREMENT GOT THE OPPOSITE ANSWER, FOR A REASON THAT HAD NOTHING TO DO WITH
+THE DEFECT.** Blocking the roster PUT on a channel that had never carried a message also
+blocks the closing notice, because §6.3 moves the generation on the first message and moving
+it IS a roster write. The probe reported *"the peer was not told"* and the fix looked
+unnecessary. One ordinary message first, and the defect appears. ➡️ **A negative result from a
+setup you have not costed is not a negative result.**
+
+**§6.7.1 rule 1a, and the rule that was already in the room saying the opposite.** Rule 2 says
+*"a failure MUST NOT block or delay the removal — the user asked for something to be gone from
+their device; a network error is not a reason to leave it there."* Read as a principle it
+licenses removing locally and reconciling later, which is the fix I did not make. It cannot
+work: §7.3.1 rule 1 drops only what a tombstone covers, so a removal without the tombstone is
+undone by the very next merge on any device — `flow/quarantine.js`'s hole exactly, where the
+conversation goes, the person believes it is gone, and it comes back. ➡️ ⭐⭐⭐ **A RULE WRITTEN
+ABOUT ONE FAILURE IS NOT A RULE ABOUT THE ONLY FAILURE.** Rule 2 governs the notice; nothing
+governed the removal, because until this the removal could not fail.
+
+**Shipped.** The roster write is the commit point and comes first (rule 1a); the notice and the
+teardown follow it, so the panel can say *"the other person was not told"* and be true. The
+three controls catch, record the problem, and raise a panel that carries the act's own sentence
+plus the reason from `flow/roster.js`'s table. The panel comes down when the person succeeds at
+the thing it is about — which is the only answer D-163's question has for it until `#notices`
+gets a dismiss control.
+
+⚠️ **AND FEEDBACK 16'S GAP WAS OPEN AT A THIRD SITE, REACHING PEOPLE THE WHOLE TIME.**
+`flow/pair.js` maps `NetworkError` to a reason and wrote the lesson — *"the reasons that go
+unmapped are the ones the server never gets to name"*. `flow/roster.js` opened with
+`if (err?.name !== "ApiError") return err`, so a lost network carried no `reason`,
+`describeIdentity` missed its lookup, and the person read **"Something went wrong, and this
+device could not say what."** Pressing *"check for changes"* with no network has said that
+since the control existed. ⚠️⚠️ **`test/copy.mjs`'s completeness check could not have found
+it**: it reads which reasons the module RAISES and demands a sentence for each — a perfect
+instrument for a reason that exists and a blind one for a reason nobody ever constructed.
+➡️ **A check over what the code DOES cannot see what the code never does.**
+
+⭐ **And the composer, which is the same question at a different control.** `$("text").value = ""`
+runs BEFORE the `await`, so a send that failed left the sentence in no field, no log and no
+record — while the line beneath it said **"Could not send. Try again."** and the handler's own
+`catch` comment said *"pressing send again is the right answer"*. It is, over an empty box that
+`if (!body) return` makes inert. The person's only copy of what they wrote was their memory.
+Two lines, no new words: the sentence goes back in the box, and only if the box is still empty
+so the next one is not overwritten.
+
+⏭️ **STILL OPEN, AND DEFERRED BY HANNU RATHER THAN MISSED: `clearNotice` IS THIS SWEEP'S
+`lockNow`.** Of eighteen `notice()` sites, eleven pass no buttons, and `clearNotice()` — which
+exists and works — is called from five places, all of them the code's own. A panel a person has
+read sits above every screen until they lock, end, or reload. That is D-163's shape exactly,
+and it is a design decision about which panels may go and which must stay, not a fault.
+`probe-d163-no-control.mjs` marks it `OPEN` rather than `FAIL`, and prints a line asking to be
+promoted the day somebody meets the rule.
+
 ### D-172. ⭐⭐⭐⭐ The second message the product sends by itself — specified at last, and writing it down found a defect
 
 **2026-08-28.** Hannu chose to keep the behaviour and put it in the specification.

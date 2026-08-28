@@ -791,6 +791,12 @@ export const nav = {
   // instruction it always was — a question there reads as a question about the box.
   namePrompt: "Name this conversation!",
 
+  // ⛔ THE THIRD OF D-173'S THREE. Renaming is a roster write like any other, and
+  // `#rename` awaited it with nothing to catch it — so a refused write left the
+  // heading unchanged and said nothing at all, which reads as a control that does
+  // not work rather than as a server that did not answer.
+  notRenamed: "The name was not saved. Nothing was changed.",
+
   // ⚠️ "Delete" ON ITS OWN NAMED NO OBJECT (feedback 9), on a screen that also
   // carried an ending. It deletes this conversation, on every device — which the
   // confirmation says, and which the label now at least points at.
@@ -1194,6 +1200,19 @@ export const roster = {
     // had a second language to lose it in.
     clock_skew: (seconds) => clockSkew(seconds),
 
+    // ⚠️⚠️ THE COMMONEST FAILURE OF ALL, AND IT HAD NO SENTENCE UNTIL D-173. A lost
+    // network throws `NetworkError`, which is not an `ApiError` and carried no
+    // `reason`, so every roster failure caused by being offline arrived as
+    // `unknown` — *"Something went wrong, and this device could not say what."*
+    // ⭐ IT SAYS WHAT WAS NOT CHANGED, because that is the half a person can act on:
+    // nothing reached the server, so nothing moved on any device.
+    // ⚠️ IT IS SAID ON MORE SCREENS THAN THE THREE THAT PROMPTED IT — `check`, the
+    // unlock path and every roster call go through the same table — so it says
+    // "Nothing was changed" and stops there. The controls that know MORE than that
+    // (`deletion.notRemoved`, `nav.notRenamed`) carry their own sentence above it.
+    offline:
+      "Nothing answered from the server. Nothing was changed — check your connection and try again.",
+
     // §7.3.1's compare-and-swap gave up. Two devices writing at once is the
     // ordinary cause and waiting is the whole remedy.
     conflict:
@@ -1334,6 +1353,26 @@ export const deletion = {
     `Delete “${name}” everywhere?\n\n` +
     "This removes it from every device you have, and it cannot be undone. " +
     "The other person keeps their copy.",
+
+  // ⛔⛔ THE CONTROL COULD NOT DO WHAT IT SAID, AND SAID NOTHING (D-173). `#delete`
+  // awaited a roster write and caught nothing, so a refused write — §9.2's limit, a
+  // stale `if_match`, a lost network — left the conversation in the list with no
+  // sentence anywhere and an unhandled rejection in the console.
+  //
+  // ⚠️ "the other person was not told" IS ONLY TRUE BECAUSE THE ORDER CHANGED. §6.7.1
+  // rule 1a now makes the roster write the commit point, so the closing notice is sent
+  // after it lands and never before. Under the old order this sentence would have been
+  // false in the one case that matters: the notice had already gone.
+  notRemoved:
+    "This conversation was not deleted. Nothing was changed here or on your other devices, " +
+    "and the other person was not told.",
+
+  // §3.6.2's third answer, failing. ⭐ IT CARRIES ONE SENTENCE THE OTHER DOES NOT,
+  // because the person pressing this has just decided the far end is not their friend
+  // — and the conversation they meant to destroy is still open in front of them.
+  notRemovedWrong:
+    "This conversation was not deleted. Nothing was changed here or on your other devices. " +
+    "Do not send anything in it until it is gone.",
 
   // ⚠️ §7.3.1a FORBIDS the obvious sentence here. The roster keeps deletions
   // forever and `root_hash` is a 128-bit commitment that outlives the thing it

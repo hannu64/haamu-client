@@ -93,6 +93,8 @@ export const FI = {
   "deletion.quarantineWindow": "Säilytetään 7 päivää, sitten poistetaan.",
   "deletion.keep": "Säilytä tällä laitteella",
   "deletion.agree": "Kyllä, poista",
+  "deletion.notRemoved": "Keskustelua ei poistettu. Mitään ei muutettu täällä eikä muilla laitteillasi, eikä toiselle henkilölle kerrottu.",
+  "deletion.notRemovedWrong": "Keskustelua ei poistettu. Mitään ei muutettu täällä eikä muilla laitteillasi. Älä lähetä siinä mitään ennen kuin se on poissa.",
   "deletion.purged": "Kaikki poistettiin toiselta laitteelta. Tämä laite on tyhjennetty.",
 
   // ── diagnostics
@@ -198,6 +200,7 @@ export const FI = {
   "nav.giveName": "Anna nimi",
   "nav.rename": "Muuta nimeä",
   "nav.namePrompt": "Nimeä keskustelu!",
+  "nav.notRenamed": "Nimeä ei tallennettu. Mitään ei muutettu.",
   "nav.delete": "Poista tämä keskustelu",
   "nav.checkForChanges": "Tarkista muutokset muilta laitteiltani",
   "nav.checked": "Ei muutoksia keskusteluissasi.",
@@ -331,6 +334,7 @@ export const FI = {
   "roster.failure.identity_exists": "Tuo AVAIN on jo olemassa. Avaa se sen sijaan, että ottaisit käyttöön uuden.",
   "roster.failure.rate_limited": "Liian monta yritystä tästä verkosta. Odota tunti ja yritä uudelleen.",
   "roster.failure.stale": "Palvelin tarjosi vanhempaa keskustelulistaa kuin tämä laite on jo nähnyt. Näin ei pitäisi käydä. Täällä ei ole muutettu mitään; yritä myöhemmin uudelleen äläkä muodosta mitään pariliitosta uudelleen kanavaa pitkin, josta et ole varma.",
+  "roster.failure.offline": "Palvelimelta ei tullut vastausta. Mitään ei muutettu — tarkista yhteytesi ja yritä uudelleen.",
   "roster.failure.conflict": "Toinen laitteesi muutti listaa samaan aikaan. Täällä ei muutettu mitään — odota hetki ja yritä uudelleen.",
   "roster.failure.roster_full": "Keskustelulistasi on täynnä. Poista keskustelu jota et enää tarvitse, niin uudelle tulee tilaa — listan koko on kiinteä, ja jokaisesta poistosta jää merkintä AVAIMESI taakse.",
   "roster.failure.storage_full": "Palvelin on täynnä eikä ota juuri nyt vastaan mitään uutta. Mitään ei menetetty — yritä myöhemmin uudelleen.",
