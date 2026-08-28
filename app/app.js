@@ -2523,6 +2523,16 @@ const reconnecting = new Set();
 async function reconnectAutomatically(entry, hash) {
   if (isGhost() || entry.local) return;
   if (reconnecting.has(hash)) return;
+  // ⛔⛔ NEVER INTO A CONVERSATION THE PEER HAS CLOSED — PROTOCOL §6.3.1 rule 5 (D-172),
+  // AND THE RULE WAS ALREADY WRITTEN FORTY LINES AWAY. `showConversationState` computes the banner as
+  // `!closed && neverHeldHere(...)` and says why: advice to send a message cannot work
+  // once the other end is gone. This function asked only the second half — so the app
+  // could send, by itself, into a mailbox nobody will ever drain again, which is the
+  // exact defect §6.7.1 was written to end.
+  //
+  // ⭐ AND THE PRODUCT ALREADY HOLDS THE PERSON TO THIS RULE: while closed the composer
+  // is hidden AND disabled. The guard was on the human and not on the app.
+  if (await store.loadClosed(session.backend, scopeOfRecords(), rootBytesOf(entry))) return;
   if (!(await neverHeldHere(entry))) return;
   reconnecting.add(hash);
   try {

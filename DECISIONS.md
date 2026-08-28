@@ -5546,6 +5546,67 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-172. ⭐⭐⭐⭐ The second message the product sends by itself — specified at last, and writing it down found a defect
+
+**2026-08-28.** Hannu chose to keep the behaviour and put it in the specification.
+
+**The drift.** Since 2026-08-18 the client sends an ordinary message —
+*"Reconnecting old conversation."* — with nobody pressing anything, when a device holds a
+channel in its roster and none of its Olm state. His design, and a good one: sending
+*anything* is what builds the session, so it needed no new payload kind. **That is exactly
+why it went unnoticed for ten days.** §6.7.1's heading claimed `kind: "closed"` was *"the
+one message the product sends by itself"*, and a reconnect message that is not a `kind`
+never contradicted anything in the file where that claim lived.
+
+⭐ **An outside review found it (2026-08-24, client slice C, finding 1, HIGH) by reading
+the heading against the code** — the one instrument neither the copy gate nor the source
+rules could be: it re-read a claim about the whole product from outside the section that
+made it. ➡️ **A CLAIM ABOUT THE PRODUCT, MADE INSIDE A SECTION ABOUT ONE PART OF IT, IS A
+CLAIM NOBODY RE-READS WHEN THE PRODUCT CHANGES SOMEWHERE ELSE.**
+
+**§6.3.1 now states the asymmetry §6.3 never did:** a restored device can send and cannot
+receive, and only a send ends that. Eight rules follow. **Rule 1 is why the section had to
+exist at all** — the trigger MUST be the person opening that conversation, because the
+obvious implementation of §6.3 on a new device **messages every contact the moment a
+passphrase is typed**. Nothing in §6.3 forbade that, and nothing would have caught it.
+**Rule 3** makes the consent property normative: the message must appear in the sender's
+own log, because the product has spoken in their name. **Rule 4** borrows §6.7.1's "the
+client chooses the words" for the opposite reason — there to prevent a parting shot, here
+to make rule 3 satisfiable.
+
+### ⛔⛔ And rule 5 was a defect in the shipping client, found by writing the rule down
+`reconnectAutomatically()` checked *"has this device ever held a session"* and **not**
+*"has the peer closed this conversation"*. While closed, the peer has destroyed their
+ratchet and drains nothing, so the message sits in a mailbox until §5.1.1 expires it —
+**§6.7.1's founding defect, committed by the product instead of by a person, and worse,
+because there the person at least chose to type.**
+
+⭐⭐ **The rule was already written forty lines away.** `showConversationState` computes the
+banner as `!closed && neverHeldHere(...)`, with a comment saying advice to send *"would be
+advice that cannot work"*. The function next door asked only the second half. **D-165's
+class for the sixth time** — and the sharpest instance yet, because the product already
+holds the PERSON to this rule: while closed the composer is hidden *and* `disabled`.
+➡️ **THE GUARD WAS ON THE HUMAN AND NOT ON THE APP.**
+
+⚠️ **REACHABILITY IS STATED HONESTLY AND IS NOT PROVEN.** `prune()` drops only *superseded*
+sessions, so a live session cannot be emptied out from under a closed marker, and both
+records live in `CONVERSATION` and are cleared together — so I could not construct the
+state from the current paths. A migration that failed partway is one route to it. **The
+guard is there because the rule is right, not because the state was demonstrated**, and
+the two-browser probe that would settle it has not been run. Guarded as a source rule in
+`test/app-document.mjs`, watched failing against removal of the guard.
+
+⚠️ Adjacent, and already fixed: the same review's finding 4 (a hostile server clearing the
+closed marker with an undecryptable envelope) landed in D-165. It matters here because it
+means **the marker this guard consults is attacker-clearable** — the guard raises the cost
+and is not a defence against a hostile server.
+
+**The review's own alternative — send nothing, let the person's next real message build the
+session — is recorded in §6.3.1 as considered and rejected**, with its cost stated: it
+leaves *"you are not receiving and nothing on screen is wrong"*.
+
+---
+
 ### D-171. ⭐⭐⭐⭐⭐ The exemption I wrote into the rule yesterday was today's defect: a channel root belongs to BOTH ends
 
 **2026-08-28, the morning after D-170.** D-170 ended by writing the rule into

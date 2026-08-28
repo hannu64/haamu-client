@@ -64,7 +64,13 @@ export const BINDING_FROM_V = 2;
 export const KIND_TEXT = "text";
 
 /**
- * §6.7.1 — the one message the product sends by itself.
+ * §6.7.1 — the notice the product sends by itself.
+ *
+ * ⚠️ IT IS NOT THE ONLY MESSAGE THE PRODUCT SENDS BY ITSELF, AND THIS LINE SAID IT WAS
+ * UNTIL D-172. §6.3.1's reconnect send is a second one — an ORDINARY message, not a
+ * `kind`, which is why nothing here ever contradicted it. A claim about the whole
+ * product, made from inside the file about one payload kind, is a claim nobody re-reads
+ * when the product changes elsewhere.
  *
  * ⚠️⚠️ IT CARRIES NO `text`, AND THAT IS THE RULE RATHER THAN AN ECONOMY. The
  * sender is destroying their own ability to receive an answer in the same act, so

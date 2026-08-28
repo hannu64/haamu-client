@@ -882,4 +882,54 @@ section("⛔⛔ D-169 — every notice can be said again in the other language")
   );
 }
 
+
+section("D-172 — the app may not send where the person may not");
+
+/**
+ * ⛔⛔ §6.7.1's FOUNDING DEFECT, PERFORMED BY THE APP ITSELF.
+ *
+ * `reconnectAutomatically()` sends a real message with nobody pressing anything, to
+ * rebuild a session on a device that has never held one (§6.3). While a conversation is
+ * CLOSED — the peer has left and deleted their side — a message goes into a mailbox
+ * nobody will ever drain again, for up to §5.1.1's fourteen days. That is the exact
+ * sentence §6.7.1 was written to end, and the product already holds the PERSON to the
+ * rule: while closed the composer is hidden AND `disabled`. The guard was on the human
+ * and not on the app.
+ *
+ * ⭐ AND THE RULE WAS ALREADY WRITTEN FORTY LINES AWAY: `showConversationState` computes
+ * the banner as `!closed && neverHeldHere(...)`, with a comment saying why. Advice to
+ * send cannot work once the other end is gone — and neither can the send.
+ *
+ * ⚠️⚠️ THIS IS A SOURCE RULE AND IT KNOWS WHAT IT IS. It reads the function's text; it
+ * cannot prove the state is REACHABLE, and as of 2026-08-28 nobody has demonstrated
+ * that it is — `prune()` only drops superseded sessions, so a live session cannot be
+ * emptied out from under a closed marker, and both records live in `CONVERSATION` and
+ * are cleared together. It is here because the RULE is right whatever the reachability,
+ * and because a migration that failed partway is one way to the state. The instrument
+ * that would settle reachability is a two-browser probe, and it has not been run.
+ */
+{
+  // ⚠️ `code()` and not `read()`: comments are stripped, so the words "closed" and
+  // "loadClosed" in the comment I just wrote cannot satisfy the check that follows it.
+  const src = code("../app/app.js");
+  const fn = bodyAfter(src, "async function reconnectAutomatically(entry, hash) {", "\n}\n");
+  check("the function still exists to be checked at all", fn.length > 0, `${fn.length} chars`);
+  check(
+    "⛔⛔ the automatic send consults the closed marker",
+    /loadClosed/.test(fn),
+    /loadClosed/.test(fn) ? "it asks §6.7.1's marker first" : "⛔ it can send into a mailbox nobody drains"
+  );
+  const closedAt = fn.indexOf("loadClosed");
+  const sendAt = fn.indexOf("deliver(");
+  check(
+    "⭐ and it consults it BEFORE it sends, which is the whole of the rule",
+    closedAt !== -1 && sendAt !== -1 && closedAt < sendAt,
+    `loadClosed@${closedAt} deliver@${sendAt}`
+  );
+  check(
+    "⚠️ the banner beside it is still gated the same way, so the two agree",
+    /const reconnect = !closed && /.test(bodyAfter(src, "async function showConversationState(entry) {", "\n}\n"))
+  );
+}
+
 done();
