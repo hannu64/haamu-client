@@ -353,8 +353,29 @@ export function openRoster({
     // nonce, so "these are the bytes I sent" is an exact answer and never an approximate
     // one. What is stored is a SHA-256 prefix of them, never the blob.
     const baseline = roster ? roster.version : hwm;
+
+    // ⭐⭐⭐⭐⭐ WHICH BASELINE ANSWERED DECIDES WHICH SENTENCE IS TRUE, AND THE TERNARY
+    // ABOVE ALREADY KNOWS. `roster` is memory, so a baseline taken from it means this
+    // document was open and reading across the whole span: the other place wrote while the
+    // person was sitting here, seconds ago, and a present tense is a fair reading of that.
+    // `hwm` is on disk with NO CLOCK BESIDE IT — "the highest version this device has EVER
+    // adopted" — so a baseline taken from it spans everything since this browser last
+    // looked, which may be days.
+    //
+    // ⚠️⚠️ `ui/copy.js` HAD THIS RIGHT IN A COMMENT AND WRONG IN THE SENTENCE UNDER IT.
+    // *"The evidence is an event and not a presence"*, it says, and then hedges with
+    // *"while that lasts"* — which bounds the CONSEQUENCE and leaves *"your KEY is in
+    // use"*, a present tense, unbounded. Hannu met the difference on 2026-08-29: a write
+    // his own second browser made 48 hours earlier, reported as something happening now,
+    // carrying advice he could not act on because he was already following it.
+    //
+    // ⚠️ THE SEVERITY IS NOT WHAT WAS WRONG. Both spans stay alarms: an unexplained write
+    // is not less serious for being two days old — if anything the person is further from
+    // being able to explain it. Only the claim narrows.
+    const span = roster ? "watched" : "away";
+
     if (baseline !== null && baselineTrusted && opened.roster.version > baseline && !(await isOurAttempt(blob))) {
-      warnings.push({ kind: "elsewhere", version: opened.roster.version });
+      warnings.push({ kind: "elsewhere", version: opened.roster.version, span });
     }
 
     // §7.3.1a, and it is asked HERE because this is the only place a device sees
@@ -564,7 +585,9 @@ export function openRoster({
      *   role_conflict       §7.3.1 rule 2, from `protocol/roster.js`'s merge
      *   name_unresolved     §7.3.1 rule 4, from the same merge
      *   memo_conflict       §7.3.1 rule 8, from the same merge (§3.4.1c, 0.9.31)
-     *   elsewhere           D-168: the sealed version rose without this device raising it
+     *   elsewhere           D-168: the sealed version rose without this device raising it,
+     *                       carrying `span` — `watched` if this document read across the
+     *                       whole span, `away` if the baseline came from the clockless mark
      *
      * ⚠️ DRAINING IS THE CALLER'S JOB AND WHERE IT DRAINS IS A DECISION. `app.js` did
      * it on the conversation list alone until D-168, which is the one screen the person

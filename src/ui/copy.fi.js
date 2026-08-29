@@ -153,6 +153,11 @@ export const FI = {
   // rajattu siihen, mitä `flow/roster.js` todella mittasi.
   "list.elsewhere":
     "Keskustelulistaasi on muutettu jossain muualla kuin täällä. AVAIMESI on käytössä toisessa selaimessa tai toisella laitteella, ja niin kauan kuin tilanne jatkuu, jokainen toisen henkilön viesti saapuu vain yhteen paikkaan — tänne tai sinne, ei koskaan molempiin. Käytä vain yhtä kerrallaan.",
+  // ⚠️⚠️ SAMA TODISTE, ERI AIKAVÄLI — ks. `copy.js`. Verbit ovat menneessä aikamuodossa,
+  // koska tämä selain ei tiedä milloin toinen paikka kirjoitti, vain ettei se ole itse
+  // katsonut sen jälkeen. Seuraus on ehdollinen: *jos* AVAIN on siellä yhä käytössä.
+  "list.elsewhereAway":
+    "Keskustelulistaasi on muutettu jossain muualla kuin täällä, joskus sen jälkeen kun viimeksi käytit haamua tässä selaimessa. AVAINTASI on käytetty toisessa selaimessa tai toisella laitteella. Jos se on siellä yhä käytössä, jokainen toisen henkilön viesti saapuu vain yhteen paikkaan — tänne tai sinne, ei koskaan molempiin.",
   "list.localOnly": "vain tällä laitteella",
 
   // ── lock

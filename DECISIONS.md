@@ -5546,6 +5546,104 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-175. ⛔⛔⛔⛔⛔ A normative MUST that its own neighbouring MAY made impossible to obey — the alarm that reported a two-day-old event in the present tense
+
+**Found in the field by Hannu, 2026-08-29, hours after D-174 shipped.** He came back to
+Chrome after roughly 48 hours away, typed his KEY, deleted one conversation, and was told:
+
+> *"Your conversation list has been changed somewhere other than here. Your KEY is in use
+> in another browser or on another device, and while that lasts each message from the other
+> person arrives in only one place — here or there, never both. Use one at a time."*
+
+He was using one at a time, and had been for two days. His own second browser had written
+that list 48 hours earlier, during the previous test session, and nothing had touched it
+since. **The detection was correct. The sentence was not.**
+
+#### 1. The rule required the claim it could not support
+
+§7.3.1's obligation, unchanged since 0.9.27 and read by two outside reviews:
+
+> *"A client that observes the roster's sealed version rise above the highest it has
+> adopted, without having raised it, MUST tell the user the identity **is** in use
+> elsewhere… §7.3.2's high-water mark MAY serve as that baseline across a lock."*
+
+⛔⛔ **The two sentences cannot both be honoured.** The high-water mark is an integer in
+`DURABLE` with **no clock beside it** — "the highest inner version this device has ever
+adopted". A client that reaches for it learns exactly one thing: *the list changed at some
+point since I last looked.* The span is unbounded. The rule then requires that this be
+reported as a **present, ongoing** state.
+
+⭐⭐⭐⭐⭐ **A PERMISSION CAN DESTROY THE REQUIREMENT IT SITS BESIDE, AND NEITHER SENTENCE
+IS WRONG ALONE.** The MUST is right when the baseline is live. The MAY is right because
+without it the notice could never survive a lock — which is the case D-169 existed to fix.
+It is only the two together that oblige a conforming client to over-claim, and no reading
+of either sentence on its own reveals it. This is the same family as D-174's find (a rule
+in one section spending a resource another section rations) and it is now two for two:
+**when two sections each grant something reasonable, the conflict lives in neither of them
+and is invisible to a reviewer reading either.**
+
+#### 2. The client had already written the finding down, one line above the defect
+
+`ui/copy.js`, in the note attached to the very sentence at fault:
+
+> *"The evidence is an event and not a presence: the other place announced itself by
+> WRITING, and nothing here can tell whether it is still there. A sentence in the present
+> tense with no bound would be claiming a reading this client never takes."*
+
+Exactly right, and the hedge it produced — *"while that lasts"* — was attached to the
+**consequence** (messages arrive in one place) while the **claim** (*"your KEY is in
+use"*) stayed in the present tense with nothing bounding it.
+
+➡️ ⭐⭐⭐⭐⭐ **A HEDGE ON THE WRONG CLAUSE READS AS CARE AND FUNCTIONS AS NONE.** The
+comment proves the author saw the hazard; the sentence proves seeing it is not enough. A
+reviewer checking whether the tense problem had been considered would have found the note
+and stopped. **The presence of the right reasoning nearby is not evidence that it was
+applied** — and it actively suppresses the next reader's suspicion.
+
+#### 3. The fix was already half-written, in the line that caused it
+
+`flow/roster.js` picks its baseline with one ternary:
+
+```js
+const baseline = roster ? roster.version : hwm;
+```
+
+`roster` is memory: a baseline from it means this document read across the whole span, so
+the other place wrote **while the person was here** and the present tense is a fair
+reading. `hwm` is the clockless mark. **The code therefore always knew which of the two
+claims it was entitled to, and threw the answer away** — pushing `{kind, version}` and no
+more. Carrying one field, `span: "watched" | "away"`, buys two sentences and needs **no
+new storage and no clock**.
+
+⭐ **Rejected: adding a timestamp beside the mark.** It would let the notice say *how* old
+("2 days ago"), which is nicer, and it is not needed for honesty — this client cannot date
+the other device's write in any case, only its own last look. "Since you last used haamu in
+this browser" bounds it against the one clock the reader actually has. A stored timestamp
+would also be a new fact about the person's habits in a store §7.8's ending does not clear.
+
+⭐ **Rejected: softening the `away` case to a quiet notice.** The tense was the fault; the
+severity never was. An unexplained write is not less serious for being two days old — the
+person is further from being able to explain it, not closer. Both spans stay alarms, and
+`test/app-document.mjs` now fails if that changes.
+
+#### 4. What shipped
+
+PROTOCOL **0.9.33**: the MUST moves to the past tense, the MAY carries its own consequence
+("MUST NOT report a PRESENT use"), and a present claim is permitted **only** from a
+continuously-held baseline. Client: `span` on the warning, `list.elsewhereAway` in English
+and Finnish, and the drain picking by span. 1543 tests green.
+
+⚠️ **AND THE REPAIR SPENT A PRECONDITION, AGAIN.** `test/app-document.mjs` asserted the
+alarm by finding the ONE LINE containing the branch — deliberately narrow, because a
+wider scope had once been satisfied by a neighbour's alarm (D-165's fault class). Choosing
+a sentence made the branch four lines and the check failed with the alarm plainly there.
+**A test written against a FORM rather than a PROPERTY is spent by any repair that changes
+the form** — the third sighting in two days (D-174 had two). It now slices from the branch
+to the next `else if`: as narrow as the line was, indifferent to formatting, and its canary
+runs the same slicer over a version with the alarm removed and a neighbour that has one.
+
+---
+
 ### D-174. ⛔⛔⛔⛔⛔ Your own invite link on your own second device: the product pairs you with yourself, spends the link, and then tells your friend they intercepted it
 
 **2026-08-28, later, taking the queued `describeExistingClaim()` item.** The queue said that

@@ -568,16 +568,35 @@ section("⛔⛔ D-168 — the roster's warnings are drained where the person act
   // D-165's fault class in the instrument written to close it: a guard whose SCOPE is
   // wider than the thing it is guarding is answered by something else. It reads the one
   // line now, and the canary below is what says so.
-  const branch = render.split("\n").find((l) => l.includes('w.kind === "elsewhere"')) ?? "";
+  //
+  // ⚠️⚠️ AND IT READ EXACTLY ONE LINE UNTIL 2026-08-29, WHEN THE SPAN FIX SPENT THAT
+  // PRECONDITION. The branch grew to four lines to choose its sentence, and this check
+  // failed with the alarm sitting right there — the same shape D-174 met twice: a test
+  // written against the old FORM rather than the old PROPERTY. The property is "this
+  // branch, and no neighbour, raises the alarm", so the slice now runs from the branch to
+  // the next `else if`, which is exactly as narrow as the line was and does not care how
+  // the branch is formatted.
+  const branchOf = (text) => {
+    const from = text.indexOf('w.kind === "elsewhere"');
+    if (from === -1) return "";
+    const rest = text.slice(from);
+    const next = rest.indexOf("else if (");
+    return next === -1 ? rest : rest.slice(0, next);
+  };
+  const branch = branchOf(render);
   check(
     "⛔⛔ 'elsewhere' has a branch, and it says it out loud rather than quietly",
     /copy\.list\.elsewhere/.test(branch) && /alarm: true/.test(branch),
-    branch.trim()
+    branch.trim().split("\n")[0]
   );
+  // ⭐ The canary runs the SAME slicer over a version with the alarm removed and a
+  // neighbour that has one — which is the arrangement that fooled the first version.
+  const unalarmed =
+    'else if (w.kind === "elsewhere") notice("elsewhere", copy.list.elsewhere);\n' +
+    '    else if (w.kind === "other") notice("other", { alarm: true });';
   check(
-    "⚠️⚠️ and the check reads THAT line — a neighbour's alarm does not answer for it",
-    !/alarm: true/.test('else if (w.kind === "elsewhere") notice("elsewhere", copy.list.elsewhere);') &&
-      /alarm: true/.test(branch),
+    "⚠️⚠️ and the check reads THAT branch — a neighbour's alarm does not answer for it",
+    !/alarm: true/.test(branchOf(unalarmed)) && /alarm: true/.test(branch),
     "canary"
   );
 
@@ -603,6 +622,47 @@ section("⛔⛔ D-168 — the roster's warnings are drained where the person act
     `⭐⭐ every warning kind either module raises has a sentence (${new Set([...raised, ...merged]).size} kinds)`,
     unhandled.join(", "),
     ""
+  );
+}
+
+section("⭐⭐⭐ the 'elsewhere' notice picks its sentence by the span it was measured over");
+
+{
+  const src = code("../app/app.js");
+
+  // ⚠️ The guard on the guard: a rename here would leave nothing to test and pass silently.
+  const drain = bodyAfter(src, "function renderWarnings(", "\n}\n");
+  check("⚠️ the drain is found", /elsewhere/.test(drain), `${drain.length} characters`);
+
+  // ⭐⭐⭐ THE DEFECT THIS CLOSES IS ONE SENTENCE SERVING TWO CLAIMS. `flow/roster.js`
+  // compares against memory or against a clockless mark on disk, and only the second can
+  // be days stale — so a client that reads `w.span` is the only one that can be honest
+  // about which it met. Hannu was told his KEY *is* in use over a 48-hour-old write.
+  check(
+    "⛔⛔ the notice reads the span rather than assuming one",
+    /w\.span/.test(drain),
+    "w.span consulted"
+  );
+  check(
+    "⭐⭐ and 'away' is the branch that gets the past-tense sentence",
+    /away.*elsewhereAway|elsewhereAway.*away/s.test(drain),
+    "away → elsewhereAway"
+  );
+  check(
+    "⭐ while the watched span keeps the sentence written for it",
+    /copy\.list\.elsewhere\b/.test(drain),
+    "elsewhere kept"
+  );
+
+  // ⚠️⚠️ AND THE ALARM SURVIVES BOTH. The tense was wrong; the severity never was. An
+  // unexplained write is not less serious for being two days old — the person is further
+  // from being able to explain it, not closer. A future edit that softens `away` into a
+  // quiet notice would be answering the wrong complaint.
+  const branch = drain.slice(drain.indexOf("elsewhere"));
+  check(
+    "⛔⛔ both spans stay alarms — the tense was the fault, not the severity",
+    /alarm:\s*true/.test(branch),
+    "alarm kept"
   );
 }
 

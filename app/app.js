@@ -2245,7 +2245,15 @@ function renderWarnings() {
     // this product cannot support (§7.3.1 rule 1, D-045) and has never mentioned. Hannu
     // measured the cost of the silence on 2026-08-26: two browsers, one KEY, and the peer's
     // replies reaching only one of them with no error at either end.
-    else if (w.kind === "elsewhere") notice("elsewhere", () => ({ body: copy.list.elsewhere, alarm: true }));
+    // ⭐⭐⭐ AND WHICH OF THE TWO, because the same evidence over two spans is two claims.
+    // `watched` means this document read across the whole span and the other place wrote
+    // while the person was here; `away` means the baseline came from §7.3.2's mark, which
+    // has no clock, so the change may be days old. Both stay alarms — see `flow/roster.js`.
+    else if (w.kind === "elsewhere")
+      notice("elsewhere", () => ({
+        body: w.span === "away" ? copy.list.elsewhereAway : copy.list.elsewhere,
+        alarm: true,
+      }));
   }
 }
 

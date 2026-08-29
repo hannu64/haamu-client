@@ -1348,6 +1348,36 @@ export const list = {
     "in another browser or on another device, and while that lasts each message from the " +
     "other person arrives in only one place — here or there, never both. Use one at a time.",
 
+  /**
+   * ⭐⭐⭐⭐⭐ THE SAME EVIDENCE OVER A SPAN THIS CLIENT CANNOT MEASURE, and therefore not
+   * the same sentence. `flow/roster.js` compares against one of two baselines: memory,
+   * which means this document watched the whole span, or §7.3.2's high-water mark, which
+   * is an integer on disk with NO CLOCK beside it. The second spans everything since this
+   * browser last looked.
+   *
+   * ⚠️⚠️ THE NOTE ON `elsewhere` ABOVE ALREADY SAYS WHY, AND THE SENTENCE UNDER IT DID NOT
+   * OBEY IT. *"The evidence is an event and not a presence"* — correct, and then the hedge
+   * *"while that lasts"* was attached to the CONSEQUENCE while the CLAIM, *"your KEY is in
+   * use"*, stayed in the present tense with nothing bounding it. Hannu met that on
+   * 2026-08-29: his own second browser had written 48 hours earlier, and this told him it
+   * was happening now and to use one at a time — which he was.
+   *
+   * ⚠️ SO THE VERBS MOVE AND NOTHING ELSE DOES. *"was changed"*, *"was used"*, and the
+   * consequence made conditional on the one thing this client genuinely cannot see. It
+   * still may not say which device, may not say messages were lost, and may not offer to
+   * end the other one — all three for the reasons written on `elsewhere`.
+   *
+   * ⭐ AND IT DATES ITSELF AGAINST SOMETHING THE PERSON KNOWS. This client cannot say when
+   * the other place wrote; it can only say it has not looked since. "Since you last used
+   * haamu in this browser" is that bound in words the reader can check against their own
+   * memory, which is the only clock either of us has here.
+   */
+  elsewhereAway:
+    "Your conversation list was changed somewhere other than here, at some point since you " +
+    "last used haamu in this browser. Your KEY was used in another browser or on another " +
+    "device. If it is still in use there, each message from the other person arrives in " +
+    "only one place — here or there, never both.",
+
   localOnly: "on this device only",
 };
 

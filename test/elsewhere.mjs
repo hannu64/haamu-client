@@ -692,4 +692,77 @@ const memoFor = async (secret) => (await (await import("../src/protocol/pairing.
   );
 }
 
+// ============================================================================
+
+section("⭐⭐⭐⭐⭐ 2026-08-29 — one piece of evidence, two spans, two claims");
+
+// ⭐⭐ HANNU MEASURED THE DIFFERENCE, 2026-08-29. His own second browser wrote 48 hours
+// earlier; he came back to Chrome, deleted one conversation, and was told his KEY *is* in
+// use somewhere and to use one at a time — which he was, and had been for two days. The
+// detection was right and the tense was not. `flow/roster.js` already chose between two
+// baselines to make it; all it had to do was say which.
+
+const spanOf = (list) => list.find((w) => w.kind === "elsewhere")?.span ?? "(no elsewhere)";
+
+{
+  // WATCHED — B read, stayed open, and read again. It saw the whole span itself, so the
+  // other place wrote while the person was here and the present tense is honest.
+  const server = fakeServer();
+  const a = device(server.api, keys);
+  const b = device(server.api, keys);
+  await a.create();
+  await b.load({ network: true });
+  b.takeWarnings(); // the first read raises nothing; drain so the assertion is about the second
+  await a.addChannel({ root: root(31), name: "thirty-one", role: "I" });
+  await b.check();
+  equal(
+    "⭐ a change met by a document that never stopped reading is 'watched'",
+    spanOf(b.takeWarnings()),
+    "watched"
+  );
+}
+
+{
+  // AWAY — the same write, met instead on the first read of a new session. The baseline is
+  // §7.3.2's mark, an integer with no clock, so this device cannot date what it found.
+  //
+  // ⚠️ THE SHAPE IS D-169's SCENARIO ON PURPOSE: it is the one that produced Hannu's report,
+  // and reusing it means this asserts about the path that actually fires in the field.
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+  const other = device(server.api, keys);
+
+  const first = mine();
+  await first.create();
+  await other.load({ network: true });
+  await other.addChannel({ root: root(32), name: "thirty-two", role: "I" });
+
+  storage.wipe(); // §7.8's ordinary ending — the mark survives it, the cache does not
+  const back = mine();
+  await back.load({ network: true, reason: rosterFlow.SETUP });
+  equal(
+    "⭐⭐⭐ and the very same change, met on a first read after a gap, is 'away'",
+    spanOf(back.takeWarnings()),
+    "away"
+  );
+}
+
+{
+  // ⚠️⚠️ THE SENTENCES THEMSELVES, because a span nothing reads is a field and not a fix.
+  // The `away` one may not assert a present state: that is the entire defect being closed,
+  // and a future edit that reintroduces "is in use" would otherwise pass every test above.
+  const copy = await import("../src/ui/copy.js");
+  const away = copy.list.elsewhereAway;
+  const watched = copy.list.elsewhere;
+
+  check("the two spans do not share one sentence", away !== watched, "distinct");
+  check("⭐⭐⭐ the 'away' sentence never claims the KEY IS in use", !/KEY is in use/.test(away), away.slice(0, 60));
+  check("⭐⭐ and it does not tell the person to act on a state it cannot see", !/Use one at a time/.test(away), "no un-actionable advice");
+  check("⭐ it says WAS, so the reader knows it is reporting an event", /was changed/.test(away) && /was used/.test(away), "past tense");
+  check("⚠️ and it still bounds the span against something the reader knows", /since you last used/.test(away), "dated to their own memory");
+  check("⭐ the 'watched' sentence is untouched — it was right for its own span", /KEY is in use/.test(watched), "present tense kept");
+}
+
 done();
