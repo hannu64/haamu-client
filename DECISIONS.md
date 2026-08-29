@@ -5546,6 +5546,198 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-174. ⛔⛔⛔⛔⛔ Your own invite link on your own second device: the product pairs you with yourself, spends the link, and then tells your friend they intercepted it
+
+**2026-08-28, later, taking the queued `describeExistingClaim()` item.** The queue said that
+function has no own-claim discriminator but *"is not reached; it is not fixed"*. That note was
+written from a probe run. **It is reached, it accuses, and one of the four ways it goes wrong
+needs nothing to fail at all.**
+
+#### 0. The two harness faults that produced the wrong note, because they come first
+
+`probe-own-claim-alarm.mjs` reported *"reopening your own claimed link accuses nobody"*. It
+failed in two independent ways at once and either alone was enough.
+
+1. ⭐⭐⭐ **A CONDITIONAL IS NOT A WAIT.** Its `unlock()` clicked `#go-enter` and then asked
+   `if (await page.$("#enter:not(.hidden)"))` **in the same tick**, with no `waitForSelector`
+   between them — the pattern every other probe in the folder gets right. When the section had
+   not been swapped in yet the `if` was simply false, the KEY was never typed, the browser
+   never unlocked, and the probe went on to read **the gate**. It reported on a screen that
+   had not been asked the question. *An `if` on a screen still being drawn is a coin toss that
+   always lands the quiet way.*
+2. ⭐⭐⭐⭐ **A PRESENCE CHECK FOR A SENTENCE PASSES FOR FREE WHEN THE SENTENCE IS WRONG.** Its
+   needle was `"somebody else opened this link before you"` — the `PairFailure` message inside
+   `flow/pair.js`, which no person ever sees. The screen says *"Somebody else opened this
+   invite **link** before you…"*, from `copy.pairing.failure.already_claimed`. **One word.** The
+   first rewrite of the probe carried the same needle across and reported **0 failed** for a
+   screen it had already captured the accusation from.
+
+⚠️ The README already recorded the mirror of (2) for **absence** checks — *"an absence check
+passes for free when the name is wrong"*. **The presence version is worse, because green is the
+answer it gives.** `probe-own-claim-reopen.mjs` now imports its needles from
+`client/src/ui/copy.js` and exits 2 if it cannot find them; a needle that is not a sentence the
+product can say is not a needle.
+
+#### 1. What is actually there — measured against the tree that is live (`lpm 71db693`)
+
+Every section proves its own precondition and reports INCONCLUSIVE rather than green when it
+cannot. `probe-own-claim-reopen.mjs` (three sections) and `probe-own-link-second-device.mjs`.
+
+| what the person does | what happens |
+|---|---|
+| opens their own **OPEN** link on their own second device | ⛔⛔ **the second device claims its owner's own offer.** Both of that person's screens reach §3.6's six digits — they pair **with themselves**. The link is spent, and the friend it was sent to now trips a genuine, MAC-verified §3.5 tripwire **naming its own owner as the interceptor**. |
+| opens their own link on their second device after the friend claimed | *"Somebody else opened this invite link before you… Treat the invite link as compromised and start again."* — about the friend they deliberately sent it to. **Nothing had to fail for this.** |
+| either party taps the finished link again, §3.4's courtesy `DELETE` having not landed | the same sentence, to **both** people, for as long as the session lives — **24 hours since D-136** |
+| the same, with the `DELETE` landing | honest: *"There is no pairing session at this invite link any more."* |
+
+⭐ **And the D-135 fix is not broken — it was proved green today for the first time for the
+right reason.** With the §3.4.1b record present, a joiner reopening its own claimed link
+resumes and accuses nobody. `claimIsOurs()` works. It only ever covered one browser.
+
+#### 2. The root, and it is in the spec rather than in the code
+
+§3.5 has said since 0.9.11 (D-135):
+
+> *"The discriminator is not whose claim it is, it is whose **LINK** it is. Before fetching
+> the offer, a client MUST check its §3.4.1b record for one held with role I and the same `L`
+> … §3.5's alarm is evaluated only once the device has established that it is a J."*
+
+⭐⭐⭐⭐⭐ **THAT RECORD IS PER BROWSER, AND THE QUESTION IT IS ASKED IS PER PERSON.** A person's
+second device holds their KEY, their identity and their whole conversation list, and holds no
+§3.4.1b record for a link made on the first one — **and never will**, because D-170 established
+that the vault addresses per browser. §3.4.1b rule 8 also destroys the record on success, which
+is why the two revisit rows land in the same hole. The client is not deviating from the spec:
+**the spec's own discriminator cannot answer the question it is given.**
+
+⚠️⚠️ **AND THE FALLACY IS D-169'S, EXACTLY.** The client reads *"I hold no record saying I am
+the initiator"* as *"therefore I have established that I am the joiner"*. D-169's rule was
+written about a version number — *a device may not accuse itself* — and its shape is general:
+**the absence of a record of your own act is not evidence of somebody else's act.** A rule
+written about one failure is not a rule about the only failure (D-173), and this is the third
+site where that has now been true.
+
+#### 3. Decided — the identity remembers its own links (Hannu, 2026-08-28)
+
+Recognition must belong to the **identity**, not to the browser, because that is the level the
+question is asked at. The construction is the open part; three were costed.
+
+* **(a) A memo in the roster.** `link_memo = HKDF(L, …)` — *not* the raw `pairing_id`, which is
+  public and travels in the request path, so storing it would put a value an eavesdropper
+  already holds into long-term sealed storage for no gain. Kept on the channel entry once the
+  channel exists, and on a short-lived `invites` list while a link is in flight.
+  ⚠️⚠️ **The channel half is free — occasion 2 of §7.3.3 is already writing that entry.** The
+  `invites` half is **two genuine widenings of §7.3.3**: a write when a link is *created* and a
+  read when an unrecognised link is *opened*. §7.3.3 exists to keep `roster_id` rare and says so
+  in its own words — *"the difference between 'every launch' and 'a handful of times ever'"* —
+  and making an invitation is not rare, it is how every friend is added.
+* **(b) An owner tag published in the §3.1 offer**, `HMAC(K_master, pairing_id)`. Free of roster
+  traffic; any device of the identity recomputes and recognises it; a stranger cannot forge one
+  and the joiner ignores it. ⚠️ Needs a server column and a migration, and **a server that
+  strips the field returns the client to today's behaviour** — it cannot fabricate a match, but
+  it can suppress one, and the suppression's consequence is the self-pairing above.
+* **(c) The tag carried in the link fragment itself.** The same value, after the `L` in the
+  `#`, never sent to any server — the product already tells the user that on screen. No server
+  change, no migration, no roster traffic, **no `roster_id` widening at all**; older clients
+  ignore a longer fragment. ⚠️ Costs link length, and **§2.2's spoken code cannot carry it**, so
+  the code path keeps today's ambiguity.
+
+⭐ **The channel half of (a) is wanted by all three** and is the one part with no fork in it: a
+**joiner** revisiting a finished link is recognised by nothing else, and the entry is being
+written anyway. It fits: §7.3 derives its stated 48 channels from 16 KiB at a conservative 341
+bytes an entry, and a 16-byte memo is ~36 bytes of JSON.
+
+There was a fourth, and it was the prettiest of them:
+
+* **(d) Derive the pairing keys deterministically.** `I_priv = HKDF(K_master || L, …)` instead
+  of random. Then any device of the identity recomputes `I_pub`, matches it against the offer's
+  own `commit_I`, and knows the link is its owner's — and better, it holds the key and can
+  **finish** the pairing rather than merely decline it. The joiner half falls out the same way,
+  which would retire `claimIsOurs()`'s dependence on a stored record entirely. **Nothing
+  published, nothing stored, nothing synced, no server change, no migration, no §7.3.3 cost.**
+
+#### 4. ⛔⛔⛔⛔⛔ AND (b), (c) AND (d) ALL TURN THE INVITE LINK INTO AN OFFLINE PASSPHRASE ORACLE
+
+Each of the three publishes, to whoever holds the link, **a value that is a checkable function
+of `K_master`** — the tag in (b) and (c), and `commit_I` itself in (d). Anyone holding the link
+can then run a candidate passphrase through Argon2id, derive, and compare. §7.3.3 already names
+this exact oracle and its cost: *"one HKDF after each Argon2id confirms a candidate passphrase"*.
+
+⭐⭐⭐⭐⭐ **THE PER-GUESS COST IS UNCHANGED AND THAT IS NOT THE POINT — WHAT CHANGES IS WHO HOLDS
+THE ORACLE.** §7.3.3's version sits behind `roster_id`, which is server data. **An invite link
+is sent to people.** Every friend, every group chat it was pasted into, anyone who saw the
+message, and anyone who kept it for a year would hold a permanent offline test for this user's
+eight words. §7.2 and §7.4 size the passphrase against an attacker who has to get the data
+first; these three hand the data out as the ordinary act of inviting somebody.
+
+➡️ **The fork closes on its own, and it closes onto (a) — Hannu's choice.** (a) stores
+`HKDF(L, …)` only. **No `K_master`-derived value goes anywhere an outsider can see, which is
+exactly what its §7.3.3 cost is buying**, and the cost is now legible rather than a nuisance:
+the roster is the only place this identity can keep a fact about itself without publishing one.
+
+⚠️ **(d) is recorded rather than discarded, because it will be reinvented.** It is the correct
+shape and the wrong secret: deterministic pairing keys are safe from any secret that is *not*
+the passphrase's, and this design has no such secret to reach for — everything syncable derives
+from `K_master`, which is what makes the oracle unavoidable rather than an implementation slip.
+
+#### 5. What (a) costs, disclosed as §7.3.3 requires
+
+The **channel** half is free: occasion 2 already writes that entry. The **`invites`** half is two
+genuine widenings, and §7.3.3's own case 3 sets the precedent for admitting one in writing:
+
+* a **write** when a link is created — a sixth occasion. Marginal, because a *successful* invite
+  already writes at completion under occasion 2; what the server newly learns is that a link was
+  created at all, including ones nobody ever opens.
+* a **read** when a link is opened on a device that cannot place it — a seventh occasion.
+
+⭐ **Neither is on launch and neither is on a schedule**, so §7.3.3's central promise — *"the
+difference between 'every launch' and 'a handful of times ever'"* — is untouched. Both are
+user-initiated acts, which is the property cases 1, 2, 3 and 5 all share.
+
+#### 6. Implemented 2026-08-29 — and what implementing it found (PROTOCOL 0.9.32)
+
+✅ **All four rows of the table in §1 have been re-measured against a build that has the fix**,
+by the two probes that produced them. Every one behaves correctly, and the probes now assert the
+**right sentence arrives**, not merely that the wrong one does not.
+
+⛔⛔ **RULE 7 ASKED FOR A WRITE §7.3.3 HAS NO CASE FOR, AND THAT WAS ONLY VISIBLE FROM THE
+IMPLEMENTATION.** It said an invite entry is removed *"when it is abandoned (§3.4.1b rule 6)"*.
+`flow/roster.js` refuses any write whose reason is not one of §7.3.3's occasions — the access
+rule is executable there, not documentary — and **there is no occasion for *a link was
+cancelled***. So the two sentences could not both be obeyed. Widening occasion 6 to cover it
+would double this feature's `roster_id` exposure on an ordinary act (cancelling a link), to buy
+the difference between telling the maker *"yours, finish it elsewhere"* and *"gone"* about a
+link that is dead either way. Rule 7 was narrowed instead. ➡️ **A rule in one section that
+spends a resource another section rations is not a small inconsistency: one of the two must
+lose, and which one should not be settled by whichever gets implemented first.**
+
+⛔⛔⛔ **`recogniseLink` CALLED `load({ network: true })`, WHICH RETURNS THE CACHE WHENEVER THERE
+IS ONE.** So §7.3.3's new occasion 7 — the read that exists precisely for *a link made on the
+other device AFTER this one cached* — **never reached the network in the only case it exists
+for.** It shipped in 23b0b66 with its own tests green, because every device in those tests had
+cached after the write. What found it was a test written in the order the defect happens in:
+device B loads, *then* device A makes the link. ➡️ **A helper whose fast path is the answer to a
+different question passes every test whose setup happens to take the slow path.** The fix is one
+word — `fetch(LINK_OPENED)` — and without it the whole of §3.4.1c would have been a no-op on
+exactly the second device it was built for.
+
+⭐⭐⭐⭐⭐ **AND THE PROBE'S OWN PRECONDITION EXPIRED WHEN THE FIX LANDED.** `probe-own-claim-reopen`
+proved it had reached the code under test by watching for a `GET` on the pairing endpoint — *"it
+entered `join()`"*, which was the honest precondition on the broken build. §3.4.1c moves the
+decision **before** the network, so a recognised link now touches no pairing endpoint at all: on
+the fixed build the probe reported INCONCLUSIVE for the best possible reason, and a reader
+skimming for green would have read the fix as a broken instrument. ➡️ **A PRECONDITION WRITTEN
+AGAINST THE BROKEN BEHAVIOUR IS SPENT BY THE REPAIR.** It now asks *was this reopen handled* —
+a request, **or** a sentence — because the two builds leave different evidence for the same fact.
+
+⚠️ One more, small: §3.4.1b rule 6's abandonment `DELETE` was being sent for a session that was
+never created, which rule 5 made reachable. It now goes only if the offer was published, and the
+flag is set **before** the `POST` rather than after it, so uncertainty errs toward sending it —
+a spurious `DELETE` is a 404 nobody sees, a missing one leaves a claimable link alive for a day.
+
+⛔ **Still unproven, and it is the same gap D-173 left:** every row above was measured in
+Chromium profiles on one machine. **Two real devices, one identity, one link has never been
+walked by hand** — the same list `tripwire`'s OR-merge is still waiting on.
+
 ### D-173. ⛔⛔⛔⛔⛔ The control that could not do what it said, and said nothing — including the one for "this is not my friend"
 
 **2026-08-28, from the D-163 sweep Hannu chose as the next item.** That sweep asks

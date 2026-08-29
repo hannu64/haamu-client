@@ -50,6 +50,15 @@ echo "=== inflight.mjs — §3.4.1b, when the browser refuses to save the record
 node test/inflight.mjs
 
 echo
+echo "=== ownlink.mjs — §3.4.1c, your own invite link on your own other device ==="
+# ⚠️⚠️ D-174, and it is the same argument one section along: the real `initiate` and
+# `join` run against a fake api, so the property — that a device NEVER claims a link its
+# own identity created, and never judges it under §3.5 — is guarded where a stranger who
+# clones the public repository actually runs it. `test/elsewhere.mjs` holds the other
+# half: two devices of one identity computing the same sixteen bytes.
+node test/ownlink.mjs
+
+echo
 echo "=== stream.mjs — §5.3's transport policy ==="
 # No browser, no server, no clock: a network that accepts connections and drops
 # them two seconds later, a socket that is open and black-holed, and an epoch

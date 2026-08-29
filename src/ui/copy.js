@@ -1280,6 +1280,14 @@ export const list = {
   // §7.3.1 rule 2's conflict, which was an inline sentence in `app/app.js`.
   roleConflict: "2 devices disagreed about which side of a conversation this is.",
 
+  // §7.3.1 rule 8 (§3.4.1c, D-174). Two honest devices cannot reach this — both ends
+  // derive the memo from the same invite link — so it reports a disagreement rather
+  // than resolving one. ⚠️ Deliberately NOT an alarm, and in the same register as
+  // `roleConflict` beside it: nothing about the conversation's security has changed,
+  // and the one thing that stops being reliable is this list's own record of where
+  // the conversation came from.
+  memoConflict: "2 devices disagreed about which invite link this conversation was made through.",
+
   // §7.3.2: a device unlocking with no local history has no high-water mark, which
   // is exactly where the rollback aims. It cannot be closed, so the client shows
   // what the blob asserts about ITSELF — and §7.3.2 requires this be recorded as
@@ -2804,6 +2812,16 @@ export const pairing = {
   tripwireTitle: "Somebody else opened this invite link",
   failureTitle: "Pairing did not complete",
 
+  // ⚠️⚠️ §3.4.1c RULE 3 SAYS *"rather than reporting a failure"* IN AS MANY WORDS, so
+  // this outcome may not wear `failureTitle` and the panel may not wear its alarm. The
+  // person did nothing wrong and nothing is broken: they opened their own invite link
+  // on their own second device, which until 0.9.31 paired them with themselves.
+  //
+  // ⚠️ IT NAMES THE THING, NOT THE MISTAKE. "You cannot open this here" would be true
+  // and useless; what the person needs is the one fact that decides what to do next —
+  // whose invite link this is.
+  ownLinkTitle: "This is your own invite link",
+
   // ⚠️⚠️ §3.4.1b RULE 11 ARRIVES ON THE FAILURE PANEL AND IS NOT A FAILURE, so it
   // may not wear `failureTitle`. "Pairing did not complete" over a sentence saying
   // the invite link still works is the product contradicting itself in the two
@@ -2903,6 +2921,39 @@ export const pairing = {
     already_claimed:
       "Somebody else opened this invite link before you, and that person holds the secret in it. " +
       "Treat the invite link as compromised and start again.",
+
+    // ⛔⛔ §3.4.1c RULE 3, AND IT IS THE SENTENCE `already_claimed` ABOVE USED TO SAY TO
+    // THIS PERSON. A second device of the same identity holds no §3.4.1b record for a
+    // link made on the first one and never will, so before 0.9.31 it read its owner's
+    // own pairing as an interception — or, worse, claimed it and paired the person with
+    // themselves. Whichever screen they landed on, the product accused them of being
+    // attacked over something they had done themselves ten seconds earlier (D-174).
+    //
+    // ⚠️ IT MUST NAME THE OTHER DEVICE, because that is the only action available: the
+    // half needed to finish the pairing is ephemeral and exists nowhere else. Telling
+    // the person to "try again" here would send them round a loop that cannot close.
+    own_link:
+      "You made this invite link on another of your devices, and only that one can finish it — " +
+      "what it needs to finish never leaves the device it was made on. Open this invite link " +
+      "there, or make a new one here.",
+
+    // ⚠️ §3.4.1c RULE 2, AND IT IS NOT A FAILURE EITHER — the conversation opens behind
+    // it and this arrives as a notice over the top. It exists so that following an old
+    // invite link is not silent: something happens, and the person is told which
+    // something. ⭐ Rule 2's *"SHOULD open the conversation it already has"* is the
+    // behaviour; this is the half that explains it.
+    own_channel:
+      "This invite link made a conversation you already have, so that conversation is open here. " +
+      "An invite link makes one conversation, and this one has made it.",
+
+    // ⛔ §3.4.1c RULE 5: the note that says the invite link is this identity's own could
+    // not be written, so no invite link was created. ⚠️ THE FIRST WORDS ARE THE STATE,
+    // not the cause — a person reading a wall of explanation over a screen that may or
+    // may not have made a link needs to know first that it did not.
+    invite_unrecorded:
+      "Nothing was created. This device could not first make a note that the invite link is " +
+      "yours, and without that note your other devices could mistake your own invite link for " +
+      "somebody else's. Try again.",
     claim_forged:
       "This invite link was taken by something that could not prove it came from the link. Nothing " +
       "was intercepted, but the link is spent — create a new one.",

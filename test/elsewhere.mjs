@@ -590,4 +590,106 @@ section("⛔⛔ D-170 — an unreadable record is not an absent one, and only ON
   equal("and names itself too", raised?.which ?? "(none)", "sent");
 }
 
+// ============================================================================
+
+/**
+ * §3.4.1c — D-174's scenario at the level the fix actually lives on: ONE identity, TWO
+ * devices, and a link made on the first.
+ *
+ * ⚠️⚠️ THIS IS THE ROUND TRIP THE WHOLE SECTION IS. Device A writes `HKDF(L, …)` into
+ * the sealed roster; device B, which has never seen `L` before in its life and holds no
+ * §3.4.1b record and never will, computes the same sixteen bytes from the link it was
+ * just handed and finds them. If the two ever compute different bytes, every check in
+ * `ownlink.mjs` still passes — each half is self-consistent — and the product is exactly
+ * as broken as it was on 2026-08-28. So the memo is derived here by the REAL
+ * `derivePairing`, from a link secret, on both sides, and never copied between them.
+ */
+section("§3.4.1c — one identity, two devices, and a link made on the other one");
+
+const memoFor = async (secret) => (await (await import("../src/protocol/pairing.js")).derivePairing(secret)).linkMemo;
+
+{
+  const server = fakeServer();
+  const a = device(server.api, keys);
+  const b = device(server.api, keys);
+  await a.create();
+  await b.load({ network: true });
+
+  const secret = randomBytes(16); // §2.1's `L`, as `newLinkSecret` produces it
+  const memo = await memoFor(secret);
+
+  equal(
+    "⚠️ before the link is made, the other device recognises nothing — and that is rule 4's ordinary case",
+    JSON.stringify(await b.recogniseLink(memo)),
+    "null"
+  );
+
+  await a.rememberInvite(memo);
+  equal(
+    "⭐⭐⭐ A MADE THE LINK AND B RECOGNISES IT — the whole of D-174 in one line",
+    (await b.recogniseLink(await memoFor(secret)))?.kind ?? "(nothing)",
+    "invite"
+  );
+
+  // ⚠️ A DIFFERENT LINK MUST NOT MATCH. A `recogniseLink` that answered "invite" to
+  // anything would suppress §3.5's alarm for every real interception there will ever be,
+  // and would pass the check above.
+  equal(
+    "⛔ and a link this identity did NOT make is still not recognised",
+    JSON.stringify(await b.recogniseLink(await memoFor(randomBytes(16)))),
+    "null"
+  );
+}
+
+{
+  const server = fakeServer();
+  const a = device(server.api, keys);
+  const b = device(server.api, keys);
+  await a.create();
+  await b.load({ network: true });
+
+  const secret = randomBytes(16);
+  const memo = await memoFor(secret);
+  await a.rememberInvite(memo);
+
+  // §3.4.1c rule 6: the memo goes in WITH the write that creates the channel.
+  await a.addChannel({ root: root(40), name: "the friend", role: "I", linkMemo: memo });
+
+  const seen = await b.recogniseLink(memo);
+  equal("⭐⭐ once the pairing completed, the same link names the CONVERSATION", seen?.kind ?? "(nothing)", "channel");
+  equal("⚠️ and it names WHICH one, because rule 2 says to open it", seen?.root ?? "", b64uEncode(root(40)));
+
+  // §3.4.1c rule 7: "removed when the pairing completes". `pruneInvites` runs inside the
+  // same write that added the channel, so it costs no extra §7.3.3 occasion at all.
+  equal(
+    "⭐ and the invite entry is gone — one write did both, so rule 7 is free",
+    JSON.stringify(a.roster.invites ?? []),
+    "[]"
+  );
+}
+
+{
+  /**
+   * ⚠️⚠️ RULE 3 IS ABOUT A DEVICE THAT CANNOT FINISH, AND THIS IS THE STATE THAT MAKES
+   * IT REACHABLE: the roster says the link is this identity's own, and the browser that
+   * could finish it is somewhere else entirely. `b` here holds every byte of the
+   * identity and not one byte of `i_priv`.
+   */
+  const server = fakeServer();
+  const a = device(server.api, keys);
+  await a.create();
+  const secret = randomBytes(16);
+  await a.rememberInvite(await memoFor(secret));
+
+  // A device that has never loaded the roster over the network cannot have the entry in
+  // its cache — which is case 7's whole reason for existing.
+  const b = device(server.api, keys);
+  await b.load({ network: true });
+  equal(
+    "⭐ a device that only ever cached before the link existed still finds it, because rule 1 reads",
+    (await b.recogniseLink(await memoFor(secret)))?.kind ?? "(nothing)",
+    "invite"
+  );
+}
+
 done();

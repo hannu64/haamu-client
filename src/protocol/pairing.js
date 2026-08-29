@@ -30,6 +30,23 @@ export const ROLE_JOINER = "J";
 
 const INFO_PAIRING_ID = "lpm-pairing-id-v1";
 const INFO_PAIRING_MAC = "lpm-pairing-mac-v1";
+/**
+ * §2.3, added 0.9.31 (D-174). The value a client keeps, sealed, so that ANY device of
+ * this identity can recognise a link it is already a party to (§3.4.1c).
+ *
+ * ⚠️⚠️ IT IS NEVER SENT ANYWHERE, and the two things it is deliberately NOT are the
+ * whole of why it exists:
+ *   · NOT `pairing_id`, which would serve identically — that one travels in the request
+ *     PATH, so anyone watching traffic already holds it, and storing it would put an
+ *     eavesdropper's value into long-term sealed storage for nothing.
+ *   · ⛔⛔ NOT anything derived from `K_master`. A tag in the offer, a tag in the link,
+ *     or pairing keys derived from the identity would each let ANY HOLDER OF THE LINK
+ *     test a candidate passphrase offline — one Argon2id, one derivation, one compare.
+ *     §7.3.3 names that oracle already, but its version sits behind server data, and an
+ *     invite link is SENT TO PEOPLE. `HKDF(L, …)` tells a holder of the link nothing
+ *     they do not already have.
+ */
+const INFO_LINK_MEMO = "lpm-link-memo-v1";
 const INFO_CHANNEL_ROOT = "lpm-channel-root-v1";
 const INFO_SAS = "lpm-sas-v1";
 
@@ -82,11 +99,12 @@ export function parseLink(link) {
  */
 export async function derivePairing(linkSecret) {
   expectLength(linkSecret, LINK_SECRET_BYTES, "L");
-  const [pairingId, macKey] = await Promise.all([
+  const [pairingId, macKey, linkMemo] = await Promise.all([
     hkdf(linkSecret, INFO_PAIRING_ID, 16),
     hkdf(linkSecret, INFO_PAIRING_MAC, 32),
+    hkdf(linkSecret, INFO_LINK_MEMO, 16),
   ]);
-  return { pairingId, macKey };
+  return { pairingId, macKey, linkMemo };
 }
 
 /**

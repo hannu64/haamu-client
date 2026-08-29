@@ -404,7 +404,7 @@ check(`§7.4's cap is ${MAX_CANDIDATE_SETS} sets`, copy.phrase.capReached.includ
   /**
    * ⚠️⚠️ A FIXED COUNT IN A FIXED SENTENCE, exempt BY THE SENTENCE and not by the digit.
    *
-   * These three are typed on purpose and there is no constant they could drift from: the
+   * These four are typed on purpose and there is no constant they could drift from: the
    * situation IS two devices, and the list that follows "3 things" is in the same sentence
    * and can be counted by eye. ⭐ Matching the surrounding words rather than the number
    * makes the exemption rot on its own — reword the sentence and the digit is stray again,
@@ -413,6 +413,11 @@ check(`§7.4's cap is ${MAX_CANDIDATE_SETS} sets`, copy.phrase.capReached.includ
    */
   const fixedCount = [
     /^2 devices disagreed about which side/,
+    // ⭐ §7.3.1 rule 8's warning (0.9.31). Note it needed its OWN line rather than a
+    // loosened neighbour: the entry above ends at "which side", so a sentence starting
+    // with the same five words still had to come and ask. That is the exemption style
+    // working — the regex is a sentence, not a permission for the digit "2".
+    /^2 devices disagreed about which invite link/,
     /^2 devices renamed a conversation at the same moment/,
     /It holds 3 things: a \[mailbox\]/,
   ];

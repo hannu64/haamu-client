@@ -92,13 +92,31 @@ function validate(roster) {
     if (c.tripwire !== undefined && typeof c.tripwire !== "boolean") {
       throw new TypeError(`roster: tripwire must be a boolean, got ${JSON.stringify(c.tripwire)}`);
     }
+    // §3.4.1c, 0.9.31. Optional on the wire because rosters written before then do
+    // not have it — and ABSENT reads as "not known", never as "does not match".
+    // ⚠️ That distinction is the whole safety of this field: a channel with no memo
+    // must be indistinguishable from a link this identity has never seen, so an old
+    // roster degrades to the behaviour of §3.5 as written rather than to a silence.
+    if (c.link_memo !== undefined && typeof c.link_memo !== "string") {
+      throw new TypeError(`roster: link_memo must be b64u text, got ${JSON.stringify(c.link_memo)}`);
+    }
+  }
+  // §7.3, 0.9.31: links this identity has created and not yet finished (§3.4.1c).
+  if (roster.invites !== undefined) {
+    if (!Array.isArray(roster.invites)) throw new TypeError("roster: invites must be an array");
+    for (const i of roster.invites) {
+      if (typeof i?.memo !== "string") throw new TypeError("roster: invite memo must be b64u text");
+      if (!Number.isSafeInteger(i.created) || i.created < 0) {
+        throw new RangeError(`roster: bad invite created ${i?.created}`);
+      }
+    }
   }
   return roster;
 }
 
 /** An empty roster, as written at first setup. */
 export function emptyRoster(unixSeconds) {
-  return { v: 1, version: 1, written_at: unixSeconds, purged_at: null, channels: [], tombstones: [] };
+  return { v: 1, version: 1, written_at: unixSeconds, purged_at: null, channels: [], tombstones: [], invites: [] };
 }
 
 /**
@@ -143,6 +161,8 @@ export async function openRoster(rosterKey, blob) {
  *   5. `purged_at` takes the maximum, treating null as zero;
  *   6. `verified` is the OR of the two (§3.6.2).
  *   7. `tripwire` is the OR of the two (§3.5).
+ *   8. `link_memo` is immutable once set; absent reads as absent (§3.4.1c).
+ *   9. `invites` is unioned by `memo` — see `pruneInvites` for the half that expires.
  *
  * ⭐ RULE 6 IS THE ONE FIELD HERE WITH NO DISCRIMINATOR PROBLEM, and that is why
  * it is monotone rather than last-write-wins (D-080). Rule 4's defect was a
@@ -220,6 +240,9 @@ export async function mergeRosters(mine, theirs) {
         entry: { ...c, verified: Boolean(c.verified), tripwire: Boolean(c.tripwire) },
         at,
       });
+      // ⚠️ `link_memo` rides in on the spread and is NOT normalised to a value:
+      // absent must stay absent (§3.4.1c), because "" or null would be a memo that
+      // matches nothing AND claims to be known.
       continue;
     }
     const { entry: existing, at: heldAt } = held;
@@ -258,6 +281,12 @@ export async function mergeRosters(mine, theirs) {
         // this line would survive every test that never merged and vanish in the
         // field, which is the worst of the three possible outcomes.
         tripwire: Boolean(c.tripwire) || Boolean(existing.tripwire), // rule 7
+        // ⚠️⚠️ RULE 8, AND IT IS HERE FOR THE REASON RULE 7's NOTE GIVES: this literal
+        // names every field it keeps, so a field with no line is DROPPED on the first
+        // collision between two devices. Immutable once set — two honest devices derive
+        // it from the same `L` and cannot disagree — so a conflict is a fact about the
+        // data and is surfaced rather than resolved.
+        ...memoOf(c, existing, warnings),
       },
       at: Math.max(at, heldAt),
     });
@@ -276,9 +305,65 @@ export async function mergeRosters(mine, theirs) {
       purged_at: Math.max(mine.purged_at ?? 0, theirs.purged_at ?? 0) || null, // rule 5
       channels: [...channels.values()].map((held) => held.entry),
       tombstones: [...tombstones.values()].sort((a, b) => a.at - b.at),
+      // Rule 9's union half. The half that EXPIRES needs a clock and lives in
+      // `pruneInvites`, so that this function stays a pure function of two rosters.
+      invites: unionInvites(mine.invites, theirs.invites),
     },
     warnings,
   };
+}
+
+/**
+ * §7.3.1 rule 8: `link_memo` is immutable once set, and absent reads as ABSENT.
+ *
+ * ⚠️ THE THREE CASES ARE NOT SYMMETRIC. One side holding a memo and the other not is
+ * the ordinary shape — a channel written before 0.9.31 meeting one written after — and
+ * the answer is to keep the one that exists. Two DIFFERENT memos on one `root` cannot
+ * happen between honest devices, because both ends derive from the same `L`; it is
+ * surfaced rather than picked, exactly as rule 2 surfaces a role conflict.
+ */
+function memoOf(a, b, warnings) {
+  const mine = a.link_memo;
+  const theirs = b.link_memo;
+  if (mine && theirs && mine !== theirs) {
+    warnings.push({ kind: "memo_conflict", root: a.root });
+    // Keep the earlier entry's, matching rule 2's "earlier `created` wins".
+    return { link_memo: a.created <= b.created ? mine : theirs };
+  }
+  const kept = mine ?? theirs;
+  return kept === undefined ? {} : { link_memo: kept };
+}
+
+/** Rule 9's union: by `memo`, keeping the earlier `created`. */
+function unionInvites(mine = [], theirs = []) {
+  const by = new Map();
+  for (const i of [...(mine ?? []), ...(theirs ?? [])]) {
+    const held = by.get(i.memo);
+    if (!held || i.created < held.created) by.set(i.memo, { memo: i.memo, created: i.created });
+  }
+  return [...by.values()].sort((a, b) => a.created - b.created);
+}
+
+/**
+ * §7.3.1 rule 9's expiring half, and §3.4.1c rule 7: an invite entry goes once the
+ * link it describes is dead, or once the channel it produced exists.
+ *
+ * ⚠️⚠️ THIS IS THE ONE LIST IN §7.3 THAT MAY EXPIRE, AND THE REASON TOMBSTONES MAY NOT
+ * DOES NOT REACH IT. A tombstone outlives its subject — that is its whole job, and any
+ * expiry means a dormant device returns and resurrects a deleted contact. An invite
+ * entry's subject is a pairing session that is dead after §1's TTL, so after that the
+ * entry describes nothing and keeping it only tells a future reader that this identity
+ * once made a link.
+ *
+ * ⚠️ A DROPPED ENTRY IS NOT A TOMBSTONE AND MUST NOT MAKE ONE. A device that still
+ * holds it re-adds it on the next merge; it is harmless there and ages out again.
+ */
+export function pruneInvites(roster, nowSeconds, ttlSeconds) {
+  const known = new Set(roster.channels.map((c) => c.link_memo).filter(Boolean));
+  const invites = (roster.invites ?? []).filter(
+    (i) => i.created + ttlSeconds > nowSeconds && !known.has(i.memo)
+  );
+  return { ...roster, invites };
 }
 
 /**

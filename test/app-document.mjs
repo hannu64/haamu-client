@@ -1028,4 +1028,88 @@ section("D-173 — the control that could not do what it said");
   );
 }
 
+// ═══════════════════════ §3.4.1c — the identity's own link, wired all the way through
+
+/**
+ * ⚠️⚠️ THE MACHINERY EXISTED FOR A DAY WITH NOTHING CALLING IT. `flow/roster.js` grew
+ * `rememberInvite` and `recogniseLink`, `protocol/pairing.js` grew the memo, both were
+ * tested, and the product behaved exactly as the deployed build — because `app.js` never
+ * passed either flow a `links`. ⭐ That is a defect a unit test cannot see: every module
+ * is correct and the wire between them is missing.
+ */
+section("§3.4.1c — the roster is actually handed to the two flows that need it");
+
+{
+  const src = code("../app/app.js");
+
+  for (const [what, needle] of [
+    ["`flow.initiate`", /flow\.initiate\(\{[^}]*links:/],
+    ["`flow.join`", /flow\.join\(\{[^}]*links:/],
+  ]) {
+    check(`⭐⭐⭐ ${what} is given somewhere to look, or none of §3.4.1c runs at all`, needle.test(src));
+  }
+
+  // ⚠️ THROUGH `linksFor()` AND NOT `session.roster`. Rule 8 exempts Ghost mode — §7.6
+  // has no roster and a ghost client must not report having recognised anything — and a
+  // call site reaching for `session.roster` directly would throw there instead.
+  check(
+    "⭐⭐ and through the one helper that knows Ghost mode has no roster (rule 8)",
+    /links: linksFor\(\)/.test(src) && /const linksFor = \(\) => \(isGhost\(\) \? null/.test(src)
+  );
+
+  // Rule 6: with the write that creates the channel, never in one of its own — the same
+  // requirement, and the same reason, as §3.5's `tripwire` two lines above it.
+  check(
+    "⭐⭐ the channel is created carrying the memo of the link that made it (rule 6)",
+    /addChannel\(\{[^}]*linkMemo/.test(src)
+  );
+
+  /**
+   * ⛔⛔ RULE 3 SAYS *"rather than reporting a failure"*, AND THE PANEL IS THE REPORT.
+   * `own_link` is terminal, so without an arm of its own it inherits "Pairing did not
+   * complete" **and the alarm colours this product reserves for telling somebody they
+   * are under attack** — shown to a person who opened their own invite link on their own
+   * second device. That is the D-174 screen one step milder, and it is not acceptable.
+   */
+  const titleFn = bodyAfter(src, "function failureTitleFor({ ownLink, paused, waiting }) {", "\n}\n");
+  check("the heading chooser is found", titleFn.length > 0, `${titleFn.length} chars`);
+  check(
+    "⛔⛔ `own_link` gets its own heading rather than the failure one",
+    /if \(ownLink\) return copy\.pairing\.ownLinkTitle/.test(titleFn)
+  );
+  check(
+    "⛔⛔ and it is decided FIRST — the terminal arm would otherwise take it",
+    titleFn.indexOf("ownLinkTitle") < titleFn.indexOf("failureTitle")
+  );
+  check(
+    "⚠️ and `failWith` actually asks it, rather than keeping a second copy of the rule",
+    /text\("failure-title", failureTitleFor\(\{ ownLink, paused, waiting \}\)\)/.test(src)
+  );
+  check(
+    "⛔⛔⛔ and the alarm class is withheld from it — nobody is being attacked",
+    /toggle\("alarm", !paused && !ownLink\)/.test(src)
+  );
+
+  /**
+   * Rule 2: *"SHOULD open the conversation it already has"*. ⚠️ The check is that the
+   * open happens BEFORE `failWith` is reached, because `failWith` is a terminus — it
+   * paints the panel and returns, and a rule 2 arm placed after it is unreachable code
+   * that reads like a fix.
+   */
+  const joinCatch = bodyAfter(src, "async function runJoin(fragment) {", "\n}\n");
+  check("`runJoin` is found", joinCatch.length > 0, `${joinCatch.length} chars`);
+  check(
+    "⭐⭐ rule 2 opens the conversation the invite link already made",
+    /own_channel/.test(joinCatch) && /await openConversation\(already\)/.test(joinCatch)
+  );
+  check(
+    "⚠️ and it does so before `failWith`, which is a terminus and not a step",
+    joinCatch.indexOf("own_channel") < joinCatch.indexOf("failWith(err)")
+  );
+  check(
+    "⚠️ with a sentence, because a screen that changes for no stated reason reads as a fault (D-163)",
+    /notice\("ownlink"/.test(joinCatch)
+  );
+}
+
 done();

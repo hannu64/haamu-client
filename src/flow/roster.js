@@ -42,6 +42,7 @@ import * as passphrase from "../protocol/passphrase.js";
 import * as rosters from "../protocol/roster.js";
 import * as signing from "../protocol/signing.js";
 import * as pow from "../protocol/pow.js";
+import { PAIRING_TTL_SECONDS } from "../protocol/pairing.js";
 import { sha256 } from "../crypto/hash.js";
 
 /**
@@ -99,8 +100,22 @@ export const CHANNEL_CHANGE = "channel_change"; // 2. a channel added or removed
 export const GENERATION_CHANGE = "generation_change"; // 3. §6.3's counter rose
 export const CONFLICT_REFETCH = "conflict_refetch"; // 4. the 409 refetch
 export const USER_CHECK = "user_check"; // 5. "check for changes made elsewhere"
+// 6 and 7, added 0.9.31 with §3.4.1c (D-174). ⚠️ BOTH ARE DISCLOSED WIDENINGS of the
+// access rule, in the same terms case 3 was — and both are USER-INITIATED, which is
+// the property every other case here shares. Neither is on launch and neither is on a
+// schedule, so §7.3.3's actual promise is untouched. Polling remains forbidden.
+export const INVITE_CREATED = "invite_created"; // 6. a link was made (§3.4.1c rule 5)
+export const LINK_OPENED = "link_opened"; // 7. a link this device cannot place was opened
 
-const OCCASIONS = new Set([SETUP, CHANNEL_CHANGE, GENERATION_CHANGE, CONFLICT_REFETCH, USER_CHECK]);
+const OCCASIONS = new Set([
+  SETUP,
+  CHANNEL_CHANGE,
+  GENERATION_CHANGE,
+  CONFLICT_REFETCH,
+  USER_CHECK,
+  INVITE_CREATED,
+  LINK_OPENED,
+]);
 
 /** §7.3.3 case 5: "rate-limited to at most one per hour". */
 export const USER_CHECK_INTERVAL_S = 3600;
@@ -470,7 +485,11 @@ export function openRoster({
       // tombstones every channel, and a tombstone is a `root_hash` — which is a
       // SHA-256, which is a promise in WebCrypto. Awaiting a plain value is free,
       // so the sync callers below are unaffected.
-      const next = await mutate(structuredClone(current()));
+      const next = rosters.pruneInvites(
+        await mutate(structuredClone(current())),
+        unixSeconds(),
+        PAIRING_TTL_SECONDS
+      );
       next.version = current().version + 1;
       next.written_at = unixSeconds();
 
@@ -518,7 +537,13 @@ export function openRoster({
 
   // ---------------------------------------------------------------- the API
 
-  return {
+  // ⚠️ NAMED RATHER THAN RETURNED ANONYMOUSLY: `this` inside an object literal is
+  // whatever the call site happened to keep, and a method that works until somebody
+  // destructures it is a defect with a delay on it. Nothing inside reaches through it
+  // today — `recogniseLink` did until it was corrected to call `fetch` directly — and
+  // the shape stays because the next method to need a sibling should not have to decide
+  // this again.
+  const self = {
     rosterId: keys.rosterId,
 
     /** The decrypted roster, or null while locked. */
@@ -538,6 +563,7 @@ export function openRoster({
      *   unexplained_removal §7.3.1a: channels gone with no tombstone to explain them
      *   role_conflict       §7.3.1 rule 2, from `protocol/roster.js`'s merge
      *   name_unresolved     §7.3.1 rule 4, from the same merge
+     *   memo_conflict       §7.3.1 rule 8, from the same merge (§3.4.1c, 0.9.31)
      *   elsewhere           D-168: the sealed version rose without this device raising it
      *
      * ⚠️ DRAINING IS THE CALLER'S JOB AND WHERE IT DRAINS IS A DECISION. `app.js` did
@@ -656,8 +682,9 @@ export function openRoster({
      * small, but exactly long enough to be the window a failed write falls into,
      * and it would spend a second §7.3.3 case 2 write on the server for one fact.
      */
-    async addChannel({ root, name, role, tripwire = false }) {
+    async addChannel({ root, name, role, tripwire = false, linkMemo = null }) {
       const encoded = b64uEncode(root);
+      const memo = linkMemo ? b64uEncode(linkMemo) : undefined;
       return write((r) => {
         if (r.channels.some((c) => c.root === encoded)) return r;
         r.channels.push({
@@ -673,9 +700,100 @@ export function openRoster({
           // §3.5, carried in from the pairing that produced the evidence — never
           // set later, and never cleared at all.
           tripwire: Boolean(tripwire),
+          // §3.4.1c rule 6: written WITH the roster write that creates the channel,
+          // never in one of its own. ⚠️ `undefined` and not `null` when there is
+          // none — §7.3.1 rule 8 says absent must read as ABSENT, and a null would
+          // be a memo that matches nothing while claiming to be known.
+          ...(memo ? { link_memo: memo } : {}),
         });
         return r;
       }, CHANNEL_CHANGE);
+    },
+
+    /**
+     * §3.4.1c rule 5: the invite memo, written BEFORE the offer is published.
+     *
+     * ⛔⛔ IT IS THE CREATION'S COMMIT POINT, exactly as §6.7.1 rule 1a is the
+     * removal's (D-173). A link that exists and is not recorded here is one the
+     * maker's own other devices cannot recognise — and that is the state D-174
+     * measured, where a second device claimed its owner's own offer, paired the
+     * person with themselves, spent the link, and left the friend it was sent to
+     * tripping §3.5's alarm at its own owner. **A refusal here MUST abandon the
+     * creation**; the caller does not get to publish an offer it could not record.
+     */
+    async rememberInvite(linkMemo) {
+      const memo = b64uEncode(linkMemo);
+      return write((r) => {
+        const invites = r.invites ?? [];
+        if (!invites.some((i) => i.memo === memo)) invites.push({ memo, created: unixSeconds() });
+        r.invites = invites;
+        return r;
+      }, INVITE_CREATED);
+    },
+
+    /**
+     * §3.4.1c rule 1: is this link one this identity is already a party to?
+     *
+     * Returns `{ kind: "channel", root }`, `{ kind: "invite" }`, or `null`.
+     *
+     * ⚠️⚠️ `null` MEANS "LEARNED NOTHING" AND MUST NOT BE READ AS "NOT MINE". It is
+     * also the ordinary answer for a first-time joiner, and §3.4.1c rule 4 requires
+     * the two stay indistinguishable — the caller falls through to §3.4.1b rule 7 and
+     * §3.5 exactly as before.
+     *
+     * ⚠️ ONE NETWORK READ, AND ONLY WHEN THE CACHED ANSWER IS "NOTHING" (case 7). A
+     * link made on the other device AFTER this one unlocked is not in the cached copy,
+     * which is the whole case this exists for; a link that already matches needs no
+     * read at all. It is bounded by the act — a link the person has just followed —
+     * and it is not a schedule.
+     */
+    async recogniseLink(linkMemo, { network = true } = {}) {
+      const memo = b64uEncode(linkMemo);
+      // ⚠️ THE EXPIRY IS CHECKED WHERE THE ANSWER IS GIVEN, not only where the blob is
+      // pruned. §3.4.1c rule 7 removes an invite entry once it is older than §1's session
+      // TTL, and `pruneInvites` only runs on a WRITE — a device that has not written
+      // since would otherwise still recognise a link that has been dead for weeks and
+      // send its owner to another device to finish something that cannot be finished.
+      // A CHANNEL memo has no expiry and must not get one: the conversation outlives
+      // the link that made it, which is exactly the distinction rule 7 draws.
+      const alive = (i) => i.created + PAIRING_TTL_SECONDS > unixSeconds();
+      const look = () => {
+        const r = current();
+        const channel = r.channels.find((c) => c.link_memo === memo);
+        if (channel) return { kind: "channel", root: channel.root };
+        if ((r.invites ?? []).some((i) => i.memo === memo && alive(i))) return { kind: "invite" };
+        return null;
+      };
+      const cached = look();
+      if (cached || !network) return cached;
+      try {
+        // ⛔⛔⛔ `fetch` AND NOT `load({ network: true })`, AND THE DIFFERENCE IS THE
+        // WHOLE OF CASE 7. `load` returns the CACHED blob whenever there is one and
+        // reaches the network only when there is not — which is right for `load` and
+        // exactly wrong here. **The case this function exists for is a link made on the
+        // other device AFTER this one cached**, so the cached copy is by construction
+        // the one that does not have it, and a "network read" that re-reads the cache
+        // answers `null` to the only question ever asked of it.
+        //
+        // ⭐ It read `load({ network: true })` for a day and every check passed, because
+        // the only test devices that recognised anything had cached AFTER the write. The
+        // two-device order in `test/elsewhere.mjs` is what tells the two apart, and it
+        // is the order D-174 actually happens in.
+        await fetch(LINK_OPENED);
+      } catch {
+        // §3.4.1c rule 4: a read that failed has taught this device nothing, which is
+        // a state the caller already handles. It must not become a recognition either
+        // way — and it must not stop the person opening the link.
+        //
+        // ⚠️ INCLUDING §7.3.2's `stale` REFUSAL, AND THAT IS §3.4.1c's [server-trust]
+        // paragraph exactly: a server serving an old roster can withhold an invite entry
+        // and put this device back in the ambiguity §3.4.1c removed. It cannot
+        // MANUFACTURE a recognition — the memo is compared against this identity's own
+        // sealed copy — and the cached blob is left intact here, so the next read made
+        // for any other reason meets §7.3.2's high-water mark and refuses loudly.
+        return null;
+      }
+      return look();
     },
 
     /**
@@ -846,6 +964,7 @@ export function openRoster({
       outer = null;
     },
   };
+  return self;
 }
 
 /**

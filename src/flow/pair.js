@@ -474,6 +474,17 @@ const TERMINAL_REASONS = new Set([
   "expired", // rule 4
   "not_found", // 404: gone, deleted, or never created
   "server_state", // 409: a legal-looking step refused. A bug, and not retryable
+  // §3.4.1c, all three. ⚠️ THEY ARE HERE FOR THE SCREEN AS MUCH AS FOR THE RECORD.
+  // `endsThePairing` is the ONE classifier both consumers read (feedback 16), and a
+  // §3.4.1c outcome left out of it would be painted "The pairing was interrupted" over
+  // a carry-on offer — an offer to resume a link this device can never finish.
+  //
+  // ⚠️ `own_link` and `own_channel` are raised BEFORE the try block, so they never
+  // reach `concludePairing` and cannot clear a record. Nothing was started: the check
+  // that produced them sent no claim and created nothing.
+  "own_link", // §3.4.1c rule 3: this identity's own link, on a device that cannot finish it
+  "own_channel", // §3.4.1c rule 2: this identity is already a party to this pairing
+  "invite_unrecorded", // §3.4.1c rule 5: the memo was refused, so the creation is abandoned
 ]);
 
 export function endsThePairing(err) {
@@ -944,7 +955,7 @@ async function solveProofOfWork(api, signal, onEvent) {
  * and cannot be handed a commitment to verify a claim against.
  */
 async function initiatorAwaitsClaim({
-  api, idPath, macKey, commit, linkSecret, privateKey, publicKey, expiresAt, signal, onEvent,
+  api, idPath, macKey, commit, linkSecret, linkMemo, privateKey, publicKey, expiresAt, signal, onEvent,
 }) {
   let tripwire = { raised: false, verified: false };
   const claimed = await pollStatus(api, idPath, {
@@ -1021,7 +1032,11 @@ async function initiatorAwaitsClaim({
   }
 
   lastPairingId = null; // completed, so there is nothing left to abandon
-  return { role: pairing.ROLE_INITIATOR, channelRoot, sas, tripwire };
+  // ⚠️ `linkMemo` TRAVELS OUT WITH THE RESULT because §3.4.1c rule 6 requires it in the
+  // roster write that CREATES the channel — with it or before it, never in a write of
+  // its own, for the same reason §3.5's tripwire field is taken that way. The caller
+  // cannot recompute it: `L` is gone by the time this returns.
+  return { role: pairing.ROLE_INITIATOR, channelRoot, sas, tripwire, linkMemo };
 }
 
 /**
@@ -1029,7 +1044,7 @@ async function initiatorAwaitsClaim({
  * delete the session.
  */
 async function joinerAwaitsReveal({
-  api, idPath, macKey, commit, linkSecret, privateKey, expiresAt, signal, onEvent,
+  api, idPath, macKey, commit, linkSecret, linkMemo, privateKey, expiresAt, signal, onEvent,
 }) {
   let tripwire = { raised: false, verified: false };
   const revealed = await pollStatus(api, idPath, {
@@ -1070,7 +1085,7 @@ async function joinerAwaitsReveal({
   }
 
   lastPairingId = null; // completed, so there is nothing left to abandon
-  return { role: pairing.ROLE_JOINER, channelRoot, sas, tripwire };
+  return { role: pairing.ROLE_JOINER, channelRoot, sas, tripwire, linkMemo };
 }
 
 // ------------------------------------------------------------- the initiator
@@ -1095,15 +1110,24 @@ async function joinerAwaitsReveal({
  * the same `L` would be one screen and no restart — and would silently drop every
  * invite link in the product from 128 bits to 80, spending the margin §2.2a says is
  * what keeps §3.6's relay unavailable to a hostile server at all.
+ *
+ * `links` is the identity's memory of its own links (§3.4.1c) — `flow/roster.js`'s
+ * `rememberInvite`. ⚠️ **`null` IS GHOST MODE AND NOTHING ELSE.** §7.6 has no roster,
+ * so rule 8 exempts it explicitly and a ghost client performs none of §3.4.1c. Every
+ * other caller has one, and passing `null` from a caller that has a roster would put
+ * a link into the world that the maker's own other devices cannot recognise — which
+ * is the entire defect D-174 measured.
  */
-export async function initiate({ api, origin, storage, signal, as = "link", onEvent = () => {} }) {
+export async function initiate({
+  api, origin, storage, signal, as = "link", links = null, onEvent = () => {},
+}) {
   // ⚠️ A typo here must not quietly hand back a 128-bit link to a caller that asked
   // for something a person can say out loud — the difference is invisible until the
   // friend on the telephone has nothing to read.
   if (as !== "link" && as !== "code") throw new TypeError(`initiate: unknown secret kind ${as}`);
   const spoken = as === "code" ? code.newCode() : null;
   const linkSecret = spoken ? code.secret(spoken) : pairing.newLinkSecret();
-  const { pairingId, macKey } = await pairing.derivePairing(linkSecret);
+  const { pairingId, macKey, linkMemo } = await pairing.derivePairing(linkSecret);
   const { privateKey, publicKey } = await x25519.generateKeyPair();
   const commit = await pairing.commitTo(publicKey);
   const idPath = idPathFor(pairingId);
@@ -1112,6 +1136,9 @@ export async function initiate({ api, origin, storage, signal, as = "link", onEv
   lastPairingId = pairingId;
 
   let failure = null; // §3.4.1b rule 10 — the `finally` has to know WHICH ending
+  // §3.4.1b rule 6 is about "a link left claimable", and until the offer lands there is
+  // no link and nothing to delete. See where it is set.
+  let published = false;
   const expiresAt = Date.now() + pairing.PAIRING_TTL_SECONDS * 1000;
   // Stored BEFORE the offer goes out. If the page is discarded between the two,
   // the worst case is an unclaimed session that expires with the link; stored
@@ -1124,6 +1151,32 @@ export async function initiate({ api, origin, storage, signal, as = "link", onEv
   }
 
   try {
+    // ⛔⛔ §3.4.1c RULE 5 — THE CREATION'S COMMIT POINT, AND IT IS BEFORE EVERYTHING
+    // OBSERVABLE. §6.7.1 rule 1a is the same discipline for the removal (D-173): the
+    // record that other devices read goes down FIRST, and a refusal abandons the act
+    // rather than proceeding without it.
+    //
+    // ⚠️⚠️ A LINK THAT EXISTS AND IS NOT RECORDED IS THE WHOLE OF D-174. The maker's
+    // own second device then finds no reason to think the link is its owner's, claims
+    // it, pairs the person with themselves, spends the link — and the friend it was
+    // actually sent to trips a genuine MAC-verified §3.5 alarm naming its own owner.
+    // Nothing has to fail for that; it is what the correct code did.
+    //
+    // ⚠️ IT RUNS BEFORE §9.1's SEARCH, NOT AFTER IT. The refusal then reaches the
+    // person before the seconds of proof-of-work rather than after them, and nothing
+    // between here and the `POST` is visible to anybody. The creation already needs the
+    // network for both of those, so no case that worked offline stops working.
+    if (links) {
+      try {
+        await links.rememberInvite(linkMemo);
+      } catch (err) {
+        throw new PairFailure(
+          "invite_unrecorded",
+          `the invite link could not be recorded, so it was not created: ${err?.reason ?? err?.name ?? err}`
+        );
+      }
+    }
+
     const solution = await solveProofOfWork(api, signal, onEvent);
     const offer = await pairing.buildOffer(macKey, commit, solution);
     // §3.1, with rule 10's ladder and 0.9.20's ownership check. The commitment the
@@ -1131,6 +1184,13 @@ export async function initiate({ api, origin, storage, signal, as = "link", onEv
     // function, so a session already standing under `commit` is this device's own
     // first attempt. A DIFFERENT commitment under the same `pairing_id` is a second
     // holder of `L` who got there first, and stays `already_exists`.
+    // ⚠️⚠️ SET BEFORE THE ATTEMPT AND NOT AFTER IT, AND THE DIRECTION IS THE WHOLE
+    // POINT. `writeRetrying` can land the `POST` and then fail its read-back, so "it
+    // returned" is not the same question as "did a session get created". A spurious
+    // `DELETE` for a session that does not exist is a 404 nobody sees; a skipped one
+    // leaves a claimable link alive for its whole day, which is the hazard rule 6
+    // exists for. Uncertainty therefore has to fall on the side of sending it.
+    published = true;
     await writeRetrying(signal, {
       send: () => api.post(idPath, offer, { signal }),
       landed: landedCheck(api, idPath, signal, (o) => ownBytes(o?.commit, commit, "served commit")),
@@ -1147,7 +1207,7 @@ export async function initiate({ api, origin, storage, signal, as = "link", onEv
     );
 
     return await initiatorAwaitsClaim({
-      api, idPath, macKey, commit, linkSecret, privateKey, publicKey, expiresAt, signal, onEvent,
+      api, idPath, macKey, commit, linkSecret, linkMemo, privateKey, publicKey, expiresAt, signal, onEvent,
     });
   } catch (err) {
     failure = fail(err);
@@ -1156,8 +1216,17 @@ export async function initiate({ api, origin, storage, signal, as = "link", onEv
     // §3.3 ("I then discards `i_priv`, `L` and the pairing session") on success, and
     // §3.4.1b rules 10 and 6 on failure. `pairingId` is passed in because the record
     // holding `L` is about to go.
+    //
+    // ⚠️ AND THE MEMO GOES WITH IT. `lastPairingId` is `abandon`'s fallback for the race
+    // where the record is already gone, and a fallback pointing at a session that was
+    // never created is a `DELETE` waiting to be sent for one. A resumption re-sets it.
+    if (!published) lastPairingId = null;
+    // ⚠️ `null` WHEN NOTHING WAS PUBLISHED, which §3.4.1c rule 5 made reachable: a
+    // refused invite memo abandons the creation BEFORE §9.1's search, so there is no
+    // session to abandon — and a `DELETE` sent anyway would hand the server a
+    // `pairing_id` derived from an `L` that never left this device.
     await concludePairing(storage, {
-      api, pairingId, failure, role: pairing.ROLE_INITIATOR, signal,
+      api, pairingId: published ? pairingId : null, failure, role: pairing.ROLE_INITIATOR, signal,
     });
   }
 }
@@ -1179,8 +1248,11 @@ export async function initiate({ api, origin, storage, signal, as = "link", onEv
  * ⚠️ The caller is responsible for `history.replaceState` — §2.1 requires the
  * fragment to be stripped from the address bar the moment it is read, and this
  * module does not touch the document.
+ *
+ * `links` is §3.4.1c's memory, as in `initiate`, and here it is what stops this
+ * device joining its own identity's link. `null` is Ghost mode (rule 8).
  */
-export async function join({ api, link, storage, signal, onEvent = () => {} }) {
+export async function join({ api, link, storage, signal, links = null, onEvent = () => {} }) {
   let linkSecret;
   const spoken = typeof link === "string" && !link.includes("#") && !link.includes("://");
   // ⚠️ TWO CONSTRUCTIONS RATHER THAN ONE WITH A TERNARY IN IT, AND `test/copy.mjs`
@@ -1194,7 +1266,7 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
     if (spoken) throw new PairFailure("code_malformed", err.message);
     throw new PairFailure("link_malformed", err.message);
   }
-  const { pairingId, macKey } = await pairing.derivePairing(linkSecret);
+  const { pairingId, macKey, linkMemo } = await pairing.derivePairing(linkSecret);
   const idPath = idPathFor(pairingId);
   // ⚠️⚠️ NO MEMO HERE, AND ITS ABSENCE IS THE RULE (§3.4.1b rule 6, 0.9.26 — D-167). The
   // memo exists so `abandon` can still send the `DELETE` after an abort has cleared the
@@ -1217,6 +1289,59 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
     held && held.role === pairing.ROLE_INITIATOR && bytes.timingSafeEqual(held.linkSecret, linkSecret)
       ? held
       : null;
+
+  // ⛔⛔⛔⛔ §3.4.1c RULE 1 — AND EVERYTHING ABOVE IT ASKS A QUESTION ABOUT THIS
+  // BROWSER WHILE THE QUESTION IS ABOUT THIS PERSON (D-174).
+  //
+  // §3.4.1b's record is addressed per browser (D-170) and is destroyed on success by
+  // rule 8, so a second device of the same identity — holding the same KEY, the same
+  // conversations, the same everything — holds no record for a link made on the first
+  // one and never will. Both branches above then find nothing, and:
+  //
+  //   · ⛔ THE ABSENCE OF A RECORD OF YOUR OWN ACT IS NOT EVIDENCE OF SOMEBODY
+  //     ELSE'S. That is D-169's fallacy, and §3.5's own sentence — *"the alarm is
+  //     evaluated only once the device has established that it is a J"* — was asking
+  //     for something no client could produce.
+  //   · measured 2026-08-28: the second device claimed its owner's own offer, both of
+  //     that person's screens reached §3.6's digits, the link was spent, and the
+  //     friend it had been sent to tripped a genuine MAC-verified §3.5 tripwire
+  //     NAMING ITS OWN OWNER.
+  //
+  // `link_memo` is `HKDF(L, …)` kept inside the sealed roster, which is where the
+  // IDENTITY can see it rather than where one browser can.
+  //
+  // ⚠️ IT IS OUTSIDE THE `try`, AND DELIBERATELY. Nothing has been started — no claim
+  // sent, no session created — so there is nothing for `concludePairing` to conclude,
+  // and running it here would clear an in-flight record belonging to a DIFFERENT
+  // pairing this device may have open.
+  //
+  // ⚠️ AND IT RUNS AFTER `heldAsInitiator`, WHICH RULE 3 REQUIRES: a device that does
+  // hold the record is a resumed I and §3.4.1b rule 7 governs, not this.
+  if (!heldAsInitiator) {
+    // ⚠️ `null` MEANS "LEARNED NOTHING" (rule 4) — a failed roster read, a ghost
+    // client, or the ordinary first-time joiner, and all three must stay
+    // indistinguishable. Falling through to §3.4.1b rule 7 and §3.5 is what that means.
+    const known = links ? await links.recogniseLink(linkMemo) : null;
+    if (known?.kind === "channel") {
+      // Rule 2. MUST NOT claim, MUST NOT raise §3.5's alarm, SHOULD open what is
+      // already there — so the root travels with the error for the caller to open.
+      const already = new PairFailure(
+        "own_channel",
+        "this invite link already made a conversation this identity has"
+      );
+      already.root = known.root;
+      throw already;
+    }
+    if (known?.kind === "invite") {
+      // Rule 3. This identity created the link and this device is not the one that
+      // did: `i_priv` is ephemeral and lives only where it was generated, so this
+      // device CANNOT finish the pairing and must say so rather than report a failure.
+      throw new PairFailure(
+        "own_link",
+        "this invite link was created by this identity, on a device that is not this one"
+      );
+    }
+  }
 
   try {
     // ⚠️⚠️⚠️ THE PERSON WHO MADE THIS LINK IS NOT JOINING IT (Hannu, 2026-08-19).
@@ -1243,7 +1368,7 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
       return await initiatorAwaitsClaim({
         api, idPath, macKey,
         commit: await pairing.commitTo(publicKey),
-        linkSecret,
+        linkSecret, linkMemo,
         privateKey, publicKey,
         expiresAt: heldAsInitiator.expiresAt,
         signal, onEvent,
@@ -1272,7 +1397,7 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
       // coming back at it is not an interception. Continue at §3.4 instead.
       if (heldHere && (await claimIsOurs(api, idPath, heldHere.privateKey, signal))) {
         return await joinerAwaitsReveal({
-          api, idPath, macKey, commit, linkSecret,
+          api, idPath, macKey, commit, linkSecret, linkMemo,
           privateKey: heldHere.privateKey,
           expiresAt: heldHere.expiresAt,
           signal, onEvent,
@@ -1325,7 +1450,7 @@ export async function join({ api, link, storage, signal, onEvent = () => {} }) {
     onEvent({ type: "claimed" });
 
     return await joinerAwaitsReveal({
-      api, idPath, macKey, commit, linkSecret, privateKey, expiresAt, signal, onEvent,
+      api, idPath, macKey, commit, linkSecret, linkMemo, privateKey, expiresAt, signal, onEvent,
     });
   } catch (err) {
     failure = fail(err);
@@ -1451,7 +1576,7 @@ export async function resume({ api, storage, signal, onEvent = () => {} } = {}) 
     return null;
   }
 
-  const { pairingId, macKey } = await pairing.derivePairing(rec.linkSecret);
+  const { pairingId, macKey, linkMemo } = await pairing.derivePairing(rec.linkSecret);
   const idPath = idPathFor(pairingId);
   // ⚠️ THE MEMO IS THE INITIATOR'S (§3.4.1b rule 6, 0.9.26 — D-167). A resumed J may
   // not send the abandonment `DELETE` on any occasion, so remembering an id it must
@@ -1476,6 +1601,7 @@ export async function resume({ api, storage, signal, onEvent = () => {} } = {}) 
         api, idPath, macKey,
         commit: await pairing.commitTo(publicKey),
         linkSecret: rec.linkSecret,
+        linkMemo,
         privateKey, publicKey,
         expiresAt: rec.expiresAt,
         signal, onEvent,
@@ -1514,6 +1640,7 @@ export async function resume({ api, storage, signal, onEvent = () => {} } = {}) 
     return await joinerAwaitsReveal({
       api, idPath, macKey, commit,
       linkSecret: rec.linkSecret,
+      linkMemo,
       privateKey: rec.privateKey,
       expiresAt: rec.expiresAt,
       signal, onEvent,

@@ -147,6 +147,7 @@ export const FI = {
   "list.roleI": "sinä aloitit sen",
   "list.roleJ": "sinä liityit",
   "list.roleConflict": "2 laitetta oli eri mieltä siitä, kumpi puoli keskustelua tämä on.",
+  "list.memoConflict": "2 laitetta oli eri mieltä siitä, minkä kutsulinkin kautta tämä keskustelu tehtiin.",
   "list.versionMismatch": "Palvelimen versio keskustelulistastasi ei täsmää itse listan kanssa. Lista on aito. Suhtaudu epäillen kaikkeen, mitä palvelin siitä sanoo.",
   // ⚠️⚠️ D-168 — kaksi selainta yhdellä AVAIMELLA. Ks. `copy.js`: jokainen väite on
   // rajattu siihen, mitä `flow/roster.js` todella mittasi.
@@ -266,6 +267,7 @@ export const FI = {
   "pairing.wrongConfirm": "Poistetaanko tämä keskustelu?\n\nTämä poistaa sen täältä. Kutsu on joka tapauksessa käytetty — jos haluat yhä tavoittaa ystäväsi, aloita alusta ja lähetä uusi kutsu toista tietä.",
   "pairing.tripwireTitle": "Joku muu avasi tämän kutsulinkin",
   "pairing.failureTitle": "Pariliitos ei valmistunut",
+  "pairing.ownLinkTitle": "Tämä on sinun oma kutsulinkkisi",
   "pairing.pausedTitle": "Odotetaan yhä ystävääsi",
   "pairing.interruptedTitle": "Pariliitos keskeytyi",
   "pairing.failureUnknown": "Jokin meni vikaan ennen kuin pariliitos valmistui.",
@@ -276,6 +278,9 @@ export const FI = {
   "pairing.failure.offer_unverified": "Se mitä palvelin tarjoaa, ei täsmää tämän kutsulinkin kanssa. Älä jatka: tämä on joko vioittunut kutsulinkki tai palvelin, joka työntää väliin jotain omaansa.",
   "pairing.failure.commitment_mismatch": "Palvelin lähetti jotain, mitä tämä kutsulinkki ei luvannut. Jokin sekaantuu tähän kutsuun. Älä yritä uudelleen — pyydä uusi linkki toista kanavaa pitkin.",
   "pairing.failure.already_claimed": "Joku muu avasi tämän kutsulinkin ennen sinua, ja hänellä on sen sisältämä salaisuus. Pidä kutsulinkkiä paljastuneena ja aloita alusta.",
+  "pairing.failure.own_link": "Teit tämän kutsulinkin toisella laitteellasi, ja vain se laite voi saattaa sen loppuun: se mitä siihen tarvitaan ei koskaan poistu linkin tehneeltä laitteelta. Avaa tämä kutsulinkki siellä tai tee tähän uusi.",
+  "pairing.failure.own_channel": "Tämä kutsulinkki teki keskustelun, joka sinulla jo on, joten se keskustelu on nyt auki tässä. Yksi kutsulinkki tekee yhden keskustelun, ja tämä on jo tehnyt sen.",
+  "pairing.failure.invite_unrecorded": "Mitään ei luotu. Tämä laite ei pystynyt ensin merkitsemään muistiin, että kutsulinkki on sinun, ja ilman sitä merkintää muut laitteesi voisivat luulla omaa kutsulinkkiäsi jonkun toisen linkiksi. Yritä uudelleen.",
   "pairing.failure.claim_forged": "Tämän kutsulinkin otti jokin, joka ei pystynyt todistamaan tulleensa linkistä. Mitään ei siepattu, mutta linkki on käytetty — luo uusi.",
   "pairing.failure.expired": "Kutsulinkin aika loppui ennen kuin pariliitos valmistui.",
   "pairing.failure.not_found": "Tällä kutsulinkillä ei ole enää pariliitosistuntoa.",

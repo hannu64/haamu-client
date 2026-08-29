@@ -1247,6 +1247,21 @@ async function useThisTab() {
 const isGhost = () => session?.mode === "ghost";
 
 /**
+ * §3.4.1c: where this identity remembers its own invite links.
+ *
+ * ⚠️⚠️ IT IS THE ROSTER AND NOT THIS BROWSER, WHICH IS THE WHOLE OF D-174. §3.4.1b's
+ * in-flight record answers *"is this my own link?"* per BROWSER, and the question is
+ * asked per PERSON — so the maker's own second device found no record, concluded it
+ * was a joiner, claimed its owner's own offer, and left the friend the link had been
+ * sent to tripping a real §3.5 alarm naming its own owner.
+ *
+ * ⚠️ `null` IN GHOST MODE, AND RULE 8 SAYS SO EXPLICITLY: §7.6 has no roster, so a
+ * ghost client can perform none of §3.4.1c and must not report having recognised
+ * anything. That mode keeps §3.5 exactly as written.
+ */
+const linksFor = () => (isGhost() ? null : (session?.roster ?? null));
+
+/**
  * §3.4.1b rule 2: where a pairing in progress is kept, and it is the ONE thing in
  * this product that behaves differently in the two modes.
  *
@@ -2224,6 +2239,7 @@ function renderWarnings() {
     else if (w.kind === "unexplained_removal")
       notice("unexplained", () => ({ body: copy.list.unexplained(w.count), alarm: true }));
     else if (w.kind === "role_conflict") notice("role", () => copy.list.roleConflict);
+    else if (w.kind === "memo_conflict") notice("memo", () => copy.list.memoConflict);
     // ⚠️⚠️ D-168 — AN ALARM, AND THE ONLY ONE HERE THAT IS NOT ABOUT THE SERVER. The other
     // three report something wrong with what arrived; this reports something ordinary that
     // this product cannot support (§7.3.1 rule 1, D-045) and has never mentioned. Hannu
@@ -3255,7 +3271,17 @@ async function succeed(result) {
     });
     paired = { ...entry, rootBytes: result.channelRoot };
   } else {
-    await session.roster.addChannel({ root: result.channelRoot, name, role: result.role, tripwire });
+    // §3.4.1c rule 6: `linkMemo` is written WITH the write that creates the channel and
+    // never in one of its own — the same requirement, and the same reason, as §3.5's
+    // `tripwire` beside it. A second write would leave a window in which the channel
+    // exists and the identity cannot recognise the link that made it.
+    await session.roster.addChannel({
+      root: result.channelRoot,
+      name,
+      role: result.role,
+      tripwire,
+      linkMemo: result.linkMemo ?? null,
+    });
     const entry = session.roster.channel(result.channelRoot);
     paired = { ...entry, rootBytes: result.channelRoot };
     session.tabs.announce("roster", { id: TAB_ID });
@@ -3466,11 +3492,23 @@ function failWith(err) {
   // RULES.** One classifier, two consumers, and neither may have its own copy of it.
   const waiting = err?.reason === "still_waiting";
 
-  text(
-    "failure-title",
-    !paused ? copy.pairing.failureTitle : waiting ? copy.pairing.pausedTitle : copy.pairing.interruptedTitle
-  );
-  $("failure").classList.toggle("alarm", !paused);
+  // ⚠️⚠️ §3.4.1c RULE 3 SAYS *"rather than reporting a failure"*, AND THE PANEL IS THE
+  // REPORT. `own_link` is terminal — the record classifier is right about that, this
+  // device genuinely cannot finish — so without this line it would arrive under
+  // "Pairing did not complete", in the alarm colours this product reserves for telling
+  // somebody they are being attacked, because they opened their own invite link on
+  // their own second device. That was the D-174 screen, one step milder.
+  //
+  // ⭐ THE THIRD BRANCH IS WHY THIS IS A FUNCTION NOW. A fourth arm on the ternary that
+  // feedback 16 already had to correct once is how the next case gets bolted on
+  // wrongly; the reasons are listed where a reader can see all of them at once.
+  // ⚠️ BOTH OF §3.4.1c's OUTCOMES, not just the one that normally lands here.
+  // `own_channel` reaches this panel only when the roster could not produce the entry to
+  // open — rare, and still not a failure: the heading is true of it either way, and an
+  // alarm over "you already have this conversation" is the D-133 shape.
+  const ownLink = err?.reason === "own_link" || err?.reason === "own_channel";
+  text("failure-title", failureTitleFor({ ownLink, paused, waiting }));
+  $("failure").classList.toggle("alarm", !paused && !ownLink);
 
   const written = copy.pairing.failure[err?.reason];
   text("failmsg", written ?? (paused ? copy.pairing.interruptedUnknown : copy.pairing.failureUnknown));
@@ -3486,6 +3524,20 @@ function failWith(err) {
   // situation by naming its cause — "this browser closed" — which is false here and
   // was shown to Hannu on a browser that had not closed (feedback 16).
   if (paused) void offerToResume({ interrupted: true });
+}
+
+/**
+ * Which heading the §3 exit panel wears.
+ *
+ *   ownLink   §3.4.1c rule 3 — not a failure, and the rule forbids reporting one
+ *   !paused   an ending: `endsThePairing` said the record does not survive
+ *   waiting   §3.4.1b rule 11 — nothing ran out, this page stopped watching
+ *   else      rule 10 — the attempt broke and the pairing is still finishable
+ */
+function failureTitleFor({ ownLink, paused, waiting }) {
+  if (ownLink) return copy.pairing.ownLinkTitle;
+  if (!paused) return copy.pairing.failureTitle;
+  return waiting ? copy.pairing.pausedTitle : copy.pairing.interruptedTitle;
 }
 
 /**
@@ -3599,6 +3651,10 @@ async function runInitiate({ as = "link" } = {}) {
       origin: location.origin,
       as,
       storage: pairingStore(),
+      // §3.4.1c rule 5 — the invite memo goes down BEFORE the offer is published, and a
+      // refusal abandons the creation. `flow/pair.js` owns that ordering; this passes
+      // it the thing to write into.
+      links: linksFor(),
       signal: controller.signal,
       onEvent: (e) => {
         // §9.1's search, on its own clock — see `measurements`. It is the only
@@ -3677,6 +3733,8 @@ async function runJoin(fragment) {
       api,
       link: fragment,
       storage: pairingStore(),
+      // §3.4.1c rule 1: consulted before any claim and before §3.5's judgement.
+      links: linksFor(),
       onEvent: (e) => {
         if (e.type === "claimed") {
           // ⚠️ LABELLED, BECAUSE IT IS NOT THE SAME QUANTITY AS THE INITIATOR'S.
@@ -3692,9 +3750,49 @@ async function runJoin(fragment) {
     });
     await succeed(result);
   } catch (err) {
+    // §3.4.1c rule 2: *"SHOULD open the conversation it already has"*. This is not a
+    // failure and must not be painted as one — the person followed an invite link that
+    // already did its work, and the honest answer is the conversation it made.
+    //
+    // ⚠️ THE NOTICE IS NOT OPTIONAL. Without it the screen simply changes and the
+    // person is left to guess why the invite link did nothing; D-163's whole lesson is
+    // that a thing which happens without a sentence reads as a thing that did not
+    // happen. It goes up BEFORE the open, so it survives onto the conversation.
+    //
+    // ⚠️ AND IT FALLS THROUGH IF THE ENTRY IS NOT THERE. `own_channel` is raised from a
+    // memo the roster holds, so the channel is there by construction — but a
+    // construction is not a guarantee, and `openConversation(undefined)` is a blank
+    // screen where a sentence belongs.
+    const already = err?.reason === "own_channel" ? entryByRoot(err.root) : null;
+    if (already) {
+      notice("ownlink", () => copy.pairing.failure.own_channel);
+      await openConversation(already);
+      return;
+    }
     failWith(err);
   } finally {
     busyPairing = false;
+  }
+}
+
+/**
+ * A roster entry by its encoded root, ready for `openConversation`.
+ *
+ * ⚠️ `channels()` ALREADY ATTACHES `rootBytes`, which every caller of
+ * `openConversation` has otherwise had to decode for itself. Ghost mode has no
+ * roster and no list, so it has nothing to look in — and §3.4.1c rule 8 means it
+ * never asks.
+ */
+function entryByRoot(root) {
+  if (!root || isGhost() || !session?.roster) return null;
+  try {
+    return session.roster.channels().find((c) => c.root === root) ?? null;
+  } catch {
+    // ⚠️ `channels()` REFUSES ON A ROSTER THAT IS NOT OPEN, and this runs inside a
+    // `catch`. A throw from here escapes as an unhandled rejection and takes the screen
+    // with it — over a lock that landed mid-join, which is a race and not a fault.
+    // Answering `null` sends the caller to the panel, which is the honest second-best.
+    return null;
   }
 }
 
