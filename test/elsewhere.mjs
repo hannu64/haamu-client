@@ -765,4 +765,37 @@ const spanOf = (list) => list.find((w) => w.kind === "elsewhere")?.span ?? "(no 
   check("⭐ the 'watched' sentence is untouched — it was right for its own span", /KEY is in use/.test(watched), "present tense kept");
 }
 
+{
+  // ⛔⛔⛔⛔⛔ HANNU'S ACTUAL PATH, 2026-08-29, AND NEITHER TEST ABOVE TAKES IT. He locked
+  // rather than ending, so §7.8 never ran and THE CACHED ROSTER SURVIVED. `load()` adopts a
+  // cached blob and does not fetch — so `roster` is non-null from a copy that may be days
+  // old, and this document did not watch anything. The span must still be `away`.
+  //
+  // ⚠️⚠️ The block above wipes `storage`, which is §7.8's ending and the ONE arrangement
+  // where the proxy `roster ? …` happens to be right. This is the ordinary one.
+  const server = fakeServer();
+  const storage = memStore();
+  const durable = memStore();
+  const mine = () => rosterFlow.openRoster({ api: server.api, keys, storage, durable });
+  const other = device(server.api, keys);
+
+  const first = mine();
+  await first.create();
+  await other.load({ network: true });
+  await other.addChannel({ root: root(33), name: "thirty-three", role: "I" });
+
+  // A LOCK, not an ending: same stores, nothing wiped.
+  const back = mine();
+  await back.load({ network: true, reason: rosterFlow.SETUP });
+  check("⚠️ the cache is adopted, so the unlock itself fetched nothing and said nothing",
+    elsewhereIn(kinds(back)) === 0, "silent at unlock");
+
+  await back.check();
+  equal(
+    "⛔⛔⛔ A BASELINE ADOPTED FROM DISK IS NOT A BASELINE THIS DOCUMENT WATCHED",
+    spanOf(back.takeWarnings()),
+    "away"
+  );
+}
+
 done();

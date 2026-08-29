@@ -198,6 +198,25 @@ export function openRoster({
   // dormant document is still the second one, and this is what says so: it slept through
   // an interval, and no number on disk covers an interval it did not watch.
   let baselineTrusted = true;
+
+  /**
+   * ⭐⭐⭐⭐⭐ HAS THIS DOCUMENT ESTABLISHED ITS BASELINE BY READING, IN THIS SESSION?
+   *
+   * ⚠️⚠️ IT IS NOT THE SAME QUESTION AS "IS A ROSTER LOADED", AND D-175 SHIPPED FOR SIX
+   * HOURS BELIEVING IT WAS. `load()` ADOPTS A CACHED BLOB AND DOES NOT FETCH — that is
+   * §7.3.3's privacy property, not an optimisation — so `roster` is non-null the moment a
+   * person unlocks, from a copy that may be days old. A span labelled from `roster ? … :`
+   * therefore called a two-day-old cache "watched", which is precisely the over-claim
+   * D-175 existed to remove. Hannu found it on the live site within the hour: he locked
+   * rather than ending, so §7.8 never cleared the cache, and the fix landed on a branch
+   * his case does not take.
+   *
+   * ⭐ THE HONEST TEST IS WHETHER THE NUMBER CAME FROM AN OBSERVATION OR OFF THE DISK.
+   * A fetch is this document seeing the roster with its own eyes; a cached blob and
+   * §7.3.2's mark are both things it found lying there. Only the first licenses a
+   * present-tense claim, because only the first means the document was there for the span.
+   */
+  let baselineObserved = false;
   const warnings = [];
 
   /**
@@ -250,10 +269,18 @@ export function openRoster({
   /** Fetch, decrypt, judge freshness, and adopt. */
   async function fetch(reason) {
     const res = await call("GET", undefined, reason);
-    return adopt(b64uDecode(res.blob, "roster blob"), res.version);
+    // ⭐ `observed: true` — this is the ONE caller that saw the roster over the wire.
+    return adopt(b64uDecode(res.blob, "roster blob"), res.version, { observed: true });
   }
 
-  async function adopt(blob, outerVersion) {
+  /**
+   * ⚠️⚠️ `adopt` SERVES BOTH THE NETWORK AND THE CACHE, AND THE DIFFERENCE IS NOT
+   * COSMETIC (D-175). `load()` hands it a blob it found on disk; `fetch()` hands it one it
+   * just read. Everything else about the two is identical — same decrypt, same freshness,
+   * same merge — which is exactly why it took a person on the live site to notice that
+   * one of them licenses a present-tense sentence and the other does not.
+   */
+  async function adopt(blob, outerVersion, { observed = false } = {}) {
     const opened = await rosters.openRoster(keys.rosterKey, blob);
     const hwm = await highWaterMark();
     const state = rosters.freshness({ inner: opened.roster.version, outer: outerVersion, highWaterMark: hwm });
@@ -354,13 +381,15 @@ export function openRoster({
     // one. What is stored is a SHA-256 prefix of them, never the blob.
     const baseline = roster ? roster.version : hwm;
 
-    // ⭐⭐⭐⭐⭐ WHICH BASELINE ANSWERED DECIDES WHICH SENTENCE IS TRUE, AND THE TERNARY
-    // ABOVE ALREADY KNOWS. `roster` is memory, so a baseline taken from it means this
-    // document was open and reading across the whole span: the other place wrote while the
-    // person was sitting here, seconds ago, and a present tense is a fair reading of that.
-    // `hwm` is on disk with NO CLOCK BESIDE IT — "the highest version this device has EVER
-    // adopted" — so a baseline taken from it spans everything since this browser last
-    // looked, which may be days.
+    // ⭐⭐⭐⭐⭐ WHICH BASELINE ANSWERED DECIDES WHICH SENTENCE IS TRUE. A baseline this
+    // document OBSERVED — it fetched, and is now fetching again — means it was there for
+    // the whole span, so the other place wrote while the person was sitting here and a
+    // present tense is a fair reading. A baseline it merely FOUND — §7.3.2's clockless
+    // mark, or a cached blob `load()` adopted at unlock — spans everything since this
+    // browser last looked, which may be days.
+    //
+    // ⛔⛔ AND THE TERNARY ONE LINE ABOVE IS NOT THAT TEST, WHICH COST A DEPLOY. See
+    // `baselineObserved`: `roster` is non-null from the cache too.
     //
     // ⚠️⚠️ `ui/copy.js` HAD THIS RIGHT IN A COMMENT AND WRONG IN THE SENTENCE UNDER IT.
     // *"The evidence is an event and not a presence"*, it says, and then hedges with
@@ -372,7 +401,7 @@ export function openRoster({
     // ⚠️ THE SEVERITY IS NOT WHAT WAS WRONG. Both spans stay alarms: an unexplained write
     // is not less serious for being two days old — if anything the person is further from
     // being able to explain it. Only the claim narrows.
-    const span = roster ? "watched" : "away";
+    const span = baselineObserved ? "watched" : "away";
 
     if (baseline !== null && baselineTrusted && opened.roster.version > baseline && !(await isOurAttempt(blob))) {
       warnings.push({ kind: "elsewhere", version: opened.roster.version, span });
@@ -407,6 +436,10 @@ export function openRoster({
     // D-168: whatever this device did or did not see before, it has just read the current
     // roster, so from here the comparison above is evidence again.
     baselineTrusted = true;
+    // ⚠️ ONLY WHEN THE BYTES CAME OFF THE WIRE. A cached blob reaches this same line and
+    // must not set it: that was the whole defect (D-175). Monotone within a session —
+    // having once seen the roster is not undone by later adopting a cache.
+    if (observed) baselineObserved = true;
     await remember(blob, outerVersion, opened.roster.version);
     return roster;
   }
@@ -535,6 +568,7 @@ export function openRoster({
         // D-168: a PUT only succeeds when `if_match` was current, so this device's own
         // version is the server's — the baseline is established by the write itself.
         baselineTrusted = true;
+        baselineObserved = true; // this document has now SEEN the roster (D-175)
         await remember(sealed.blob, res.version, next.version);
         return roster;
       } catch (err) {
@@ -609,6 +643,9 @@ export function openRoster({
      */
     forgetBaseline() {
       baselineTrusted = false;
+      // ⚠️ AND IT STOPS HAVING OBSERVED ONE. A document that went dormant was not watching
+      // either, so the next read it does may not speak in the present tense (D-175).
+      baselineObserved = false;
     },
 
     /**
@@ -645,7 +682,8 @@ export function openRoster({
       roster = fresh;
       outer = 1;
       size = sealed.size;
-      baselineTrusted = true; // D-168: this device made version 1.
+      baselineTrusted = true;
+      baselineObserved = true; // D-175: and it has seen it — it wrote it
       await remember(sealed.blob, 1, fresh.version);
       return roster;
     },

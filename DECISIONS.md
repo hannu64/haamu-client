@@ -5546,7 +5546,7 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
-### D-175. ⛔⛔⛔⛔⛔ A normative MUST that its own neighbouring MAY made impossible to obey — the alarm that reported a two-day-old event in the present tense
+### D-175. ⛔⛔⛔⛔⛔ A normative MUST that its own neighbouring MAY made impossible to obey — and then the fix for it reused a proxy that answered a different question
 
 **Found in the field by Hannu, 2026-08-29, hours after D-174 shipped.** He came back to
 Chrome after roughly 48 hours away, typed his KEY, deleted one conversation, and was told:
@@ -5626,12 +5626,52 @@ severity never was. An unexplained write is not less serious for being two days 
 person is further from being able to explain it, not closer. Both spans stay alarms, and
 `test/app-document.mjs` now fails if that changes.
 
-#### 4. What shipped
+#### 4. ⛔⛔⛔⛔⛔ AND THE FIRST IMPLEMENTATION COMMITTED THE SAME FAULT ONE LEVEL DOWN
+
+**Shipped 12:25, reported broken by Hannu within the hour.** He did the whole reproduction:
+locked browser A, had browser B on the same KEY write, came back, and got **nothing** — then
+pressed *"Check my other devices for changes"* and was shown **the present-tense sentence**,
+the very one D-175 exists to remove.
+
+The span was computed as `roster ? "watched" : "away"`. That expression does not ask *"was
+this document watching?"*; it asks **"is a roster loaded?"** — and `load()` adopts a cached
+blob without fetching, because §7.3.3 forbids a launch from touching `roster_id`. So `roster`
+is non-null the instant a person unlocks, **from a copy that may be days old**, and the
+clockless case was labelled `watched`.
+
+➡️ ⭐⭐⭐⭐⭐ **I REUSED AN EXISTING EXPRESSION AS A PROXY FOR A QUESTION IT DOES NOT ANSWER —
+WHICH IS THE FAULT THIS VERY DECISION IS ABOUT.** §3.5's discriminator was per-browser while
+the question was per-person (D-174); this notice claimed a presence from evidence of an event
+(D-175 §1); and the fix for it read "a roster is loaded" as "this document was present". Three
+in a row, the third inside the repair for the second. **A discriminator that is already in the
+code is the most dangerous kind, because adopting it costs nothing and looks like reuse.**
+
+⛔⛔ **AND EVERY TEST ARRANGED THE ONE STATE WHERE THE PROXY IS RIGHT.** `test/elsewhere.mjs`'s
+watched case used a device that had just fetched; its away case wiped `storage`; and
+`probe-elsewhere-return.mjs` presses `#end-here`, §7.8's ordinary ending, **which clears the
+cached roster**. Hannu pressed **lock**, whose entire promise is *"nothing is deleted"*. The
+two controls sit next to each other and leave states that are indistinguishable on screen.
+➡️ **THE PATH A TEST TAKES TO REACH A STATE IS PART OF WHAT IT TESTS**, and three instruments
+agreeing proves nothing when all three take the same path around the defect.
+
+**The repair.** `baselineObserved` — set only where the bytes came off the wire. `adopt()` is
+shared by `fetch()` and `load()`, identical in every other respect, so it is now *told* which:
+`adopt(blob, version, { observed: true })` from `fetch` alone. Monotone within a session,
+cleared by `forgetBaseline()` because a dormant document was not watching either. The honest
+test is whether the number came from an observation or off the disk.
+
+**New instrument: `probe-elsewhere-lock.mjs`**, which differs from its neighbour by one
+button. The unit test that exposed it was written first and failed on the shipped code with
+exactly Hannu's symptom — `watched` where `away` was due.
+
+#### 5. What shipped
 
 PROTOCOL **0.9.33**: the MUST moves to the past tense, the MAY carries its own consequence
 ("MUST NOT report a PRESENT use"), and a present claim is permitted **only** from a
 continuously-held baseline. Client: `span` on the warning, `list.elsewhereAway` in English
-and Finnish, and the drain picking by span. 1543 tests green.
+and Finnish, and the drain picking by span; then `baselineObserved` after §4. **1545 tests
+green, 20/20 probes green.** Two deploys: `e60fcb1e4357b715` at 12:25, and the repair after
+Hannu's report.
 
 ⚠️ **AND THE REPAIR SPENT A PRECONDITION, AGAIN.** `test/app-document.mjs` asserted the
 alarm by finding the ONE LINE containing the branch — deliberately narrow, because a
