@@ -5546,6 +5546,90 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-176. ⭐⭐⭐⭐ The rule that two correct guards could not enforce: §6.7.1 rule 5 moved off the callers and onto the one place that sends
+
+**2026-08-30, and it is not a field report.** Nothing was broken. This is the queued
+follow-up to D-172, and what makes it worth a number is that the client was *already
+obeying the rule twice* and that was the problem.
+
+#### 1. What D-172 left standing
+
+Two guards, both correct, neither of them the rule:
+
+- **the composer** is hidden *and* `disabled` while a conversation is closed — that is
+  §6.7.1 rule 5's *"stop offering to send"*, done properly;
+- **`reconnectAutomatically()`** asks `loadClosed` before it sends — added by D-172, on
+  2026-08-28, *after* the app had shipped for ten days able to send into a closed
+  conversation by itself.
+
+⭐ **The second one is the whole argument.** It was written because the first one did not
+cover it. Nothing said the third caller would be covered either, and nothing would have
+said so until somebody wrote it and it was wrong.
+
+#### 2. The rule was addressed to the wrong actor
+
+§6.7.1 rule 5 said the client *"MUST stop offering to send in that conversation"*. That is
+a sentence about the **interface** — about what a person can press. §6.3.1's reconnect
+send is not an offer; nobody presses it. So the rule, read exactly, **never reached the
+defect D-172 found**, and a client could obey rule 5 to the letter and still put a message
+into a mailbox nobody will ever drain again, for §5.1.1's fourteen days.
+
+➡️ ⭐⭐⭐⭐ **A RULE PHRASED FOR ONE ACTOR SAYS NOTHING ABOUT THE OTHER, AND THE PRODUCT
+HAS TWO.** D-175 was a MUST its neighbouring MAY made impossible to obey; this is a MUST
+whose subject was narrower than the behaviour it was written to stop. Both are sentences
+that read as complete and are silent exactly where the defect is.
+
+#### 3. Where it went
+
+`flow/message.js`, in `sendOnce` — the single function every send passes through, ordinary
+and automatic alike. It reads §6.7.1's marker **before it encrypts and before it
+transmits**, so a refusal spends no ratchet and leaves no ciphertext behind.
+
+⚠️ It is in `sendOnce` and not in `send`, so `attempts()` re-asks on every retry: a marker
+the receive path writes while a conflicted send is spinning stops the next attempt instead
+of being overtaken by it.
+
+⚠️ **The caller guards stay, demoted in writing.** The composer's `disabled` is rule 5's
+*offering* half and is still the rule. `reconnectAutomatically`'s check is now an early
+exit — it stops work that would be refused later — and both its comment and its source rule
+in `test/app-document.mjs` now say so. **Deleting it changes no outcome. Deleting the one
+in `sendOnce` changes every caller at once**, which is the property that was missing.
+
+#### 4. The exemption is an opt-in, and that is D-175's lesson spent forward
+
+`sendClosing` must still work on a closed channel: B receives A's notice, and may later end
+their own copy, which §6.7.1 rule 1 makes the notice part of. So one call is exempt.
+
+⛔⛔ **The obvious exemption is `kind !== KIND_CLOSED`, and it is wrong for a reason that
+has nothing to do with today.** It behaves identically — there are two kinds — and it
+answers a different question: *"is this the closing notice?"* instead of *"did this caller
+ask to be exempt?"* The first silently exempts every kind added after it. **This is exactly
+what D-175 shipped**: a discriminator already sitting in the code, adopted because it cost
+nothing and read as reuse. So the exemption is a defaulted parameter, `evenIfClosed`,
+default **false**, and `sendClosing` is the one call that passes `true`.
+
+⚠️⚠️ **NO BEHAVIOURAL TEST CAN SEE THAT DIFFERENCE**, today or on the day it would matter.
+`test/app-document.mjs` holds it as a source rule instead, with a canary, and PROTOCOL
+0.9.34 makes it normative so the rule outlives the test.
+
+#### 5. What is proven now, and what still is not
+
+✅ `test/e2e-message.mjs` reaches the closed state **the way the product does** — A sends a
+real §6.7.1 notice over the wire, B drains it, B marks closed — and then measures that B's
+send is refused, that nothing reached the server, that B's own notice still goes, and that
+clearing the marker (rule 8) makes the same call succeed. That last one is the
+falsification; without it every check above would pass on a send path that had simply
+stopped working. Both instruments were checked failing: the source rule against the guard's
+removal *and* against the `kind` refactor, the e2e against the removal.
+
+⚠️ **D-172's reachability question is untouched and still open.** Nobody has demonstrated a
+path to a device that holds a closed marker and no session, which is what
+`reconnectAutomatically` needs to reach its guard. The send-path guard does not depend on
+it — it refuses every caller in every state — but the honest statement is unchanged: the
+guard is there because the rule is right, not because the state was demonstrated.
+
+---
+
 ### D-175. ⛔⛔⛔⛔⛔ A normative MUST that its own neighbouring MAY made impossible to obey — and then the fix for it reused a proxy that answered a different question
 
 **Found in the field by Hannu, 2026-08-29, hours after D-174 shipped.** He came back to

@@ -982,13 +982,81 @@ section("D-172 — the app may not send where the person may not");
   const closedAt = fn.indexOf("loadClosed");
   const sendAt = fn.indexOf("deliver(");
   check(
-    "⭐ and it consults it BEFORE it sends, which is the whole of the rule",
+    "⭐ and it consults it BEFORE it sends — now an early exit, no longer the rule itself",
     closedAt !== -1 && sendAt !== -1 && closedAt < sendAt,
     `loadClosed@${closedAt} deliver@${sendAt}`
   );
   check(
     "⚠️ the banner beside it is still gated the same way, so the two agree",
     /const reconnect = !closed && /.test(bodyAfter(src, "async function showConversationState(entry) {", "\n}\n"))
+  );
+}
+
+section("D-176 — and the rule moved off the callers onto the one place that sends");
+
+/**
+ * ⛔⛔⛔⛔ §6.7.1 RULE 5, 0.9.34: THE REFUSAL MUST LIVE WHERE THE CLIENT SENDS.
+ *
+ * D-172's guard above is correct and was never enough: it is one caller's copy of a
+ * rule, and the composer's `disabled` is a second. Both were right, and the app still
+ * shipped able to send into a closed conversation, because the rule was written down
+ * twice instead of once in the place it applies. `flow/message.js` now refuses in
+ * `sendOnce`, which every send reaches and no caller can go round.
+ *
+ * ⚠️⚠️ AND THE EXEMPTION IS THE PART A TEST HAS TO HOLD. `sendClosing` must still work
+ * on a closed channel — a receiver who has been told may still end their own copy. The
+ * refactor that turns `evenIfClosed` into `kind !== KIND_CLOSED` behaves identically
+ * today and is exactly the mistake D-175 shipped: a discriminator already in the code,
+ * answering a neighbouring question, adopted because it costs nothing. `e2e-message.mjs`
+ * cannot see the difference. This can.
+ */
+{
+  const flowMessage = code("../src/flow/message.js");
+  const once = bodyAfter(flowMessage, "async function sendOnce(", "\n}\n");
+  check("`sendOnce` still exists to be checked at all", once.length > 0, `${once.length} chars`);
+  check(
+    "⛔⛔ the one place sending happens consults §6.7.1's marker",
+    /loadClosed/.test(once),
+    /loadClosed/.test(once) ? "it asks before it encrypts" : "⛔ the rule is back on the callers"
+  );
+
+  const guardAt = once.indexOf("loadClosed");
+  const encryptAt = once.indexOf("session.encrypt");
+  const transmitAt = once.indexOf("sendToPeer");
+  check(
+    "⭐⭐ and it refuses BEFORE it encrypts and before it transmits — no spent ratchet, " +
+      "no ciphertext left in a mailbox for §5.1.1's fourteen days",
+    guardAt !== -1 && encryptAt !== -1 && transmitAt !== -1 && guardAt < encryptAt && guardAt < transmitAt,
+    `loadClosed@${guardAt} encrypt@${encryptAt} sendToPeer@${transmitAt}`
+  );
+  check(
+    "⚠️ the exemption is an OPT-IN parameter, not a test on `kind` (§6.7.1 rule 5, 0.9.34)",
+    /evenIfClosed/.test(once) && !/kind\s*!==\s*payloads\.KIND_CLOSED/.test(once),
+    /kind\s*!==\s*payloads\.KIND_CLOSED/.test(once)
+      ? "⛔ a `kind` test exempts every kind that does not exist yet"
+      : "`evenIfClosed`, defaulting to false"
+  );
+
+  const closing = bodyAfter(flowMessage, "export async function sendClosing(", "\n}\n");
+  check(
+    "⭐ and `sendClosing` — the one call that needs it — asks for it out loud",
+    /evenIfClosed:\s*true/.test(closing),
+    closing.length ? "it passes `evenIfClosed: true`" : "⛔ `sendClosing` was not found"
+  );
+
+  // ⚠️ THE CANARY. Every check above is a regex over a slice, and a slice that came
+  // back empty or overlong would satisfy several of them by accident. This runs the
+  // same `bodyAfter` over a body that has none of the properties, followed by one that
+  // does — so a slicer that ran past its terminator is caught here rather than passing
+  // quietly upstairs.
+  const fake =
+    "async function sendOnce(a, b) {\n  return b;\n}\n" +
+    "async function other() {\n  await store.loadClosed(x);\n  evenIfClosed;\n}\n";
+  const fakeOnce = bodyAfter(fake, "async function sendOnce(", "\n}\n");
+  check(
+    "⚠️ the slicer stops at its own function — a neighbour's guard cannot answer for it",
+    fakeOnce.length > 0 && !/loadClosed/.test(fakeOnce) && !/evenIfClosed/.test(fakeOnce),
+    JSON.stringify(fakeOnce)
   );
 }
 

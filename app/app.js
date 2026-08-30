@@ -2596,6 +2596,13 @@ async function reconnectAutomatically(entry, hash) {
   //
   // ⭐ AND THE PRODUCT ALREADY HOLDS THE PERSON TO THIS RULE: while closed the composer
   // is hidden AND disabled. The guard was on the human and not on the app.
+  //
+  // ⚠️⚠️ THIS LINE IS NO LONGER THE GUARANTEE, AND MUST NOT BE READ AS ONE. §6.7.1
+  // rule 5 now lives in `flow/message.js`, at the single point where sending happens,
+  // because D-172 was what two hand-written copies of one rule cost. What survives
+  // here is an EARLY EXIT: it keeps this function from starting work — an Olm init, a
+  // record load, a generation raise — that the send path would refuse at the end of.
+  // Deleting it would change no outcome. Deleting the one in `sendOnce` would.
   if (await store.loadClosed(session.backend, scopeOfRecords(), rootBytesOf(entry))) return;
   if (!(await neverHeldHere(entry))) return;
   reconnecting.add(hash);

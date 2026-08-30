@@ -872,4 +872,96 @@ section("§7.8, 0.8.13 — clearing the store while a drain is still in flight")
   equal("⭐⭐⭐ stopping first leaves nothing behind", String(after), "0");
 }
 
+// ------------------------------ §6.7.1 rule 5 — sending into a conversation that ended
+
+section("§6.7.1 rule 5 — the SEND PATH refuses a conversation the peer has ended");
+
+// ⚠️⚠️ THIS SECTION EXISTS BECAUSE THE RULE USED TO LIVE IN THE CALLERS, AND D-172
+// IS WHAT THAT COST. The composer is hidden and disabled while closed, and
+// `reconnectAutomatically` asks `loadClosed` itself — but that second guard was
+// added only after the app had shipped able to send, by itself, into a mailbox
+// nobody will ever drain again. Everything below goes through `flow/message.js`
+// with no `app/app.js` in the picture at all, which is the whole point: it is the
+// send path that must refuse, not the two callers that happen to remember.
+{
+  const { i: iC, j: jC } = await pairTwoClients();
+  const A = device(iC); // ends the conversation
+  const B = device(jC); // is told, and must then be unable to send
+
+  // Warm it, so nothing below is testing a channel that never worked.
+  await messageFlow.send(A, "hei");
+  const first = await messageFlow.receive(B);
+  equal("an ordinary message crosses first", texts(first).join(), "hei");
+  await first.settle();
+
+  // ⛔⛔⛔ B REACHES "CLOSED" THE WAY THE PRODUCT DOES — over the wire, from a real
+  // §6.7.1 notice. Calling `markClosed` alone would set the same byte and prove far
+  // less: it would skip the notice entirely, and the notice is the ONLY thing that
+  // ever writes that marker in the product. D-175: the path a test takes to reach a
+  // state is part of what it tests.
+  await messageFlow.sendClosing(A);
+  const notice = await messageFlow.receive(B);
+  equal("the notice arrives as its own kind (§6.7.1)",
+    notice.messages.map((m) => m.payload?.kind).join(), payloads.KIND_CLOSED);
+  check("⭐ and carries no words — there is no `text` key at all, not an empty one",
+    !("text" in (notice.messages[0].payload ?? {})));
+  await notice.settle();
+
+  // What `app/app.js` does on receipt — §6.7.1 rule 5's first half, "mark the channel
+  // closed in local conversation state".
+  await store.markClosed(B.backend, "test", B.channelRoot, 1_756_000_000);
+
+  const queuedForA = (await peek(A)).length;
+
+  let refused = null;
+  try {
+    await messageFlow.send(B, "oletko siellä?");
+  } catch (err) {
+    refused = err;
+  }
+  check(
+    "⛔⛔⛔ a message into a closed conversation is REFUSED BY THE SEND PATH ITSELF",
+    messageFlow.isClosed(refused),
+    refused ? `${refused.name}: ${refused.message}` : "it was sent"
+  );
+  equal(
+    "⭐⭐ and NOTHING reached the server — the refusal is before the transmit, so " +
+      "there is no ciphertext sitting in a mailbox for §5.1.1's fourteen days",
+    String((await peek(A)).length),
+    String(queuedForA)
+  );
+
+  // ⭐ THE EXEMPTION, AND IT HAS TO WORK. B receiving A's notice does not take away
+  // B's own ending: §6.7.1 rule 1 makes the notice part of a removal, and B removing
+  // their copy is an ordinary thing to do. A guard on `kind` would have exempted this
+  // too — but it would also have exempted every kind that does not exist yet.
+  const ownNotice = await messageFlow.sendClosing(B);
+  check("⭐ B's OWN closing notice still goes, on the same closed channel",
+    Boolean(ownNotice?.msgId), JSON.stringify(ownNotice?.msgId ?? null));
+
+  // ⭐⭐ THE FALSIFICATION. Without this, every check above would pass on a send path
+  // that had simply stopped working. §6.7.1 rule 8 — a later message from that peer
+  // clears the marker — and the same call then succeeds, which says the marker is
+  // what refused it and that the guard re-reads it rather than latching.
+  await store.clearClosed(B.backend, "test", B.channelRoot);
+  const again = await messageFlow.send(B, "takaisin");
+  check("⭐⭐ clearing the marker (§6.7.1 rule 8) makes the very same call succeed",
+    Boolean(again?.msgId), JSON.stringify(again?.msgId ?? null));
+
+  const back = await messageFlow.receive(A);
+  // ⚠️ TWO THINGS ARRIVE AT A, AND THE PAIR OF THEM IS §6.7.1 RULE 8 SEEN FROM A'S
+  // SIDE: B's closing notice, and then a message from B after it. A client of this
+  // protocol cannot normally do that — B only can here because the line above cleared
+  // the marker by hand — which is exactly the hostile-or-broken peer rule 8 is about.
+  // The honest response is the one that does not hide content, so BOTH are handed over.
+  equal(
+    "the notice and the message after it are BOTH handed over (§6.7.1 rule 8)",
+    back.messages.map((m) => m.payload?.kind ?? "?").join(","),
+    `${payloads.KIND_CLOSED},${payloads.KIND_TEXT}`
+  );
+  equal("and the message is readable at the other end",
+    back.messages.map((m) => m.payload?.text).filter(Boolean).join(), "takaisin");
+  await back.settle();
+}
+
 done();

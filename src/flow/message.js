@@ -203,6 +203,28 @@ const fromWire = (bytes) => envelopes.parseEnvelope(JSON.parse(utf8String(bytes)
 // ------------------------------------------------------------------- sending
 
 /**
+ * §6.7.1 rule 5 — *"The client MUST stop offering to send in that conversation."*
+ *
+ * ⛔⛔ NOT A NETWORK FAILURE, AND NOT A REASON TO RETRY. Nothing was encrypted,
+ * nothing was persisted and nothing left the device; there is no later moment at
+ * which the same call would work, because the ratchet at the other end is gone.
+ * It is a refusal, and `attempts` passes it through untouched — the retry loop
+ * turns only on `RecordConflict`.
+ */
+export class ConversationClosed extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ConversationClosed";
+    this.reason = "conversation_closed";
+  }
+}
+
+/** Is this the send path saying "the other person has left"? */
+export function isClosed(err) {
+  return err?.reason === "conversation_closed";
+}
+
+/**
  * Encrypt `text` and put it in the peer's inbound mailbox for this epoch.
  *
  * Creates the Olm session if there is none — §6.3's "first message, cleared
@@ -235,11 +257,48 @@ export async function send(channel, text, opts = {}) {
 export async function sendClosing(channel, opts = {}) {
   await olm.initOlm();
   return channel.guard(await channelHash(channel), () =>
-    attempts("send", () => sendOnce(channel, null, { ...opts, kind: payloads.KIND_CLOSED }))
+    attempts("send", () =>
+      // ⚠️ THE ONE EXEMPTION FROM THE CLOSED GUARD BELOW, and it is the product's own
+      // bookkeeping rather than a person's message. Ending a conversation whose peer
+      // ended theirs first is an ordinary thing to do — B receives A's notice, marks
+      // closed, and later removes their own copy — and §6.7.1 rule 1 makes this notice
+      // part of that removal. Guarding it would make an ending depend on whether the
+      // other end had ended first, which is not a rule anything states.
+      sendOnce(channel, null, { ...opts, kind: payloads.KIND_CLOSED, evenIfClosed: true })
+    )
   );
 }
 
-async function sendOnce(channel, text, { signal, unixSeconds, kind = payloads.KIND_TEXT } = {}) {
+async function sendOnce(
+  channel,
+  text,
+  { signal, unixSeconds, kind = payloads.KIND_TEXT, evenIfClosed = false } = {}
+) {
+  // ⛔⛔⛔⛔ §6.7.1 RULE 5 LIVES HERE BECAUSE THIS IS THE ONE PLACE SENDING HAPPENS,
+  // AND D-172 IS WHY IT IS NOT LEFT TO THE CALLERS. The rule was obeyed twice by hand:
+  // the composer is hidden AND disabled while closed, and `reconnectAutomatically`
+  // asks `loadClosed` itself. The second of those was added only after the app had
+  // shipped able to send, BY ITSELF, into a mailbox nobody will ever drain again —
+  // the exact defect §6.7.1 was written to end. Two correct callers are not a
+  // guarantee. They are two copies of one rule, and the next caller inherits neither.
+  //
+  // ⚠️ IT IS IN `sendOnce` AND NOT IN `send`, so `attempts` re-asks on every retry.
+  // A marker the receive path writes while a conflicted send is spinning then stops
+  // the next attempt instead of being overtaken by it.
+  //
+  // ⚠️⚠️ AND THE EXEMPTION IS AN OPT-IN, NOT A TEST ON `kind`. `kind !== KIND_CLOSED`
+  // reads identically today and is a discriminator that answers a different question:
+  // it exempts every kind that does not exist yet. Default-deny, and `sendClosing`
+  // says so out loud.
+  //
+  // ⭐ NO NEW COPY. If this ever reaches the composer it is a bug in a caller, and the
+  // screen behind it is already showing §6.7.1's closing banner; `chat.notSent` plus
+  // that banner is the truth. A sentence reachable only through a defect is a sentence
+  // nobody can check.
+  if (!evenIfClosed && (await store.loadClosed(channel.backend, channel.scope, channel.channelRoot))) {
+    throw new ConversationClosed("send: this conversation was ended by the other person");
+  }
+
   const now = unixSeconds ?? epochs.nowSeconds();
   const epoch = await epochs.currentEpoch(channel.channelRoot, now);
 
