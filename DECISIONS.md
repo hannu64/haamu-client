@@ -5546,6 +5546,341 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-179. ⛔⛔⛔ A refusal may not wear the de-emphasis class — §7.4's "that is not the same KEY" was painted like a footnote, and its own author walked past it
+
+**2026-08-30, Hannu, immediately after D-178's walk and reported as *"one item that does not
+belong to this test"*.** He was setting up a fresh identity, mistyped his KEY at §7.4's
+confirmation, was refused — **and did not see that he had been refused.**
+
+> *"it is so the same font, colour etc that it does not look like an error message. If the
+> user is in a hurry the user needs a clear stand out red notice or won't react. That happened
+> to me."*
+
+**It was worse than "the same".** `app/index.html` rendered the refusal into
+`<p class="note" id="retype-note">`, and `app/app.css` defines:
+
+```css
+.note { color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
+```
+
+That is **the de-emphasis class** — the one this stylesheet uses for footnotes and asides,
+muted grey and *smaller than body text*. The sentence did not merely fail to stand out; it was
+painted to recede.
+
+⭐⭐ **He reacted correctly to what the screen was signalling. The screen was signalling the
+wrong thing.** This is D-104's mirror image: that entry found a **layout** class that painted,
+and the trap was the second caller inheriting a colour it never asked for. Here the class is
+honestly named and does exactly what it says — and the defect is that it was applied to the one
+sentence on the screen that must not be de-emphasised.
+
+⚠️⚠️ **§7.4's OWN REASONING IS WHAT MAKES IT SERIOUS, AND IT IS ON THIS PAGE ALREADY.** The
+whole argument for retyping all eight words rather than spot-checking two is that a wallet-style
+check *"catches a single transcription error only a quarter of the time"* — so this is **the**
+moment a mistranscribed KEY is caught, and there is no account, no email and no reset behind it.
+➡️ **A REFUSAL THE PERSON CAN WALK PAST CONVERTS THE STRONGEST CHECK IN THE SETUP FLOW INTO A
+FORMALITY.**
+
+#### It was not one screen, and the second one is the one people meet often
+
+`#retype-note` is the one he hit, and it is a **one-time** screen. The same class carried
+`#enter-note` on the unlock screen, which takes `describeIdentity(err)` — §7.2's wrong-KEY
+refusal, the sentence a person meets **every time they mistype on the way back in**. Fixing only
+the reported screen would have left the more frequent one exactly as it was.
+
+⚠️ **And `#enter-note` is why the fix could not simply restyle the element**: the same paragraph
+also carries ordinary prompts (`copy.unlock.ask`, and `lockSaid()`'s explanation of why §4.3
+locked the tab). Those must not be alarming. **One element, two meanings, in turn.**
+
+#### Decided: `refused()` sets the paint and `text()` is the only thing that removes it
+
+- **The strength is D-104's *"important"*, not its *"one action"*** — a soft fill with a coloured
+  border, in the `--alarm` hue: the same recipe as `.msg.bad`. ⚠️ **Deliberately NOT the filled
+  treatment**, which D-104 reserves for the single **action** on a screen. A refusal is not an
+  action; the button underneath it is, and it has to stay the loudest thing there.
+- **The class comes off in the ordinary setter, not at the call sites.** `text()` removes
+  `refused` on every write; `refused()` is the only thing that adds it. So a neutral sentence
+  written into `#enter-note` cannot inherit the previous refusal's alarm because somebody forgot
+  to take it off. ➡️ **That is D-104's collision in its state-machine form — two correct writes
+  to one element, the second silently wearing the first one's meaning — and the fix is the same
+  shape: make the safe thing the default path rather than a thing to remember.**
+- ⛔ **No ARIA.** A refusal that must be noticed is plainly also an accessibility matter, and
+  there is **no `aria-live` or `role="alert"` anywhere in this product**. Adding the first one
+  here would be inventing a construction this document does not describe, which §0 forbids.
+  **Recorded as owed, not smuggled in.**
+
+#### Verified from the cascade, not from the stylesheet
+
+`probe-refusal-visible.mjs` (added to `run-all.sh`) reads **`getComputedStyle` and never a class
+list**, which is D-104's rule and the reason D-104 exists — `classList.contains("refused")`
+would pass identically on a build where some other selector out-specifies the paint.
+
+⭐ **The control is the same element on the same screen before the refusal**, so any difference
+between the two readings is the class and nothing else. At 411×751, his phone's viewport, at
+**both themes**:
+
+| | control | refused | |
+|---|---|---|---|
+| light | `rgb(102,119,129)` on transparent, 14px | `rgb(179,38,30)` on `rgb(253,236,235)`, 16px, 1px edge | **5.72:1** |
+| dark | `rgb(134,150,160)` on transparent, 14px | `rgb(241,92,109)` on `rgb(43,26,29)`, 16px, 1px edge | **5.12:1** |
+
+Contrast is computed from the **resolved** `rgb()` the browser reports, never from the hex in
+the stylesheet — D-145's lesson, and the reason `--alarm` is `#b3261e` and not a brighter red in
+the first place (*"a red at 4.4:1 on white is a sentence people misread"*). It also asserts the
+paint **comes off**, which is the `#enter-note` half.
+
+⏭️ **Owed:** the `aria-live` question above, product-wide rather than here.
+
+### D-178. ⭐⭐⭐⭐⭐ The panel that warns about split messages cannot fire while messages are splitting — walked on a phone and a desktop, and the silence was correct
+
+**2026-08-30, and it is the first time one identity has ever been carried on two real
+devices.** The item had stood since 2026-08-29 with a note saying only Hannu could close it.
+He closed it: his own KEY on a Samsung Galaxy S25 Ultra (Chrome 151, `key 267 ms, 129 MiB`,
+`boot 27 ms`, 411×751) and on desktop Chrome, with desktop Firefox playing the friend. Nine
+stages, every expected sentence quoted out of `ui/copy.js` rather than out of memory.
+
+**Seven stages behaved exactly as specified. The finding is in the one that did nothing at
+all, and the silence was correct.**
+
+#### What happened
+
+- The phone unlocked and the whole conversation list arrived. **267 ms of key work on a
+  current phone** — §7.2's `m=128 MiB, t=3, p=1` measured on hardware people actually own,
+  and the first such reading taken outside the device panel.
+- With the conversation open on **both** the phone and the desktop, the friend sent three
+  messages. The first landed on the desktop — the phone was on the conversation *list* at
+  that moment. The rest landed on the phone, which had the conversation open. §5.4's mailbox
+  is delete-on-collect and behaved exactly so: **each message arrived in one place, never
+  both.**
+- **No panel appeared. On either device. Not on returning to the list, not on re-opening the
+  conversation, not at all.**
+- `elsewhere` appeared later — on the desktop **when it created an invite link**, and on the
+  phone when the QR scan made it read the roster (§3.4.1c's own-link check fetches), or when
+  the person pressed §7.3.3 case 5's manual control.
+
+#### Why the silence is correct, and why that is the whole finding
+
+§4.2.4 rule 1 fires on **the sealed roster's inner version rising**. Rule 3 already says what
+that excludes, in as many words: *"a second message on an existing session raises no
+generation, so it is not a roster write, so that device touches `roster_id` not at all."*
+
+So the hazard and the evidence are disjoint. **Receiving a message is the harm. Writing the
+roster is the signal. The harm does not produce the signal.** The panel fired for an invite
+link — an act with no relation to the split — minutes after a session in which every message
+had already gone to the other device.
+
+➡️ **A WARNING WHOSE TRIGGER IS NOT ITS HAZARD ARRIVES AT A TIME THAT CARRIES NO
+INFORMATION.** The person is told *"your KEY is in use in another browser or on another
+device"* while looking at a screen where nothing is happening, and told nothing at all while
+the thing that sentence describes is happening to them.
+
+⚠️⚠️ **THIS IS NOT A DEFECT AND IT IS WRITTEN DOWN RATHER THAN REPAIRED, DELIBERATELY.** The
+obvious remedy is rule 3's forbidden one: §7.3.3 permits five occasions and *"on a schedule"*
+is deliberately not among them, because a periodic touch turns a permanent identifier into a
+daily behavioural signal — the thing §4 and §9.1 spend their entire design budget avoiding.
+D-168 accepted the after-the-fact character knowingly. ⭐ **What is new is that it has now
+been WATCHED**: the design's known cost, paid in full, in the field, by the person the
+sentence was written for — and he did not notice anything was wrong, because nothing on
+either screen said so.
+
+⭐ **And the mechanism that finally surfaced it is worth keeping.** The phone learned nothing
+until §3.4.1c's own-link check went to the network. **A check written for one purpose is the
+only thing in the design that made the other one visible** — which is a fact about how thin
+the read schedule is, not a reason to add reads.
+
+#### What did NOT get tested, and the instruction was mine
+
+The walk's ninth stage asked whether §3.5's tripwire crosses to a second device by §7.3.1
+rule 7's OR-merge. **It could not have, and the error was in the instruction.** The step said
+to re-open a spent invite link a second time. But `api/pair.go`'s `handlePairDelete` is
+called by the joiner the moment a pairing completes — `store/pairing.go`'s `DeletePairing` is
+documented *"Sent by J at §3.4"* — so by then the row is gone and a second claim gets
+`not_found`, which is exactly what he saw and what his diagnostics recorded
+(`problem not_found ×1`).
+
+**No tripwire was ever set, so the merge had nothing to carry, so the merge was not tested.**
+The mechanism itself is sound and pinned — `TestPair_TripwireFiresAfterTheRevealToo` proves a
+claim against a REVEALED session sets it. Its window is between the reveal and the joiner's
+delete.
+
+➡️ ⭐⭐⭐⭐ **A NEGATIVE RESULT IS ONLY EVIDENCE IF THE INSTRUMENT COULD HAVE PRODUCED A
+POSITIVE ONE.** The step and its "this would be a real finding" note were both written by me,
+both plausible, and both incapable of reaching the thing they named. The walk's own report
+duly recorded the failure it had been told to look for. ⚠️ **The check the instruction was
+missing is the one D-165 exists for: before writing down what a wrong answer looks like,
+establish that the right answer is reachable at all.** Rebuilt in the field sheet as a
+deliberate race — two joiners held at the KEY-choice screen and fired a second apart — which
+is also the only shape §3.5 was ever meant to catch (`FEEDBACK_2026-08-12.md`: *"The tripwire
+catches the race variant only"*).
+
+#### A separate finding from the same evening: the refusal that is styled as a footnote
+
+Not part of the walk; he met it before starting, retyping his KEY at §7.4's confirmation. He
+mistyped, was refused, and **did not see that he had been refused**:
+
+> *"it is so the same font, colour etc that it does not look like an error message. If the
+> user is in a hurry the user needs a clear stand out red notice or won't react. That
+> happened to me."*
+
+It is worse than "the same". `app/index.html` renders the refusal into
+`<p class="note" id="retype-note">`, and `app/app.css` defines:
+
+```css
+.note { color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
+```
+
+**That is the de-emphasis class** — the one used for footnotes and explanatory asides, muted
+grey and *smaller than body text*. The single sentence telling a person that the eight words
+standing between them and their entire message history do not match is painted to recede.
+
+⭐⭐ **He reacted correctly to what the screen was signalling; the screen was signalling the
+wrong thing.** D-104 is already on this page — *"Colour means something, and a layout class
+that paints is a trap"* — and this is its mirror: a class that paints **de**-emphasis, applied
+to the one sentence on the screen that must not be de-emphasised. ⚠️ §7.4's own reasoning
+makes the case: the whole point of retyping all eight words rather than spot-checking two is
+that this is *the* moment a transcription error is caught. A refusal the person can walk past
+converts the strongest check in the setup flow into a formality.
+
+⏭️ **Not repaired here** — it is a live-site change and needs its own authorization.
+
+#### Still open
+
+1. **The tripwire's OR-merge across devices remains untested**, now knowingly rather than
+   accidentally. The rebuilt stage needs two joiners raced by hand.
+2. **Three conversations in his list all read `Ei vielä nimeä · aloitettu 30.8.2026` /
+   `sinä aloitit sen`** and are not distinguishable from one another. Separate, small, real.
+3. ⭐ **`elsewhere` is cleared permanently by forgetting the KEY and typing it back in.**
+   Correct by rule 8 — no local history means no high-water mark means a silent first read —
+   but it means a non-dismissable warning does have a way out, and nothing says so.
+4. **Two real PHONES** — both ends frozen at once — is still unwalked, and is now the only
+   part of the original item left.
+
+### D-177. ⛔⛔⛔⛔ The fix was applied three minutes after the page that calls it pending — and every record since has been copying that page instead of reading the box
+
+**2026-08-30, opening the queue's next item.** The item was *"§3.2.1's Caddy fix — needs its
+own authorization, the config is shared with a live privsend"*. Hannu gave the authorization.
+The first thing the work asks for is the current state of `/etc/caddy/Caddyfile`, and the
+global options block at the top of it reads:
+
+```
+{
+	log default {
+		exclude http.handlers.reverse_proxy
+	}
+}
+```
+
+**It was already done, and had been for thirteen days.** Nothing was deployed. What follows is
+the whole of the finding.
+
+#### The three minutes
+
+- **11:42, 2026-08-17** — `system-docs 30ca333` commits `ARCHITECTURE.md` §3.2.1, which says
+  *"Status 2026-08-17: the box does not yet keep this promise"* and *"Fix, proposed and not yet
+  applied."*
+- **11:45:25, 2026-08-17** — `/etc/caddy/Caddyfile` is modified, and
+  `Caddyfile.bak-20260817-114524` is written beside it. That backup does **not** contain the
+  exclusion; the live file does. So the backup is the genuine before state and the change is
+  that morning's.
+
+The sentence was accurate for **three minutes**. It was then read as current for thirteen days.
+
+#### It did not sit still — it was picked up and re-issued
+
+This is the part worth the number. A stale sentence is a small thing. A stale sentence inside a
+document that other work is required to consult is not, because the next reader does not
+re-derive it — they cite it.
+
+1. **D-165 (2026-08-25)** listed *"§3.2.1's Caddy fix"* as the first of four open rulings, with
+   the words *"The fix is designed and unapplied."* D-165 was a careful pass; it verified eleven
+   findings against the code. **It verified this one against the page.**
+2. **D-166 (2026-08-26)** carried it forward again under *"Still open, unchanged"*, and attached
+   a condition to a user-facing sentence — *"if §3.2.1 is ever fixed and measured, it may widen
+   again"* — on the belief that it had not been.
+3. **The memory index** recorded it as a queued item needing its own authorization.
+4. **I told Hannu so, twice**, most recently in the message immediately before this one, and
+   named it first in the queue. Four sources agreed, and all four are one sentence.
+
+➡️ ⭐⭐⭐⭐ **A DOCUMENT THAT DESCRIBES A PENDING ACTION HAS A SHELF LIFE OF MINUTES, AND NOTHING
+IN IT MARKS THE EXPIRY.** Every other kind of claim in these files decays slowly or not at all —
+a protocol rule, a measurement, a reason. *"Not yet applied"* is the one kind that is falsified
+by the very work it exists to prompt, and it is the kind most likely to be quoted, because it is
+the kind that generates the next task.
+
+➡️ ⭐⭐⭐⭐ **AND A REVIEW THAT READS THE RECORD INHERITS THE RECORD'S STALENESS AND RETURNS IT AS
+A FRESH FINDING.** D-165's own headline was that five of seven fixes were rules already written
+in a comment one branch above — a session about the documents being right. It did not follow
+that they were current. **Agreement between four records is not four confirmations when three of
+them are copies**, and there was no way to tell from inside the documents which it was. The only
+thing that could distinguish them was the box, which none of the four had asked. This is D-160's
+shape once more (*a guard that does not run is not a guard*) applied to prose: **an assertion
+about a machine that nothing re-checks is not documentation, it is a memory of documentation.**
+
+#### What the measurement actually says, now that one has been taken
+
+Twelve days to 2026-08-30, from the box:
+
+- `lpmd` served **552** stream requests. Under §5.3 every one of those ends with the client
+  vanishing mid-response — every one was a line under the old configuration, at the measured
+  rate of about thirty a day.
+- Caddy wrote **502** lines in the same window, from `tls.cache.maintenance`,
+  `http.acme_client`, `tls`, `http` and `admin.api`. **Zero** from `http.handlers.reverse_proxy`.
+- **Ten** Caddy lines contain an IP address at all: nine ACME challenge lookups, one loopback
+  call to the admin API. `lpmd`'s own three are its listen address at startup.
+- The exclusion is present in the **running** configuration (`GET localhost:2019/config/logging`),
+  not merely in the file — checked separately, because a file that has not been reloaded is a
+  plan and not a state.
+- The pre-fix lines are gone without anyone purging them: the same session capped journald at
+  `MaxRetentionSec=14d`, and the oldest entry on the box is now 2026-08-18. §3.2.1's *"bounding
+  what already exists is a separate decision"* answered itself, and answered it the good way —
+  `--vacuum-time` was never run, so privsend's operational history was never collateral.
+
+#### ⛔ D-166's condition is met, and the answer is still no
+
+D-166 narrowed the `ghostAdds` sentence from *"the **server** holds nothing tying this
+conversation to any identity of yours"* to *"nothing in the server's **database** ties…"*, and
+left the door open: *"if §3.2.1 is ever fixed **and measured**, it may widen again — and not one
+hour before."* Both halves of the condition are now satisfied. **The sentence does not widen.**
+
+`sshd` wrote **30,978** lines containing an IP address over the same twelve days —
+overwhelmingly scanners, plus every administrative login. So *"the server holds nothing"* as a
+whole-machine claim is simply false, and would have been false on any day. What changed with the
+Caddy fix is the only thing that ever mattered: **not one address on the box now sits beside a
+`mailbox_id`.** That is a statement about the database's contents and about a specific defunct
+proxy log, and the narrow wording says exactly it.
+
+➡️ ⭐⭐⭐ **A CONDITION BEING MET IS NOT THE SAME AS THE CHANGE BEING RIGHT.** D-166 wrote the
+condition as a permission and it reads like a promise; satisfied, the natural move is to take
+it. The reason not to is §3.2.1's own closing rule — *a logging commitment must name every
+process that can write a line about a request* — which a claim about "the server" can never
+satisfy, and which would break again the first time anything new is installed on that box. The
+condition should have been written as *"and only if no other process on the box logs an
+address"*, which was never going to be true. **A conditional clause in a security sentence is a
+future edit with the reasoning removed.**
+
+#### What was actually repaired here
+
+- `ARCHITECTURE.md` §3.2.1 — status rewritten as applied, live and measured, with the numbers
+  above and the twelve-day window named. The finding, the exposure and the closing rule are
+  unchanged; only the tense and the evidence are new.
+- `DECISIONS.md` — D-165's ruling 1 and D-166's *"Still open"* both struck, in place, saying
+  when and why rather than being deleted.
+- ⚠️ **`lpm/deploy/README.md` — the real gap.** The runbook's only mention of Caddy is the
+  one-digit port patch. **Nothing in the lpm repository recorded that the global options block
+  carries a privacy control**, and `deploy/Caddyfile.haamu-app` is explicitly a *fragment* — the
+  `haamu.app` site block — so it neither holds the control nor should. A rebuild from the
+  runbook would therefore have produced a correct-looking box with the leak back, and passed
+  every check in the document. The runbook now verifies the exclusion against the running
+  config as its own step. ⭐ **The fix lived in exactly one place that was not under version
+  control: a comment in a file owned by another service.**
+
+#### Still open, and honestly
+
+Nothing here touched the four items behind it in the queue. And the mechanism that produced this
+is not fixed by fixing its instance: **there is still no check anywhere that a sentence in these
+documents describing the state of the box is true of the box.** §3.2.1 now carries a date and a
+measurement, which makes the next drift visible to a reader who looks — it does not make it
+visible to one who does not. Whether that deserves a test is Hannu's call, not mine to invent.
+
 ### D-176. ⭐⭐⭐⭐ The rule that two correct guards could not enforce: §6.7.1 rule 5 moved off the callers and onto the one place that sends
 
 **2026-08-30, and it is not a field report.** Nothing was broken. This is the queued
@@ -6825,10 +7160,16 @@ sentence (which is the shape D-153 gave the English) and the dash clause is new.
 
 #### Still open, unchanged
 
-D-165's other three rulings: **§3.2.1's Caddy fix** (needs its own authorization — the config is
-shared with a live privsend), **I6's wording**, and **§3.4.1b rule 6's scope**. The `ghostAdds`
-sentence above is honest today with the proxy logging as it is; if §3.2.1 is ever fixed **and
-measured**, it may widen again — and not one hour before.
+D-165's other three rulings: ~~**§3.2.1's Caddy fix**~~ ✅ **it was applied on 2026-08-17, three
+minutes after the page that called it pending was committed — see D-177**; **I6's wording**; and
+**§3.4.1b rule 6's scope**.
+
+~~The `ghostAdds` sentence above is honest today with the proxy logging as it is; if §3.2.1 is
+ever fixed **and measured**, it may widen again — and not one hour before.~~ ⛔ **Both halves of
+that condition were already satisfied when this was written, and the sentence still does not
+widen — D-177.** `sshd` logs an address 30,978 times in twelve days; *"the server holds
+nothing"* is a whole-machine claim and was never going to be true. **The condition was written
+as a permission and should have been written as an impossibility.**
 
 ### D-165. ⭐⭐⭐⭐ Seven fixes, and five of them were a rule already written in a comment one branch above
 
@@ -6919,12 +7260,15 @@ loudly if a payload grows into it again, with a second check that a message one 
 
 #### ⏳ Open — four rulings, none invented *(4 closed by D-166)*
 
-1. **`ARCHITECTURE.md` §3.2.1's Caddy fix** (C #9). `server.ghostAdds` says the server *"holds
-   nothing tying this conversation to any identity of yours"*, and §3.2.1 records the proxy
-   logging `remote_ip` beside a real `mailbox_id`, **measured at 215 lines in seven days**, kept
-   about five weeks. ⭐ `copy.js` already knows: the comment on the *metadata* paragraph forbids
-   exactly this kind of whole-machine claim, twenty lines away. The fix is designed and unapplied
-   and touches a config shared with a live privsend, so it needs its own authorization.
+1. ✅ **RULED — and it was never open. `ARCHITECTURE.md` §3.2.1's Caddy fix** (C #9) **had
+   already been applied on 2026-08-17, the same morning §3.2.1 was written, and this entry read
+   the page rather than the box. See D-177.** What the entry said: `server.ghostAdds` says the
+   server *"holds nothing tying this conversation to any identity of yours"*, and §3.2.1 records
+   the proxy logging `remote_ip` beside a real `mailbox_id`, **measured at 215 lines in seven
+   days**, kept about five weeks. ⭐ `copy.js` already knows: the comment on the *metadata*
+   paragraph forbids exactly this kind of whole-machine claim, twenty lines away. ~~The fix is
+   designed and unapplied and touches a config shared with a live privsend, so it needs its own
+   authorization.~~ ⛔ **That last sentence is the one four later records copied.**
 2. ~~**I6's wording** (B #2, above).~~ ✅ **RULED 2026-08-26 — split into I6a/I6b/I6c, see D-167.**
 3. ✅ **RULED 2026-08-26 — every occasion is the initiator's, PROTOCOL 0.9.26, see D-167.**
    ~~**§3.4.1b rule 6 and rule 4.** The fix sends the `DELETE` for the **initiator only**, which is

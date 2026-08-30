@@ -66,7 +66,48 @@ import { segments } from "/src/ui/emphasis.js";
 
 const $ = (id) => document.getElementById(id);
 const show = (id, on = true) => $(id).classList.toggle("hidden", !on);
-const text = (id, s) => ($(id).textContent = s);
+/**
+ * ⚠️⚠️ IT CLEARS `refused`, AND THAT IS WHY THE PAIR BELOW IS SAFE (D-179).
+ *
+ * `#enter-note` carries BOTH a refusal (`describeIdentity`, §7.2's wrong KEY) and
+ * ordinary prompts on the same screen (`copy.unlock.ask`, `lockSaid`) — so the paint
+ * has to come off again, and putting the removal in the ORDINARY setter means a
+ * neutral sentence cannot inherit the previous refusal's alarm by anybody forgetting
+ * to take it off at a call site. That is D-104's collision in its state-machine form:
+ * two correct writes to one element, and the second one silently wearing the first
+ * one's meaning.
+ */
+const text = (id, s) => {
+  const el = $(id);
+  el.classList.remove("refused");
+  return (el.textContent = s);
+};
+
+/**
+ * ⛔⛔ A REFUSAL MAY NOT WEAR THE DE-EMPHASIS CLASS, AND FOR ITS WHOLE LIFE IT DID.
+ *
+ * `.note` is `--muted` at 0.875rem — the class this stylesheet uses for footnotes and
+ * asides — and until 2026-08-30 it painted the one sentence telling a person that the
+ * eight words standing between them and every message they have do not match. Hannu
+ * mistyped his own KEY at §7.4's confirmation, was refused, and walked straight past
+ * it: *"it is so the same font, colour etc that it does not look like an error
+ * message. If the user is in a hurry the user needs a clear stand out red notice or
+ * won't react. That happened to me."*
+ *
+ * ⚠️ §7.4's OWN REASONING IS WHAT MAKES IT SERIOUS. The whole point of retyping all
+ * eight words rather than spot-checking two is that this is THE moment a transcription
+ * error is caught; a refusal the person can walk past converts the strongest check in
+ * the setup flow into a formality.
+ *
+ * ⚠️ THE STRENGTH IS D-104's "important", NOT ITS "one action". A soft fill with a
+ * coloured border, in the alarm hue. The filled treatment is reserved for the single
+ * ACTION on a screen and a refusal is not an action — the action is the button
+ * underneath, which must stay the loudest thing here.
+ */
+const refused = (id, s) => {
+  text(id, s);
+  $(id).classList.add("refused");
+};
 
 // ⚠️ `emphasised()` STOOD HERE AND IS GONE, ABSORBED INTO `prose()` BELOW. It
 // rendered `**marked**` runs as `<strong>` nodes and had exactly one caller, which
@@ -790,7 +831,7 @@ $("confirmed").addEventListener("click", () => {
     // down properly. A wallet-style spot check of two words out of eight catches a
     // single transcription error only a quarter of the time; this is the whole
     // phrase, and Phase 0.5 measured 24.4 s to type it at 90% accuracy.
-    text("retype-note", copy.phrase.wrong);
+    refused("retype-note", copy.phrase.wrong);
     // ⚠️ IT DOES NOT SEND THEM BACK TO THE PHRASE. §7.4 says to show it again on a
     // wrong answer, and until D-084 that happened by the phrase never having left
     // the screen. The offer is a button they choose, so that the second attempt is
@@ -993,7 +1034,7 @@ async function withIdentity(phrase, run) {
     opened?.tabs?.close();
     opened?.db?.close();
     only("enter");
-    text("enter-note", describeIdentity(err));
+    refused("enter-note", describeIdentity(err));
     if (err?.reason === "record_unreadable" && scope) offerToForgetLocalHistory(scope);
   }
 }
@@ -1035,7 +1076,7 @@ function offerToForgetLocalHistory(scope) {
                 text("enter-note", copy.unlock.ask);
               } catch (err) {
                 noteProblem(err);
-                text("enter-note", describeIdentity(err));
+                refused("enter-note", describeIdentity(err));
               } finally {
                 db?.close();
               }

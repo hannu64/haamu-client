@@ -1434,6 +1434,37 @@ button.term[aria-expanded="true"] { color: var(--accent); border-bottom-style: s
    411px phone actually needs. */
 .note { color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
 
+/* ⛔⛔ D-179 — A REFUSAL MAY NOT WEAR THE CLASS ABOVE.
+   `.note` is the DE-EMPHASIS class, and it painted §7.4's "that is not the same KEY"
+   and §7.2's wrong-KEY refusal at `--muted`, 0.875rem — smaller than body text, in the
+   grey this file uses for asides. Hannu was refused at his own confirmation and did not
+   see it. `app.js`'s `refused()` is the only thing that sets this class and `text()` is
+   the only thing that takes it off, so an element that carries a refusal and an ordinary
+   prompt in turn (`#enter-note`) cannot wear the wrong one.
+
+   ⚠️ THE HUE IS `--alarm` AND THE STRENGTH IS D-104's "important" — a soft fill with a
+   coloured border, the same recipe as `.msg.bad`. NOT the filled accent, which D-104
+   reserves for the one ACTION on a screen: the button under this sentence has to stay
+   the loudest thing on it.
+
+   ⚠️ CONTRAST IS THE REASON `--alarm` IS THIS RED AND NOT A BRIGHTER ONE (see the token).
+   `--alarm` on `--alarm-soft` measures 5.72:1 light and 5.12:1 dark — over the 4.5:1
+   line in both, and asserted from `getComputedStyle` by `probe-refusal-visible.mjs`
+   rather than from these hex values, which is D-104's rule and D-145's lesson.
+
+   ⚠️ (0,2,0), and nothing in this file paints `.note` above it on either of the two
+   screens that use it — `#confirm` and `#enter` are plain `.panel`, never `.panel.alarm`,
+   whose `.note` rule at (0,2,1) would win. Checked, not assumed. */
+.note.refused {
+  color: var(--alarm);
+  background: var(--alarm-soft);
+  border: 1px solid var(--alarm);
+  border-radius: var(--r);
+  padding: 0.5rem 0.7rem;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
 /* ⚠️⚠️ `!important`, AND IT IS NEW AT D-139. Until today this was a plain
    `display: none` that won on specificity and source order alone, and the file
    carried two separate comments explaining which rules had to be written weakly so
