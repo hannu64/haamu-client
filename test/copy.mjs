@@ -534,6 +534,93 @@ for (const [pattern, why] of FORBIDDEN) {
   equal(why.split(" — ")[0] + " forbids " + pattern.source, hits.map(([p]) => p).join(", "), "", why);
 }
 
+// ============================== the actions the reader can actually take (D-182)
+
+/**
+ * ⛔⛔⛔⛔ A FAILURE SCREEN MAY NOT NAME AN ACTION ITS READER CANNOT PERFORM, AND THIS
+ * PRODUCT HAS NOW GOT THAT WRONG TWICE.
+ *
+ * D-174 was the first: `own_link` told a second device to "try again" when the half
+ * needed to finish lives only on the first, and the comment above that entry in
+ * `copy.js` states the rule — **name the action that is actually available, and no
+ * other.** It was stated on one screen and not learned by its neighbours.
+ *
+ * D-182 is the second, found by Hannu within hours of D-181 shipping:
+ *
+ *   > *"The browser C gets 'and start again' but how can user C start again, that
+ *   >  user only received a pairing link."*
+ *
+ * Exactly right. Every reason below is reached only by a **joiner** — one of them by
+ * both roles — and a joiner holds an invite link and nothing else. The half that makes
+ * an invite link is ephemeral and lives on the device that created it, so "start
+ * again" and "create a new one" are instructions to somebody who cannot follow them.
+ *
+ * ⚠️⚠️ AND ON `already_claimed` IT IS NOT A STYLE POINT. D-181 established that the
+ * INITIATOR can never be warned about a late second claim — §3.3 has it discard `L`.
+ * **The only path by which the initiator ever finds out is this reader telling that
+ * person**, so this screen has to send them asking. A sentence that tells them to go
+ * away and start over ends the chain.
+ */
+section("a failure names only an action its reader can take");
+
+// Reachable by a joiner: every one is raised inside `join`, by `describeExistingClaim`,
+// or by a refused claim — and only a joiner claims. `claim_forged` reaches BOTH roles,
+// which is a stronger constraint, not a weaker one: it may name neither party's action.
+const JOINER_REACHABLE = [
+  "link_malformed", "code_malformed", "offer_unverified", "commitment_mismatch",
+  "already_claimed", "claim_forged", "expired", "not_found",
+];
+// ⚠️ Deliberately NOT a global FORBIDDEN pattern. `own_link` says "make a new one here"
+// and is right to: that reader is the initiator, standing at the device that can.
+const CANNOT_DO = [
+  [/\bstart (again|over)\b/i, "only the device that made the invite link can start one"],
+  [/\b(create|make)\b[^.]*\bnew\b/i, "a joiner has no way to create an invite link"],
+];
+
+for (const reason of JOINER_REACHABLE) {
+  const sentence = copy.pairing.failure[reason];
+  check(
+    `⭐ \`${reason}\` exists`,
+    typeof sentence === "string" && sentence.length > 0,
+    typeof sentence
+  );
+  for (const [pattern, why] of CANNOT_DO) {
+    check(
+      `⭐⭐ \`${reason}\` does not tell a joiner to ${pattern.source.includes("start") ? "start again" : "create one"}`,
+      !pattern.test(sentence),
+      pattern.test(sentence) ? `REFUTED — ${why}: "${sentence}"` : "asks rather than commands"
+    );
+  }
+}
+
+// ⛔⛔⛔ §3.6.2's SCREEN IS THE THIRD SITE AND THE MOST SERIOUS. `sas-wrong` is on the
+// six-digit screen, which BOTH roles reach, and its confirmation said *"start again and
+// send the new one a different way"* — an action only the party that made the invite
+// link has. The person pressing it has just decided the far end is an interceptor.
+check(
+  "⭐⭐⭐ §3.6.2's delete confirmation names no action only the initiator has",
+  !CANNOT_DO.some(([pattern]) => pattern.test(copy.pairing.wrongConfirm)) &&
+    !/\bsend\b/i.test(copy.pairing.wrongConfirm),
+  copy.pairing.wrongConfirm.replace(/\n/g, " ")
+);
+
+// ⚠️ `server_state` IS DELIBERATELY NOT IN THE LIST ABOVE, and the reason is a code path
+// rather than a preference: `join` intercepts EVERY 409 from its claim and turns it into
+// `describeExistingClaim`, and a joiner makes no other write that can conflict. So it is
+// reached only by an I — for whom "start again with a new invite link" is exactly right.
+// ⭐ Checked when D-182 was written rather than assumed; re-check it if a joiner ever
+// gains a second write.
+
+// ⭐⭐⭐ AND THE ONE THAT CARRIES THE CHAIN SAYS WHAT TO RELAY. Warning this reader is
+// not the point — the point is that the person on the other end learns, and nothing
+// else will tell them. See D-181.
+check(
+  "⭐⭐⭐ `already_claimed` sends the reader to the person who can act, and says what to pass on",
+  /\bask\b/i.test(copy.pairing.failure.already_claimed) &&
+    /already been opened/i.test(copy.pairing.failure.already_claimed),
+  copy.pairing.failure.already_claimed
+);
+
 // ======================================================== the sentences that must exist
 
 section("the qualifiers that are load-bearing");

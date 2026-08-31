@@ -269,7 +269,10 @@ export const FI = {
   "pairing.answer.verified": "Aivan varmasti — se on ystäväni.",
   "pairing.answer.later": "En vielä — kysyn ystävältäni myöhemmin",
   "pairing.answer.wrong": "Tämä ei ole se henkilö, jonka halusin tavoittaa",
-  "pairing.wrongConfirm": "Poistetaanko tämä keskustelu?\n\nTämä poistaa sen täältä. Kutsu on joka tapauksessa käytetty — jos haluat yhä tavoittaa ystäväsi, aloita alusta ja lähetä uusi kutsu toista tietä.",
+  // ⛔⛔⛔ D-182: näytetään molemmille osapuolille, joten se ei saa käskeä lähettämään —
+  // vain kutsun tehnyt voi lähettää. Ennen: "aloita alusta ja lähetä uusi kutsu".
+  // ⚠️ "kutsu", ei "kutsulinkki": tämä näyttö ei saa nimetä kumpaakaan §2:n salaisuutta.
+  "pairing.wrongConfirm": "Poistetaanko tämä keskustelu?\n\nTämä poistaa sen täältä. Kutsu on joka tapauksessa käytetty — ystäväsi tavoittamiseen tarvitaan uusi kutsu, ja se on välitettävä toista tietä kuin tämä.",
   "pairing.tripwireTitle": "Joku muu avasi tämän kutsulinkin",
   "pairing.failureTitle": "Pariliitos ei valmistunut",
   "pairing.ownLinkTitle": "Tämä on sinun oma kutsulinkkisi",
@@ -282,11 +285,16 @@ export const FI = {
   "pairing.failure.code_malformed": "Koodissa on 16 merkkiä. Vertaa siihen, mitä ystäväsi luki — koodissa ei koskaan ole kirjaimia I tai L eikä numeroa 1, joten jokin sellainen on jotain muuta. Nolla siinä missä kuulit Oscarin on aivan oikein.",
   "pairing.failure.offer_unverified": "Se mitä palvelin tarjoaa, ei täsmää tämän kutsulinkin kanssa. Älä jatka: tämä on joko vioittunut kutsulinkki tai palvelin, joka työntää väliin jotain omaansa.",
   "pairing.failure.commitment_mismatch": "Palvelin lähetti jotain, mitä tämä kutsulinkki ei luvannut. Jokin sekaantuu tähän kutsuun. Älä yritä uudelleen — pyydä uusi linkki toista kanavaa pitkin.",
-  "pairing.failure.already_claimed": "Joku muu avasi tämän kutsulinkin ennen sinua, ja hänellä on sen sisältämä salaisuus. Pidä kutsulinkkiä paljastuneena ja aloita alusta.",
+  // ⛔⛔ D-182: *"aloita alusta"* pyysi lukijaa tekemään sen, mitä vain linkin tehnyt
+  // voi tehdä. Lukijalla on kutsulinkki eikä mitään muuta. Ja viestin vieminen on tässä
+  // ainoa tie: kutsun tehnyt laite ei voi enää saada tätä tietoonsa (D-181).
+  "pairing.failure.already_claimed": "Joku muu avasi tämän kutsulinkin ennen sinua, ja hänellä on sen sisältämä salaisuus. Pyydä uusi kutsulinkki siltä, joka lähetti tämän — mieluiten toista kanavaa pitkin — ja kerro hänelle, että tämä oli jo avattu, kun sait sen. Linkin tehnyt laite ei voi tietää tätä.",
   "pairing.failure.own_link": "Teit tämän kutsulinkin toisella laitteellasi, ja vain se laite voi saattaa sen loppuun: se mitä siihen tarvitaan ei koskaan poistu linkin tehneeltä laitteelta. Avaa tämä kutsulinkki siellä tai tee tähän uusi.",
   "pairing.failure.own_channel": "Tämä kutsulinkki teki keskustelun, joka sinulla jo on, joten se keskustelu on nyt auki tässä. Yksi kutsulinkki tekee yhden keskustelun, ja tämä on jo tehnyt sen.",
   "pairing.failure.invite_unrecorded": "Mitään ei luotu. Tämä laite ei pystynyt ensin merkitsemään muistiin, että kutsulinkki on sinun, ja ilman sitä merkintää muut laitteesi voisivat luulla omaa kutsulinkkiäsi jonkun toisen linkiksi. Yritä uudelleen.",
-  "pairing.failure.claim_forged": "Tämän kutsulinkin otti jokin, joka ei pystynyt todistamaan tulleensa linkistä. Mitään ei siepattu, mutta linkki on käytetty — luo uusi.",
+  // ⚠️ D-182: näytetään molemmille osapuolille, joten se ei saa nimetä tekoa, jonka vain
+  // toinen voi tehdä. Ennen: "luo uusi".
+  "pairing.failure.claim_forged": "Tämän kutsulinkin otti jokin, joka ei pystynyt todistamaan tulleensa linkistä. Mitään ei siepattu, mutta linkki on käytetty — tähän pariliitokseen tarvitaan uusi kutsulinkki.",
   "pairing.failure.expired": "Kutsulinkin aika loppui ennen kuin pariliitos valmistui.",
   "pairing.failure.not_found": "Tällä kutsulinkillä ei ole enää pariliitosistuntoa.",
   "pairing.failure.still_waiting": "Kukaan ei ole vielä avannut tätä kutsulinkkiä, joten tämä sivu lakkasi odottamasta. Itse kutsulinkki on yhä hyvä, ja voit jatkaa milloin tahansa ystäväsi ollessa valmis.",

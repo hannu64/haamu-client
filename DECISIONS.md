@@ -5546,6 +5546,82 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-182. ⛔⛔⛔⛔ *"and start again"* — the one screen that carries §3.5's chain told its reader to do the one thing that reader cannot do
+
+**2026-08-31, Hannu, testing D-181 within hours of it shipping.** Both tests passed. Then:
+
+> *"The browser C gets 'and start again' but how can user C start again, that user only received
+> a pairing link."*
+
+Exactly right, and it is not a phrasing complaint. **Every path to `already_claimed` is a
+joiner's** — it is raised inside `join`, by `describeExistingClaim`, or by a refused claim, and
+only a joiner claims. A joiner holds an invite link and nothing else; the half that MAKES one is
+ephemeral and lives on the device that created it. The sentence named an action available only
+to the other party.
+
+⚠️⚠️ **AND ON THIS SCREEN THAT ENDS THE SECURITY PROPERTY, NOT JUST THE SENTENCE.** D-181
+established that the initiator can never be warned about a late second claim: §3.3 has it
+discard `L`, and `pairing_mac_key = HKDF(L, …)`. **The only path by which the initiator ever
+learns is this reader telling that person out of band.** So a screen that says "start again" —
+i.e. *go away and do something else* — is the last link in the chain, broken. The new sentence
+sends the reader asking, and says what to pass on, and says that nothing else will say it:
+
+> *"…Ask whoever sent it for a new invite link, over a different channel if you can — and say
+> that this one had already been opened when you got here. The device that made it cannot find
+> that out for itself."*
+
+⭐ **THIS IS D-174's RULE, NOT LEARNED BY THE NEIGHBOURS.** The entry one line down in
+`copy.js` — `own_link` — already carries it in bold: *"IT MUST NAME THE OTHER DEVICE, because
+that is the only action available… Telling the person to 'try again' here would send them round
+a loop that cannot close."* That was written for one screen and stayed there. ➡️ **A rule
+recorded beside the sentence that taught it is a rule with a readership of one.** It is now a
+gate over every joiner-reachable failure instead of a comment over a single entry.
+
+⚠️ `claim_forged` had the same defect and was fixed in the same change: it said *"create a new
+one"*, which is true for the I that raises it in `initiatorAwaitsClaim` and impossible for the J
+that reaches it through `describeExistingClaim` — a path §3.5.1 made far more reachable, because
+a spent session is now still there to be read. It is shown to **both** roles, so it may name
+neither party's action: *"this pairing needs a new invite link."*
+
+⚠️ The gate is deliberately **scoped, not global**. `own_link` says *"make a new one here"* and
+is right to — that reader is the initiator, standing at the device that can. A blanket FORBIDDEN
+pattern would have failed the one screen that gets it right. And the gate was proved to fail:
+restoring the old sentence turns it red, twice.
+
+#### ⛔⛔⛔ A THIRD SITE, AND THE MOST SERIOUS ONE — §3.6.2's screen
+
+Sweeping for the same shape found it in the Finnish before the English: `pairing.wrongConfirm`,
+the confirmation behind *"this is not the person"*, said *"start again and send the new one a
+different way"*. That screen is reached by **both roles** — both parties compare the digits —
+and the person pressing it has **just decided the far end is an interceptor**. Sending them off
+to do something only the other party can do is the worst moment in the product to do it. It now
+names what is needed and how it must travel, and no party's action.
+
+⭐⭐ **AND THE SUITE REFUSED MY FIRST FIX, CORRECTLY.** I wrote *"you will need a fresh invite
+link"* and `test/copy.mjs` failed it: **§3.6.2's screen may not name either of §2's two
+secrets.** It is reached again from inside a conversation, where nothing on the device records
+whether a link or a spoken code built the channel — and the sentence I was replacing had been
+careful about exactly that, saying *"the invitation"*. ➡️ **Only the VERB was wrong, and I had
+started rewriting the noun.** A correction that touches more than the defect is how a fix
+introduces its own.
+
+⚠️ `pairing.failure.server_state` was checked and deliberately left alone: `join` intercepts
+every 409 from its claim, and a joiner makes no other write that can conflict, so it is reached
+only by an I — for whom *"start again with a new invite link"* is exactly right. Verified in the
+code rather than assumed, and the test says so beside the exclusion.
+
+#### What Hannu also confirmed, and what it means
+
+> *"The browser A who initiated pairing link and B who successfully opened it did not get any
+> notification no matter what I did, not even with pressing 'Check my other devices for
+> changes'."*
+
+**Correct, and nothing is broken.** §7.3.3 case 5's control reads the roster, and no tripwire was
+ever written to any roster — because none was ever raised: C read the session, saw it was taken,
+and sent no claim, so the server had nothing to refuse. **There is no record anywhere for that
+button to find.** This is D-181's asymmetry seen from the other side, and the copy above is the
+whole of the answer to it.
+
 ### D-181. ⭐⭐⭐⭐⭐ The victim of a stolen invite link was told *"there is no pairing"* — §3.5's alarm was unreachable in every case that actually happens, and the fix is a tombstone
 
 **2026-08-31, from building D-180's ruling and finding it changed nothing.**

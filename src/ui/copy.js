@@ -2834,10 +2834,23 @@ export const pairing = {
   // ⚠️ Reached from the same screen as `sas` and under the same constraint — the
   // kind may be unknown by the time somebody presses it — so "the invitation" here
   // is the superordinate documented at `sasWhat`, not a loose synonym.
+  // ⛔⛔⛔ D-182, THE THIRD SITE AND THE MOST SERIOUS ONE. §3.6.2's screen is reached by
+  // BOTH roles — both parties compare the digits — and this said *"start again and send
+  // the new one a different way"*, which only the party that MADE the invite link can
+  // do. The person reading it has just decided the far end is an interceptor; sending
+  // them off to do something impossible is the worst moment in the product to do it.
+  // ⭐ So it names no party's action: what is needed, and how it must travel. Whoever is
+  // reading knows which of the two they are.
+  //
+  // ⚠️⚠️ AND IT SAYS "invitation", NOT "invite link" — THE FIRST ATTEMPT AT THIS FIX SAID
+  // "invite link" AND THE SUITE REFUSED IT. This screen may not name either of §2's two
+  // secrets (see `test/copy.mjs`): it is reached again from inside a conversation, where
+  // nothing on the device records whether a link or a spoken code built the channel. The
+  // sentence this replaces was already careful about that; only its VERB was wrong.
   wrongConfirm:
     "Delete this conversation?\n\n" +
-    "This removes it here. The invitation is spent either way — if you still want to reach your " +
-    "friend, start again and send the new one a different way.",
+    "This removes it here. The invitation is spent either way — to reach your friend you will " +
+    "need a fresh invitation, passed between you a different way than this one was.",
 
   tripwireTitle: "Somebody else opened this invite link",
   failureTitle: "Pairing did not complete",
@@ -2948,9 +2961,28 @@ export const pairing = {
     commitment_mismatch:
       "The server sent something this invite link did not promise. Something is interfering with " +
       "this invitation. Do not retry — ask for a new one over a different channel.",
+    // ⛔⛔⛔⛔ IT SAID *"and start again"* UNTIL D-182, AND THE PERSON READING IT CANNOT
+    // START ANYTHING. This screen is reached only by a J — every `already_claimed` in
+    // `flow/pair.js` is raised inside `join` or by a refused claim, and only a J claims.
+    // A J has an invite link and nothing else: the half that makes one is ephemeral and
+    // lives on the device that created it. Hannu, testing D-181's fix the day it
+    // shipped: *"how can user C start again, that user only received a pairing link."*
+    // ⭐ It is `own_link`'s rule one entry down, applied to the neighbouring screen —
+    // **name the action that is actually available**, and no other.
+    //
+    // ⚠️⚠️ AND THE RELAY IS NOT ADVICE, IT IS THE LAST LINK IN §3.5's CHAIN. D-181
+    // established that the INITIATOR can never be warned late: §3.3 has it discard `L`,
+    // and `pairing_mac_key = HKDF(L, …)`, so evidence arriving afterwards is
+    // unverifiable by the one party now holding a conversation with whoever took the
+    // link. **The only path by which the initiator ever finds out is this reader telling
+    // that person.** So the sentence has to say what to relay AND that nothing else
+    // will: a reader who assumes the app has already dealt with it stays silent, and
+    // silence is the whole attack succeeding.
     already_claimed:
       "Somebody else opened this invite link before you, and that person holds the secret in it. " +
-      "Treat the invite link as compromised and start again.",
+      "Ask whoever sent it for a new invite link, over a different channel if you can — and say " +
+      "that this one had already been opened when you got here. The device that made it cannot " +
+      "find that out for itself.",
 
     // ⛔⛔ §3.4.1c RULE 3, AND IT IS THE SENTENCE `already_claimed` ABOVE USED TO SAY TO
     // THIS PERSON. A second device of the same identity holds no §3.4.1b record for a
@@ -2984,9 +3016,14 @@ export const pairing = {
       "Nothing was created. This device could not first make a note that the invite link is " +
       "yours, and without that note your other devices could mistake your own invite link for " +
       "somebody else's. Try again.",
+    // ⚠️ SHOWN TO BOTH ROLES, like `expired` below, so it may not name an action only
+    // one of them can take. It said *"create a new one"* until D-182 — true for the I
+    // that raised it in `initiatorAwaitsClaim`, and impossible for the J that reaches
+    // it through `describeExistingClaim`. §3.5.1 made the second path far more
+    // reachable, because a spent session is now still there to be read.
     claim_forged:
       "This invite link was taken by something that could not prove it came from the link. Nothing " +
-      "was intercepted, but the link is spent — create a new one.",
+      "was intercepted, but the link is spent — this pairing needs a new invite link.",
     // ⚠️ IT IS SHOWN TO BOTH ROLES, so it may not say which of them was waited for.
     // "Before the other person arrived" is true for the initiator and false for the
     // joiner, who arrived and was left waiting — feedback 16's shape, one screen along.
