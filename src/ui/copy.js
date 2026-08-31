@@ -954,6 +954,26 @@ export const menu = {
  * server about somebody else's pairing. Navigation cannot do that; a paste field
  * can, which is the price of having one.
  */
+/**
+ * ⭐⭐ D-185 — THE ONE WORD ON A PANEL A PERSON MAY PUT AWAY.
+ *
+ * 15 of the 19 `notice()` call sites passed no buttons at all, so until now only the
+ * code could ever take a panel off the screen. Hannu, 2026-08-31, on the proposal that
+ * the informational ones become closable and the alarms do not: *"That can be done the
+ * way you recomended."*
+ *
+ * ⚠️ "Close", NOT "Dismiss" and NOT "OK". A control says exactly what happens, and what
+ * happens is that this message goes away. **It does not say the condition went away** —
+ * a browser that is not storing anything permanently is still not storing anything
+ * permanently after the panel is closed — and "OK" would have quietly claimed otherwise
+ * by inviting agreement. ⭐ Which panels may carry it is not a list in `copy.js` or in
+ * `app.js`: it is derived from the panel's own shape, so a panel added next year obeys
+ * the rule without anybody remembering it exists. See `paintNotice`.
+ */
+export const notices = {
+  close: "Close",
+};
+
 export const openLink = {
   // ⚠️ §2.2's code arrives through THIS field and not a second one. A person is
   // handed one thing by one friend and needs one place to put it; two fields would

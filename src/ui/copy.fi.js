@@ -139,6 +139,11 @@ export const FI = {
   "ghost.duplicatedEndNote": "Tämä tyhjentää kopion tältä välilehdeltä. Toiseen välilehteen se ei vaikuta.",
   "ghost.noCensus": "Tämä selain ei osaa kertoa, onko sama keskustelu auki toisella välilehdellä. Jos olet monistanut tämän välilehden, sulje kopio.",
 
+  // ── notices
+  // ⭐ D-185. *Sulje* is the plain Finnish for closing a thing on a screen, and like the
+  // English it says only that the MESSAGE goes — not that what it reported has changed.
+  "notices.close": "Sulje",
+
   // ── list
   "list.title": "Keskustelut",
   "list.empty": "Ei vielä keskusteluja.",

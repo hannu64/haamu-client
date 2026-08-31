@@ -2165,6 +2165,12 @@ function paintNotice(id, build) {
   const el = document.createElement("section");
   el.className = `panel${alarm ? " alarm" : ""}`;
   el.dataset.notice = id;
+  // ⭐⭐ D-179's OWED QUESTION, ANSWERED FOR THE PANELS. A panel is appended to a
+  // container that sits above every screen, WITHOUT anybody pressing anything — which
+  // is precisely the change a screen reader is silent about unless the element says it
+  // is a message. `role="alert"` announces at once and `role="status"` waits for a
+  // pause; the split is the same one that decides the styling, so the two cannot drift.
+  el.setAttribute("role", alarm ? "alert" : "status");
   const p = document.createElement("p");
   p.textContent = body;
   el.append(p);
@@ -2187,6 +2193,34 @@ function paintNotice(id, build) {
       button.addEventListener("click", b.onClick);
       row.append(button);
     }
+    el.append(row);
+  }
+  // ⭐⭐⭐ D-185 — WHICH PANELS A PERSON MAY CLOSE IS DERIVED FROM THE PANEL, NOT LISTED.
+  //
+  // 15 of 19 `notice()` call sites passed no buttons, so a panel that appeared stayed
+  // until some other code removed it, and 10 of those had nothing to do with an alarm.
+  // The rule Hannu chose is *the informational ones may be closed and the alarms may
+  // not*, and the shape already says which is which: an `alarm` is §3.5's register and
+  // must stand until its cause is gone, and a panel that carries `actions` already has
+  // a way out that says something more useful than "close".
+  //
+  // ⚠️⚠️ A SET OF IDS WOULD HAVE BEEN THE OBVIOUS IMPLEMENTATION AND IT IS THE WRONG
+  // ONE. `RERENDER` is the standing example in this file of a table somebody must
+  // remember to add a row to; D-169 removed one for exactly this reason. Derived from
+  // the shape, a panel written next year obeys the rule without knowing it exists —
+  // and `test/app-document.mjs` pins today's partition so the set cannot move in
+  // silence.
+  //
+  // ⚠️ `clearNotice` AND NOT `el.remove()`. The builder must leave `liveNotices` too,
+  // or the next language change (D-169) paints the closed panel straight back.
+  if (!alarm && actions.length === 0) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const close = document.createElement("button");
+    close.className = "secondary";
+    close.textContent = copy.notices.close;
+    close.addEventListener("click", () => clearNotice(id));
+    row.append(close);
     el.append(row);
   }
   $("notices").append(el);

@@ -5546,6 +5546,76 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-185. ⭐⭐⭐ A panel a person may put away — and which ones those are is derived from the panel, not listed
+
+**2026-08-31.** Measured before proposing: **19 `notice()` call sites, 18 distinct panels** —
+`ghostbusy` is raised twice — and **15 of the 19 sites passed no buttons at all**. A panel that
+went up therefore stayed up until some other code took it down; the person looking at it had no
+way to put it away. Hannu, on the proposal that the informational ones become closable and the
+alarms do not:
+
+> *"That can be done the way you recomended."*
+
+**The partition, and it is total:**
+
+| class | count | what they get |
+|---|---|---|
+| informational | **9** — `closing` `ghostbusy` `linkbusy` `memo` `nocensus` `not-durable` `ownlink` `rename` `role` | a **Close** |
+| alarms | **6** — `damaged` `dbblocked` `elsewhere` `mismatch` `purged` `unexplained` | nothing; they stand until their cause is gone |
+| carry their own actions | **3** — `inflight` `quarantine` `resume` | their own buttons, which say something more useful than *close* |
+
+⚠️ **I told Hannu "10" before counting distinct ids.** 15 no-button sites minus 5 no-button
+alarms is 10 **sites**, but `ghostbusy` is two of them. Nine panels, not ten.
+
+⭐⭐⭐ **THE IMPLEMENTATION IS THE DECISION.** The obvious way to write this is a `Set` of ids in
+`app.js`. `RERENDER` is this codebase's standing example of why that shape rots — D-169 removed
+one for exactly this reason, after a panel outside the table stayed English under a Finnish list.
+So the rule is read off the panel itself: **`if (!alarm && actions.length === 0)`**. A panel
+written next year obeys it without anybody remembering it exists, and `test/app-document.mjs`
+pins today's three classes so the answer cannot move in silence.
+
+⚠️ **`clearNotice(id)`, not `el.remove()`.** `notice()` re-runs every live builder on a language
+change, so a handler that only detached the node would paint the closed panel straight back in
+the other language. That is the one property no source test can reach, and it is what
+`probe-notice-close` exists to watch.
+
+⭐ **"Close", not "Dismiss" and not "OK".** A control says exactly what happens, and what happens
+is that the message goes. It does **not** say the condition went — a browser that is not storing
+anything permanently is still not storing anything permanently afterwards — and "OK" would have
+quietly claimed otherwise by inviting agreement. Finnish *Sulje*, same restraint.
+
+#### ⭐⭐ D-179's owed question, half answered — and the claim it was owed under was wrong
+
+D-179 left *"what about `aria-live`"* open, and it has been carried in my own notes as **"there is
+no ARIA anywhere in the product"**. That was measured on 2026-08-31 and it is **false**: the client
+ships **29 ARIA attributes** — `aria-label` on every icon-only control (set from `copy.js` at boot,
+so it follows the language), a real `role="menu"` with `aria-checked` on the theme and language
+items, `aria-expanded`/`aria-controls` on the bar, and the QR canvas deliberately `aria-hidden`
+with a comment saying the link is on screen as text one element above. Focus is moved to the right
+field on every screen change. **A claim about an absence is the easiest kind to carry unchecked,
+and this one had been repeated for days.**
+
+**What is actually missing, measured:**
+
+1. **Zero live regions.** Nothing that changes without the person acting was announced at all —
+   and `#notices` is the container that changes without anybody acting, by construction. Closed
+   here: a panel now carries `role="alert"` when it is an alarm and `role="status"` when it is
+   not, derived from the same flag that decides the styling so the two cannot drift.
+2. **Four text inputs with no accessible name** — `#retype`, `#paste-link`, `#phrase-in`,
+   `#panic-phrase`. A screen reader announces an unnamed edit box; the instruction is in a
+   preceding `<p>`, so a person reading linearly hears it and a person jumping control-to-control
+   does not. **Not fixed here** — it is a separate change and Hannu has not seen the proposal.
+3. The pairing progress and the failure screen still change silently. Not addressed.
+
+➡️ **What cannot be settled from the source at all is whether the product is USABLE that way.**
+Hannu's question was the right one — *"I wonder if a person who uses a screen reader can use haamu
+because it has so many alerts and texts and pairing possibilities"* — and structure is not
+experience. Answering it needs a run with TalkBack or NVDA, by somebody who uses one.
+
+**Green:** `client/test.sh` **1588** (8 new), `probe-notice-close` (new, in `run-all.sh`),
+`probe-notice-language` gained the negative control — a panel with its own buttons is not given a
+Close as well.
+
 ### D-184. ⭐⭐ Three rows that read identically — the label had stopped identifying, and the minute was already in the roster
 
 **2026-08-31, Hannu, from the field:**

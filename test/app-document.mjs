@@ -1251,4 +1251,100 @@ section("§3.4.1c — the roster is actually handed to the two flows that need i
   );
 }
 
+// ═══════════ D-185 — which panels a person may close, and D-179's owed question
+
+section("a panel a person may close is decided by the panel's own shape (D-185, D-179)");
+
+{
+  /* ⭐⭐⭐ THE POINT OF THIS SECTION IS THAT THERE IS NO LIST TO CHECK.
+   *
+   * 15 of 19 `notice()` call sites passed no buttons, so a panel that went up stayed up
+   * until other code took it down. Hannu chose the rule — the informational ones may be
+   * closed, the alarms may not — and the obvious implementation is a `Set` of ids in
+   * `app.js`. `RERENDER` is this file's standing example of why that is the wrong shape:
+   * a table somebody has to remember to add a row to eventually meets somebody who does
+   * not. So the control is derived from `alarm` and `actions`, and what is checked here
+   * is the DERIVATION, plus today's partition so the answer cannot move in silence.
+   */
+  const app = code("../app/app.js");
+
+  check(
+    "⭐⭐⭐ the Close control is guarded by the panel's own shape, not by a list of ids",
+    /if \(!alarm && actions\.length === 0\) \{/.test(app),
+    "`!alarm && actions.length === 0`"
+  );
+  check(
+    "⚠️ it leaves `liveNotices` too, or the next language change paints it back (D-169)",
+    /close\.addEventListener\("click", \(\) => clearNotice\(id\)\)/.test(app),
+    "clearNotice(id), not el.remove()"
+  );
+  check(
+    "⭐⭐ and what a screen reader is told is derived from the same flag (D-179)",
+    /el\.setAttribute\("role", alarm \? "alert" : "status"\)/.test(app),
+    'role="alert" for an alarm, role="status" otherwise'
+  );
+  check(
+    "⚠️⚠️ and no set of notice ids has appeared beside it",
+    !/new Set\(\[\s*"(dbblocked|purged|mismatch|unexplained|elsewhere|ownlink|linkbusy|nocensus)"/.test(app),
+    "a hand-kept list of closable panels is exactly what this must not become"
+  );
+
+  /* Today's partition, read off the call sites rather than declared. A `notice()` call
+   * whose builder mentions `alarm: true` is an alarm; one that mentions `actions` has its
+   * own way out; everything else is a panel a person may now close. */
+  const call = (from) => {
+    let depth = 0;
+    for (let i = app.indexOf("(", from); i < app.length; i++) {
+      if (app[i] === "(") depth++;
+      else if (app[i] === ")" && --depth === 0) return app.slice(from, i + 1);
+    }
+    return "";
+  };
+  const shape = new Map();
+  for (const m of app.matchAll(/\bnotice\("([a-z0-9-]+)"/g)) {
+    const body = call(m.index);
+    const kind = /alarm:\s*true/.test(body) ? "alarm" : /actions/.test(body) ? "acts" : "closable";
+    // ⚠️ An id raised from two call sites keeps the stronger classification: a panel is
+    // one panel, and `ghostbusy` is raised twice.
+    if (shape.has(m[1]) && shape.get(m[1]) !== "closable") continue;
+    shape.set(m[1], kind);
+  }
+  const closable = [...shape].filter(([, k]) => k === "closable").map(([id]) => id).sort();
+
+  equal(
+    "⭐⭐ the panels a person may close, pinned — a change here has to be a decision",
+    closable.join(" "),
+    "closing ghostbusy linkbusy memo nocensus not-durable ownlink rename role",
+    "9 informational panels. Anything added or removed is a product decision, not a diff."
+  );
+  equal(
+    "⛔⛔ no alarm is among them — an alarm you can swipe away is one people learn to swipe away",
+    [...shape].filter(([, k]) => k === "alarm").map(([id]) => id).sort().join(" "),
+    "damaged dbblocked elsewhere mismatch purged unexplained",
+    "6 alarms; these stand until their cause is gone"
+  );
+  equal(
+    "⚠️ and the three that carry their own buttons keep them as the way out",
+    [...shape].filter(([, k]) => k === "acts").map(([id]) => id).sort().join(" "),
+    "inflight quarantine resume",
+    "a panel offering a decision must not also offer a way to not make it"
+  );
+  equal(
+    "⭐ the three classes are a partition — every panel this product can raise is in exactly one",
+    String(shape.size),
+    String(closable.length + 6 + 3),
+    "18 distinct panels from 19 call sites; `ghostbusy` is raised twice"
+  );
+
+  // ⚠️⚠️ THE CANARY. This whole section is a set of patterns over source text, and a
+  // pattern that stops matching passes silently forever. Each one is shown refusing the
+  // thing it exists to refuse.
+  check(
+    "⚠️⚠️ and the classifier still separates the two — an alarm is not read as closable",
+    /alarm:\s*true/.test('notice("x", () => ({ body: "b", alarm: true }))') &&
+      !/alarm:\s*true/.test('notice("x", () => copy.some.sentence)'),
+    "an alarm builder and a plain one are told apart"
+  );
+}
+
 done();
