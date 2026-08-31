@@ -2975,14 +2975,20 @@ export const pairing = {
     // and `pairing_mac_key = HKDF(L, …)`, so evidence arriving afterwards is
     // unverifiable by the one party now holding a conversation with whoever took the
     // link. **The only path by which the initiator ever finds out is this reader telling
-    // that person.** So the sentence has to say what to relay AND that nothing else
-    // will: a reader who assumes the app has already dealt with it stays silent, and
-    // silence is the whole attack succeeding.
+    // that person.** That is why the relay is phrased as an instruction and not as a
+    // suggestion — *say that this one had already been opened* — and why it may not be
+    // dropped to shorten this screen.
+    //
+    // ⛔ D-183 REMOVED THE THIRD SENTENCE, *"The device that made it cannot find that
+    // out for itself."* It existed to stop a reader assuming the app had already dealt
+    // with it. Hannu, reading the shipped screen: *"the last sentence is unnecessary. It
+    // does not help the user."* ⭐ The mechanism is not the reader's to know, and the
+    // IMPERATIVE above already asks for the only behaviour that sentence was buying — a
+    // third sentence on a red screen is paid for out of the attention of the first two.
     already_claimed:
       "Somebody else opened this invite link before you, and that person holds the secret in it. " +
       "Ask whoever sent it for a new invite link, over a different channel if you can — and say " +
-      "that this one had already been opened when you got here. The device that made it cannot " +
-      "find that out for itself.",
+      "that this one had already been opened when you got here.",
 
     // ⛔⛔ §3.4.1c RULE 3, AND IT IS THE SENTENCE `already_claimed` ABOVE USED TO SAY TO
     // THIS PERSON. A second device of the same identity holds no §3.4.1b record for a

@@ -6,4 +6,4 @@
  * this same file fresh and find out whether the code it is running is the code the
  * server currently has. See `buildLine()` in `app/app.js`, and `stamp.sh` for why.
  */
-export const BUILD = "1e5826aa44f3961c";
+export const BUILD = "c055670a778b52e8";

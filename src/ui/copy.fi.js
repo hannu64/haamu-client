@@ -288,7 +288,7 @@ export const FI = {
   // ⛔⛔ D-182: *"aloita alusta"* pyysi lukijaa tekemään sen, mitä vain linkin tehnyt
   // voi tehdä. Lukijalla on kutsulinkki eikä mitään muuta. Ja viestin vieminen on tässä
   // ainoa tie: kutsun tehnyt laite ei voi enää saada tätä tietoonsa (D-181).
-  "pairing.failure.already_claimed": "Joku muu avasi tämän kutsulinkin ennen sinua, ja hänellä on sen sisältämä salaisuus. Pyydä uusi kutsulinkki siltä, joka lähetti tämän — mieluiten toista kanavaa pitkin — ja kerro hänelle, että tämä oli jo avattu, kun sait sen. Linkin tehnyt laite ei voi tietää tätä.",
+  "pairing.failure.already_claimed": "Joku muu avasi tämän kutsulinkin ennen sinua, ja hänellä on sen sisältämä salaisuus. Pyydä uusi kutsulinkki siltä, joka lähetti tämän — mieluiten toista kanavaa pitkin — ja kerro hänelle, että tämä oli jo avattu, kun sait sen.",
   "pairing.failure.own_link": "Teit tämän kutsulinkin toisella laitteellasi, ja vain se laite voi saattaa sen loppuun: se mitä siihen tarvitaan ei koskaan poistu linkin tehneeltä laitteelta. Avaa tämä kutsulinkki siellä tai tee tähän uusi.",
   "pairing.failure.own_channel": "Tämä kutsulinkki teki keskustelun, joka sinulla jo on, joten se keskustelu on nyt auki tässä. Yksi kutsulinkki tekee yhden keskustelun, ja tämä on jo tehnyt sen.",
   "pairing.failure.invite_unrecorded": "Mitään ei luotu. Tämä laite ei pystynyt ensin merkitsemään muistiin, että kutsulinkki on sinun, ja ilman sitä merkintää muut laitteesi voisivat luulla omaa kutsulinkkiäsi jonkun toisen linkiksi. Yritä uudelleen.",

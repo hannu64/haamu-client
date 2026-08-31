@@ -5546,6 +5546,55 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-183. ⭐⭐ The sentence that explained the mechanism came off — the imperative was already carrying it
+
+**2026-08-31, Hannu, reading D-182's repaired screen the day after it shipped.** He approved the
+new wording and then removed a sentence from it:
+
+> *"These texts are fine. In my opinion the last sentece is unnecessary. It does not help the
+> user."*
+
+The sentence was *"The device that made it cannot find that out for itself."* — in Finnish
+*"Linkin tehnyt laite ei voi tietää tätä."* Gone from `already_claimed` in both languages. What
+stays is the report and the instruction:
+
+> Somebody else opened this invite link before you, and that person holds the secret in it. Ask
+> whoever sent it for a new invite link, over a different channel if you can — and say that this
+> one had already been opened when you got here.
+
+**What the removed sentence was for, honestly.** D-182 put it there deliberately, and its
+reasoning is in this file one entry down: the initiator can *never* be warned late (§3.3 discards
+`L`, and `pairing_mac_key = HKDF(L, …)`), so this reader relaying the fact is the last link in
+§3.5's chain, and a reader who assumes the app has already handled it stays silent. The sentence
+was insurance against that assumption.
+
+**Why removing it is still right.** ⭐ **The relay does not depend on the reader understanding
+why.** It is phrased as an instruction — *and say that this one had already been opened* — and a
+person follows an instruction on a red screen without first being told which component is
+incapable of what. The sentence explained a **mechanism**, and a mechanism is the author's
+concern, not the reader's. It also cost real attention: it was the third sentence of a failure
+message, and the two ahead of it are the ones that must land.
+
+⚠️ **The cost is not zero and should be written down rather than argued away.** We cannot measure
+whether the imperative alone produces the relay as reliably as the imperative plus the reason. If
+a future field report shows a joiner reading this screen and doing nothing, this is the first
+place to look, and the answer is to strengthen the *instruction* — not to reinstate the
+explanation.
+
+⭐⭐ **And note how this arrived, because it is the second time in two days.** D-182 came from him
+reading a screen that D-181 had just repaired; D-183 came from him reading the screen D-182 had
+just repaired. *The second reading of a repaired sentence is a different sentence* — the fault he
+found the first time was occupying the attention that found the second one. A copy fix is not
+finished when it ships; it is finished when it has been read again by someone who is no longer
+looking for the previous defect.
+
+**Sites:** `client/src/ui/copy.js` (`pairing.failure.already_claimed` + the comment block above
+it), `client/src/ui/copy.fi.js` (`pairing.failure.already_claimed`). No protocol, server or test
+change — `client/test.sh` stayed green at 1577, and the six probes that reach this screen
+(`spent-link`, `tripwire-browser`, `tripwire-window`, `own-link-second-device`,
+`own-claim-reopen`, `notice-language`) all pass unchanged, none of them having asserted on the
+removed sentence.
+
 ### D-182. ⛔⛔⛔⛔ *"and start again"* — the one screen that carries §3.5's chain told its reader to do the one thing that reader cannot do
 
 **2026-08-31, Hannu, testing D-181 within hours of it shipping.** Both tests passed. Then:
