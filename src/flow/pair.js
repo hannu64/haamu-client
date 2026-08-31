@@ -1392,6 +1392,28 @@ export async function join({ api, link, storage, signal, links = null, onEvent =
         "this link does not match what the server is offering — do not continue"
       );
     }
+    /**
+     * §3.5 / D-181: `used` is TERMINAL, and it is tested BEFORE rule 7's resumption
+     * on purpose. A USED row never changes again, so a resumed J that fell through to
+     * `joinerAwaitsReveal` would poll it until rule 11's ten-minute budget ran out —
+     * where the `404` this state replaced ended the attempt on the first read. **The
+     * new state must not be allowed to turn a fast failure into a slow one.**
+     *
+     * ⚠️ AND THE ACCEPTED CLAIM MAY BE THIS DEVICE'S OWN. `describeExistingClaim`
+     * verifies `mac_J` on whoever won; run on our own winning claim it verifies
+     * perfectly and reports an interception BY US. That is the false alarm
+     * migrations/003 exists to have avoided, arriving by a different door. Reachable
+     * when this browser claimed, never finished, and the initiator then abandoned:
+     * the record is still here and the row it names is now a tombstone.
+     */
+    if (offer.state === "used") {
+      if (heldHere && (await claimIsOurs(api, idPath, heldHere.privateKey, signal))) {
+        // What a `404` said here until 0.9.x, and still the honest sentence: this
+        // device's pairing is over. Nobody intercepted anything.
+        throw new PairFailure("not_found", "this pairing ended before it finished");
+      }
+      throw await describeExistingClaim(api, idPath, macKey, commit, signal);
+    }
     if (offer.state !== "open") {
       // §3.4.1b rule 7: a resumed J MUST NOT re-claim, and its own earlier claim
       // coming back at it is not an interception. Continue at §3.4 instead.
@@ -1635,6 +1657,13 @@ export async function resume({ api, storage, signal, onEvent = () => {} } = {}) 
     if (offer.state === "open") {
       keepRecord = true;
       return null;
+    }
+    // §3.5 / D-181, and the same trap as in `join`: `used` is terminal, so waiting on
+    // it waits forever. This path has no `claimIsOurs` branch because it does not need
+    // one — `rec` IS this device's record, so the session it names ended while this
+    // device was a party to it, and there is nobody to accuse.
+    if (offer.state === "used") {
+      throw new PairFailure("not_found", "this pairing ended before it finished");
     }
     onEvent({ type: "claimed" });
     return await joinerAwaitsReveal({

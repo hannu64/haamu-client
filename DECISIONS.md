@@ -5546,6 +5546,213 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-181. ⭐⭐⭐⭐⭐ The victim of a stolen invite link was told *"there is no pairing"* — §3.5's alarm was unreachable in every case that actually happens, and the fix is a tombstone
+
+**2026-08-31, from building D-180's ruling and finding it changed nothing.**
+
+Hannu authorized standing deploys that morning and asked what to test. The queued job was
+D-180's fix — the initiator takes one more look before the roster write. It was built, tested
+green, and measured. **The window did not move.** See D-180's closing note for why that was the
+right thing to discover and the wrong thing to have believed.
+
+Instrumenting the actual requests of all three browsers, instead of their screens, answered it
+in one run:
+
+```
+267  C  GET  /api/pair/…/         200
+268  C  GET  /api/pair/…/status   200   state=claimed tripwire=false
+                                        ← and then nothing. Ever.
+```
+
+**The late joiner never claims.** §3.5's own arrival check tells it the session is taken, it
+verifies the accepted claim's MAC itself, and it stops — correctly. But **the tripwire is written
+by the server having to REFUSE a claim.** No claim, no evidence, and nothing for anybody to read.
+
+#### The three regimes, measured
+
+| the friend arrives | what happens | who is warned |
+| --- | --- | --- |
+| within ~12 ms | both claims in flight; one gets the 409 | both |
+| ~12 ms – ~800 ms | reads `CLAIMED`, warns itself, sends nothing | the friend only |
+| after ~800 ms | J has deleted the session → `404` | ⛔ **nobody** |
+
+⭐⭐ **ONLY THE THIRD ROW IS A REAL INTERCEPTION.** The attacker claims the moment the link goes
+past; the friend reads a message and clicks minutes later. The winner's own §3.4 delete lands
+about 800 ms after its claim — paced by I's 750 ms poll — so the row is always gone by the time
+the victim arrives. Hannu's two hand-races never failed to trip the alarm; **they never got near
+the mechanism**, and neither did I, for five days.
+
+And what the victim was told is the worst part:
+
+> *"There is no pairing session at this invite link any more."*
+
+— which is also what a mistyped link says, and an expired one, and a server having a bad day.
+**The natural answer to that sentence is "send me another one", straight back into an attacker
+who is still in position.**
+
+#### What cannot be fixed, and must not be pretended away
+
+⭐ **The initiator cannot be warned late.** §3.3 has I discard `L`, and
+`pairing_mac_key = HKDF(L, …)`. Evidence arriving after I finishes can never be verified by I,
+however long it looks. D-180 proposed looking longer; looking longer reads `false` more times.
+**The party that can still be warned is the one that arrives late — and it is warned by not
+lying to it.**
+
+#### The fix — §3.5.1, `migrations/005`
+
+J's §3.4 delete no longer removes the row when the session reached `CLAIMED`. It marks it
+**`USED`** and drops `i_pub`, keeping exactly what a late arrival needs to judge for itself:
+`commit` + `mac_I` to verify the offer is the one its link describes (§3.2), and `j_pub` +
+`mac_J` to verify that whoever took it held `L`.
+
+⭐⭐ **THE CLIENT PATH ALREADY EXISTED AND HANNU HAD ALREADY FIELD-TESTED IT.** The sentence the
+victim now sees — *"Somebody else opened this invite link before you, and that person holds the
+secret in it"* — is the one he saw on 2026-08-30 when he raced two browsers by hand, already
+written and already translated. It could not be reached because **the row it reads had been
+deleted.** The whole client change is two guards, and neither adds a screen.
+
+⚠️ **AN ABANDONED, NEVER-CLAIMED SESSION IS STILL REALLY DELETED, AND THAT IS THE HALF THAT
+COULD HAVE GONE WRONG.** §3.4.1b rule 6's delete also fires when nobody ever came. A tombstone
+there would tell the next arrival that somebody else had opened a link **nobody ever opened** —
+the fabricated warning `migrations/003` rewrote §3.5 to make impossible, arriving by a new door.
+The state at the moment of the delete is the discriminator: `OPEN` is removed, `CLAIMED` and
+`REVEALED` are kept. `probe-spent-link.mjs` asserts both halves, and the second one is the point.
+
+⚠️ **The two guards on the client are not decoration.** `USED` never changes again, so a resumed
+J that fell through to `joinerAwaitsReveal` would poll it until rule 11's ten-minute budget ran
+out — where the `404` it replaces ended the attempt on the first read. **A new state must not
+turn a fast failure into a slow one.** And `describeExistingClaim` run on this device's *own*
+winning claim verifies perfectly and reports an interception by us, so the own-claim case is
+tested first.
+
+⚠️ **What it deliberately gives away.** A `USED` row is distinguishable from an absent one, which
+`ErrPairingNotFound` previously promised it would not be. `pairing_id = HKDF(L, …)`, so the only
+parties who can ask are those holding the link or those who watched its traffic go past — and
+the latter saw the claim and the reveal themselves. A true warning for the victim, at the cost
+of a fact the people able to ask already have. No new retention: the row keeps its original
+`expires_at`.
+
+#### What this does not fix
+
+§3.6's **relay variant** is untouched and still needs the six digits: an attacker who creates its
+own fresh session and relays never produces a second claim on either `pairing_id`, and now never
+produces a `USED` row the victim would see either. §3.6 said the race variant *"works as
+described"*; that line is corrected in the same change.
+
+### D-180. ⛔⛔⛔⛔ §3.5's alarm is reachable for about fifty milliseconds, and the evidence it needs survives at least ten times longer — measured, after two hand-races failed to hit it
+
+**2026-08-30, from Hannu's second attempt in five days.** He staged the race the rebuilt field
+sheet asked for — three windows, two joiners held at the KEY-choice screen, fired as close
+together as a person can press two buttons. The loser was refused, correctly and in the right
+words:
+
+> *"Somebody else opened this invite link before you, and that person holds the secret in it.
+> Treat the invite link as compromised and start again."* — `already_claimed`
+
+**And the initiator was never told anything.** Not on the six-digit screen, not in the
+conversation list, not after messages each way, and not after pressing §7.3.3 case 5's
+*"check my other devices for changes"* control.
+
+⚠️ **`already_claimed` IS THE PROOF THAT THE SERVER DID ITS PART.** §3.5 sets `tripwire: true`
+only on a second claim against a session that still exists; a claim arriving after the joiner's
+`DELETE` gets `not_found` instead (D-178). So the evidence was recorded, and it did not reach
+the one device that had a reason to want it.
+
+⭐ **THIS IS A REPRODUCTION, NOT A DISCOVERY, AND THE RECORD ALREADY SAID SO.**
+`probe-tripwire-browser.mjs`'s own header opens: *"Hannu raced two phones by hand on 2026-08-26
+and could not hit the window: the loser saw `already_claimed`, the initiator was never warned."*
+That probe exists **because** of that run, and it fires the alarm on every suite run. So the
+mechanism has never been in doubt. ➡️ **What had never been done is measure the distance between
+"fires in a probe" and "has never once fired for a person."**
+
+#### The measurement
+
+`probe-tripwire-window.mjs`. Both joiners unlocked and holding the link in the paste field so the
+claim leaves **on** the button press — the arming trick `probe-tripwire-browser` had to invent
+after discovering that a navigation costs a full Argon2 and *"pressing together is not claiming
+together."* Both clicks dispatched concurrently; the second one's delay is the only variable.
+
+| delay | what the loser was told | was the initiator warned? |
+|---|---|---|
+| 0 ms | `already_claimed` | ✅ **yes** |
+| 25 ms | `already_claimed` | ✅ **yes** |
+| 60 ms | `already_claimed` | ⛔ no |
+| 120 ms | `already_claimed` | ⛔ no |
+| 250 ms | `already_claimed` | ⛔ no |
+| 500 ms | `already_claimed` | ⛔ no |
+
+**The window closes between 25 ms and 60 ms.**
+
+⭐⭐ **AND THE MIDDLE COLUMN IS THE FINDING, NOT THE RIGHT-HAND ONE.** The loser is refused with
+`already_claimed` at **every** delay out to half a second, which means the server recorded the
+tripwire every single time. **The evidence does not expire; the reader stops reading.**
+`initiatorAwaitsClaim` takes *"one last look before `macKey` is discarded"* immediately after the
+reveal, and after that line nothing on that device can verify a tripwire ever again, because
+`macKey` is `HKDF(L, …)` and `L` is gone.
+
+#### ⛔ The instrument was wrong first, and it would have reported a defect that does not exist
+
+The first version of the window probe wrote `await b.click(); await wait(d); await c.click()`,
+which adds a **CDP round trip to every delay, including zero** — and at zero it reported the
+alarm missing, on a build where the control probe fires it every time.
+
+➡️ ⭐⭐⭐⭐⭐ **THE INSTRUMENT'S OWN LATENCY WAS WIDER THAN THE WINDOW IT WAS BUILT TO MEASURE**,
+and nothing about its output looked wrong: a clean table, a plausible boundary, six consistent
+rows. It was caught only by running `probe-tripwire-browser` as a **control** first — the known-good
+instrument, on the same server, in the same minute.
+⚠️ **A measuring device must be shown to resolve the quantity before its readings mean anything**,
+and for timing that is not a detail — it is the whole measurement. This is D-178's reachability
+lesson pointed at the *instrument* rather than at the target.
+
+#### What this changes about the threat model, and what it does not
+
+Nothing here is a contradiction of the specification. `PROTOCOL.md` §0.3 already calls the
+tripwire **a hint, not a guarantee**, `FEEDBACK_2026-08-12.md` already says it *"catches the race
+variant only"*, and §3.6's six digits are and remain the actual defence against a relaying
+man-in-the-middle. ⛔ **No sentence anywhere overclaims it, and none needs correcting.**
+
+⚠️⚠️ **What is new is the ASYMMETRY, and it is worth stating plainly because it is not obvious
+from any of those sentences.** In the case the tripwire exists for —
+
+> A creates an invite link. An interceptor claims it first. A's friend claims second and is
+> told *"treat the invite link as compromised and start again."*
+
+— **the friend is warned and A is not**, unless the friend's claim landed within about fifty
+milliseconds of the attacker's. A is the one now holding a conversation with the interceptor.
+➡️ **THE WARNING IS DELIVERED TO THE PARTY WHO IS SAFE AND WITHHELD FROM THE PARTY WHO IS NOT** —
+not by design, but as a consequence of which device still holds `L` when the evidence appears.
+
+#### ⛔⛔⛔⛔ CLOSED 2026-08-31, AND THE DIAGNOSIS ABOVE IS WRONG — SEE D-181
+
+**This entry's measurement is sound and its explanation is not.** Everything above is left
+standing on purpose, because the way it was wrong is the lesson.
+
+It reads *"the evidence does not expire, the reader stops reading"*, and proposes that the
+initiator look for longer. Hannu ruled **yes** to that on the evening of 2026-08-30. It was
+built the next morning — and **the window did not move by one millisecond.** The widened watch
+read the session four times instead of once and found `tripwire = false` every time, because
+**there was never any evidence to read.** A joiner arriving more than about twelve milliseconds
+late never sends a claim at all: it reads `/status`, sees `CLAIMED`, and stops. No refused
+claim, no tripwire. The 25–60 ms measured here is not the initiator's reading window; it is how
+long two claims can overlap **in flight**.
+
+The change was reverted rather than shipped: 200 ms added to every honest pairing, buying
+nothing. **D-181 is the real finding and the real fix.**
+
+⭐⭐⭐⭐⭐ **AND THE INSTRUMENT IS THE LESSON. `probe-tripwire-window.mjs` races two joiners and
+asks whether the alarm appeared — it can only ever see the OUTCOME, so it could not tell a
+reader that stopped reading from a writer that never wrote.** Both produce "no alarm". One run
+of `probe-tripwire-timeline.mjs`, which prints the actual requests, settled in seconds what a
+day of reasoning from screens got backwards. ➡️ **AN INSTRUMENT THAT CAN ONLY SEE THE OUTCOME
+CANNOT SEE THE MECHANISM — and a measurement believed without one is a story.**
+
+⛔ Note what the ruling did NOT save us from. §0 was honoured, the trade was put to the user, and
+the user answered — and the answer was still built on my wrong sentence. **Asking the right
+person does not make a wrong premise right;** the premise has to be measured too.
+
+⚠️ `probe-tripwire-window.mjs` is a **tool**, not an instrument: it measures and asserts nothing,
+so it is not in `run-all.sh`. Re-run it if the reveal path or the polling changes.
+
 ### D-179. ⛔⛔⛔ A refusal may not wear the de-emphasis class — §7.4's "that is not the same KEY" was painted like a footnote, and its own author walked past it
 
 **2026-08-30, Hannu, immediately after D-178's walk and reported as *"one item that does not
