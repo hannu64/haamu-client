@@ -2354,8 +2354,22 @@ async function openHome() {
     // onto the screen that is showing whenever the app is open and unlocked — which
     // is a decision about §7 and shoulder-surfing, not about layout, and it is not
     // one to make in a design pass. The role is what this list already knew.
+    // ⚠️ TWO FORMATTERS AND ONE `Date`. `toLocaleTimeString()` on its own prints seconds,
+    // which is noise in a list; the row wants the minute the conversation began and nothing
+    // finer. `test/app-document.mjs` reads this line and requires BOTH calls, because a
+    // sample argument is a claim about a call site and D-164 is what happens when it drifts.
+    //
+    // ⚠️⚠️ `hour: "numeric"` AND NOT `"2-digit"`, AND THAT IS A FINNISH DECISION. Both were
+    // rendered before choosing: `2-digit` gives *klo 09.05*, and a Finnish clock is written
+    // *klo 9.05* — the leading zero is not wrong, it is not what anybody writes. Nothing here
+    // is a column, so there is no alignment to trade for it. English is unharmed either way.
+    const began = new Date((entry.created ?? 0) * 1000);
     const name =
-      entry.name || copy.list.unnamedOn(new Date((entry.created ?? 0) * 1000).toLocaleDateString());
+      entry.name ||
+      copy.list.unnamedOn(
+        began.toLocaleDateString(),
+        began.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+      );
 
     const avatar = document.createElement("span");
     avatar.className = "avatar";

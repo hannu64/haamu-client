@@ -60,7 +60,13 @@ export const SAMPLES = {
   // REVIEWED IN. THE NEXT DEFECT IN IS A SAMPLE OF THE WRONG KIND: the sentence is
   // reviewable, everybody reviews it, and what they review is a fiction.** A sample
   // argument is not an example — it is a claim about what the call site passes.
-  "list.unnamedOn": [["25.8.2026"]],
+  // ⭐ D-184 — the second slot is a CLOCK TIME, and `test/copy.mjs` enforces its shape the
+  // way it enforces the date's. Finnish separates hours from minutes with a period, English
+  // with a colon, so both are sampled: a reviewer must see the sentence each language builds.
+  "list.unnamedOn": [
+    ["25.8.2026", "9.05"],
+    ["25/08/2026", "14:32"],
+  ],
   "list.noHistory": [
     ["25.8.2026", 1],
     ["25.8.2026", 4],

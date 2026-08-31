@@ -541,14 +541,17 @@ export const FI_BUILT = {
 
   // ── list
   // ⚠️⚠️ D-164 — `laitteella` MEANT "ON THE DEVICE" AND THE ARGUMENT IS A DATE. The English
-  // is *"No name yet · started 25.8.2026"* and has no preposition at all; the Finnish put one
+  // was *"No name yet · started 25.8.2026"* and had no preposition at all; the Finnish put one
   // in and picked the wrong noun, so the list read *"started WITH THE DEVICE 25.8.2026"*.
   // ⭐ `laitteella` is correct in eleven other Finnish sentences in this file, where it really
   // does mean "on this device". It is wrong in exactly the two that interpolate a DATE —
   // D-158's class, and it survived 27 review rounds because both of these are FUNCTIONS,
   // read as templates and never once read with a date substituted in. Hannu confirmed the
   // repair on his own screen, 2026-08-25.
-  "list.unnamedOn": (when) => `Ei vielä nimeä · aloitettu ${when}`,
+  // ⭐ D-184 ADDS THE TIME. `klo` is the preposition Finnish requires before a clock time and
+  // English does not — the mirror image of D-164 above, which is why both entries are written
+  // out rather than shared: *aloitettu 30.8.2026 klo 14.32*, never *aloitettu 30.8.2026 14.32*.
+  "list.unnamedOn": (when, at) => `Ei vielä nimeä · aloitettu ${when} klo ${at}`,
 
   "list.noHistory": (writtenAt, channels) =>
     `Tämä laite ei ole nähnyt tätä listaa aiemmin. Sen mukaan se tallennettiin viimeksi ${writtenAt}, ` +

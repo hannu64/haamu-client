@@ -1528,6 +1528,9 @@ for (const [name, html] of pages) {
 {
   const DATE_LIKE = /^\d{1,4}[./-]\d{1,2}[./-]\d{1,4}$/;
   const dated = { "list.unnamedOn": [0], "list.noHistory": [0] };
+  // ⭐ D-184's slot, held to the same standard: a clock time, not a date and not a word.
+  const TIME_LIKE = /^\d{1,2}[.:]\d{2}(\s?[AaPp]\.?[Mm]\.?)?$/;
+  const timed = { "list.unnamedOn": [1] };
   const wrong = [];
   for (const [path, slots] of Object.entries(dated))
     for (const args of SAMPLES[path] ?? [["<<NO SAMPLE>>"]])
@@ -1547,6 +1550,29 @@ for (const [name, html] of pages) {
     "⚠️⚠️ and the pattern still refuses the sample that caused it",
     DATE_LIKE.test("25.8.2026") && DATE_LIKE.test("8/25/2026") && !DATE_LIKE.test("Pixel 6"),
     "dates accepted, `Pixel 6` refused"
+  );
+
+  const badTime = [];
+  for (const [path, slots] of Object.entries(timed))
+    for (const args of SAMPLES[path] ?? [["<<NO SAMPLE>>"]])
+      for (const i of slots)
+        if (!TIME_LIKE.test(String(args[i]))) badTime.push(`${path}[${i}]=${JSON.stringify(args[i])}`);
+
+  equal(
+    "⭐⭐ and the sentence that renders a TIME is sampled with a time (D-184)",
+    badTime.join(", "),
+    "",
+    "`app.js` passes `toLocaleTimeString(undefined, {hour: \"numeric\", minute: \"2-digit\"})`. " +
+      "Finnish needs `klo` before it and English needs `at`, so a reviewer has to see a clock " +
+      "there — and one sample has a single-digit hour, because *klo 9.05* is the Finnish form."
+  );
+
+  // ⚠️⚠️ THE SAME CANARY, FOR THE SAME REASON. A date is the argument this slot is most
+  // likely to drift back into, and it is the one that must be refused.
+  check(
+    "⚠️⚠️ and the time pattern refuses a date and a bare word",
+    TIME_LIKE.test("14.32") && TIME_LIKE.test("2:32 PM") && !TIME_LIKE.test("25.8.2026") && !TIME_LIKE.test("Pixel 6"),
+    "clock times accepted, a date and `Pixel 6` refused"
   );
 }
 

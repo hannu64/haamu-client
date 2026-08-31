@@ -1269,9 +1269,18 @@ export const list = {
    * a name somebody chose, travels to their other devices, and takes §7.3.1 rule
    * 4's merge with it. The date comes from `created`, which the roster carries
    * anyway.
+   *
+   * ⭐⭐ D-184 ADDED THE TIME, AND THE REASON IS THAT THE LABEL HAD STOPPED
+   * IDENTIFYING. Hannu, 2026-08-31, with three conversations made on one day:
+   * *"I have been too lazy to name each and every one."* Three rows read *"Ei
+   * vielä nimeä · aloitettu 30.8.2026"* and the second line — the role — was the
+   * same on all three, so the list could not be used to pick one out. `created`
+   * already carries the minute; only the formatter was throwing it away.
+   * ⚠️ It is still NOT a name: nothing is written to the roster, so §7.3.1 rule 4
+   * has nothing new to merge and the other device's list is unaffected.
    */
   unnamed: "No name yet",
-  unnamedOn: (when) => `No name yet · started ${when}`,
+  unnamedOn: (when, at) => `No name yet · started ${when} at ${at}`,
 
   /** Which side of the pairing this device was. */
   roleI: "you started it",

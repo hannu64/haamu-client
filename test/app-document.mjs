@@ -382,7 +382,7 @@ section("§4.3 — the lock is reachable, and locking still deletes nothing (D-1
 
 // ═══════════════ D-164 — the other end of the sample contract: what is really passed
 
-section("the two sentences that print a date are really given one (D-164)");
+section("the two sentences that print a date are really given one, and the one that also prints a time is given that (D-164, D-184)");
 
 {
   /* ⛔⛔ THE SAMPLE TABLE CLAIMS `list.unnamedOn` AND `list.noHistory` ARE HANDED A DATE, and
@@ -400,8 +400,16 @@ section("the two sentences that print a date are really given one (D-164)");
   // `new Date((entry.created ?? 0) * 1000)`. A pattern written with it matches nothing here
   // and passes the day somebody deletes the call. `[\s\S]{0,80}?` is lazy and paren-blind,
   // which is what this needs; the canary below is what proves it did not become permissive.
+  //
+  // ⭐ D-184 PUT A SECOND ARGUMENT AT THE FIRST CALL SITE, so the pattern now has to read
+  // both. `began` is a `Date` built one line above the call, which no `new Date(` inside the
+  // call can stand in for — the pattern therefore looks for the construction AND for the two
+  // formatters, in order, within the call.
   const CALLS = [
-    ["list.unnamedOn", /copy\.list\.unnamedOn\(\s*new Date\([\s\S]{0,80}?\.toLocaleDateString\(\)/],
+    [
+      "list.unnamedOn",
+      /const began = new Date\([\s\S]{0,80}?copy\.list\.unnamedOn\([\s\S]{0,200}?\.toLocaleDateString\(\)[\s\S]{0,200}?\.toLocaleTimeString\(/,
+    ],
     ["list.noHistory", /const when = new Date\([\s\S]{0,80}?\.toLocaleDateString\(\);[\s\S]{0,200}?copy\.list\.noHistory\(when,/],
   ];
   for (const [path, pattern] of CALLS)
@@ -416,8 +424,11 @@ section("the two sentences that print a date are really given one (D-164)");
   check(
     "⚠️⚠️ and the patterns still refuse a call site that passes something else",
     !CALLS[0][1].test("copy.list.unnamedOn(entry.deviceName)") &&
+      !CALLS[0][1].test(
+        "const began = new Date((entry.created ?? 0) * 1000);\ncopy.list.unnamedOn(began.toLocaleDateString());"
+      ) &&
       !CALLS[1][1].test("const when = entry.device; text('home-note', copy.list.noHistory(when, 2));"),
-    "a device-shaped argument is not accepted at either call site"
+    "a device-shaped argument is refused at either call site, and so is a date with no time"
   );
 }
 

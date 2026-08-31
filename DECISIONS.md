@@ -5546,6 +5546,49 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-184. ⭐⭐ Three rows that read identically — the label had stopped identifying, and the minute was already in the roster
+
+**2026-08-31, Hannu, from the field:**
+
+> *"This would be a good idea to put the time in the default conversation name. I have been too
+> lazy to name each and every one."*
+
+Three conversations made on one day rendered as three identical rows: *"Ei vielä nimeä · aloitettu
+30.8.2026"* over *"aloitit sen"*. **A label whose whole job is to identify was identifying
+nothing** — and the list is the only place a person picks a conversation from.
+
+**The fix costs no new data.** `created` is already in the roster and already carries the minute;
+`toLocaleDateString()` was throwing it away. `list.unnamedOn` now takes two arguments — a date and
+a clock time — and the row reads *"No name yet · started 30/08/2026 at 14:32"* /
+*"Ei vielä nimeä · aloitettu 30.8.2026 klo 14.32"*.
+
+⚠️ **It is still not a name.** Nothing is written to the roster, so §7.3.1 rule 4 has nothing new
+to merge and the other device's list is untouched. That was the constraint D-014 set when
+`Paired 13/08/2026` stopped being a stored channel name, and it is unchanged: a placeholder in the
+roster is indistinguishable from a name somebody chose.
+
+⭐⭐ **The Finnish decided the format, and both were rendered before choosing.** `hour: "2-digit"`
+gives *klo 09.05*; a Finnish clock is written *klo 9.05*. The leading zero is not wrong, it is
+just not what anybody writes — and nothing in this row is a column, so there was no alignment to
+trade for it. `hour: "numeric"` it is. Finnish also needs the preposition *klo* where English needs
+*at*, which is D-164's lesson in mirror image: the two entries stay written out rather than shared.
+
+⭐ **Both ends of D-164's contract were extended rather than worked around.** `test/samples.mjs`
+now samples a clock time in slot 1 (one sample deliberately single-digit, so a reviewer reads
+*klo 9.05*), `test/copy.mjs` enforces its shape with its own canary refusing a date and a bare
+word, and `test/app-document.mjs` reads the call site and requires **both** formatters in order —
+its canary now also refuses a call that passes the date alone. A sample argument is a claim about
+a call site; a claim about a call site is worth nothing unless the call site is read.
+
+⚠️ **And a third end was never pinned by anybody: the DOM.** Reading the rendered row to check
+this change turned up a fault in `probe-clean-round`'s own scraper — `b.querySelector("span")`
+returns the AVATAR span, so its `name` field had been reading the single letter *"N"* for every
+unnamed row. Nothing asserted on it, so it never looked broken. **It is the `#failreason` fault
+again: a probe that reads the wrong node still reports something.** Fixed to `.name`.
+
+**Green:** `client/test.sh` **1579** (two new), `probe-clean-round` clean, and the label read out
+of a real browser: `"No name yet · started 8/31/2026 at 2:08 PM"`.
+
 ### D-183. ⭐⭐ The sentence that explained the mechanism came off — the imperative was already carrying it
 
 **2026-08-31, Hannu, reading D-182's repaired screen the day after it shipped.** He approved the
