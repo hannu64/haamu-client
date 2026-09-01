@@ -220,8 +220,9 @@
         the user with an empty app, two identities, no error, and no way to tell
         which happened.
       -->
-      <section id="gate" class="panel hidden">
+      <section id="gate" aria-labelledby="gate-title" class="panel hidden">
         <p id="gate-arrived" class="hidden"></p>
+        <h2 id="gate-title"></h2>
         <!--
           D-083, feedback 1. What a person can repeat to a friend, before anything
           is asked of them. It used to open with a sentence about how many words
@@ -300,7 +301,8 @@
         </p>
       </section>
 
-      <section id="setup" class="panel hidden">
+      <section id="setup" aria-labelledby="setup-title" class="panel hidden">
+        <h2 id="setup-title"></h2>
         <p id="setup-choose" class="lead"></p>
         <div class="candidates" id="candidates"></div>
         <div class="row">
@@ -327,7 +329,8 @@
         Writing it down is one screen; typing it back is another; and both routes
         back here clear the field, so looking again costs the test again.
       -->
-      <section id="write" class="panel hidden">
+      <section id="write" aria-labelledby="write-title" class="panel hidden">
+        <h2 id="write-title"></h2>
         <p id="write-down" class="lead"></p>
         <div class="phrase" id="chosen-phrase"></div>
         <div class="row mt-s">
@@ -336,7 +339,8 @@
         </div>
       </section>
 
-      <section id="confirm" class="panel hidden">
+      <section id="confirm" aria-labelledby="confirm-title" class="panel hidden">
+        <h2 id="confirm-title"></h2>
         <!--
           Round 6 (D-110). `<p class="note" id="confirm-hidden">` stood under this
           and is gone: three sentences explaining why the KEY is off the screen, on
@@ -355,7 +359,7 @@
         </div>
       </section>
 
-      <section id="pasted" class="panel hidden">
+      <section id="pasted" aria-labelledby="pasted-title" class="panel hidden">
         <h2 id="pasted-title"></h2>
         <p id="pasted-body"></p>
         <p class="mt"><button id="pasted-ok"></button></p>
@@ -391,7 +395,7 @@
         uppercases anyway) — but one that autocorrects a four-letter group into an
         English word is not, which is what `spellcheck="false"` is for.
       -->
-      <section id="paste" class="panel hidden">
+      <section id="paste" aria-labelledby="paste-title" class="panel hidden">
         <h2 id="paste-title"></h2>
         <p class="note" id="paste-what"></p>
         <p class="note" id="paste-or-code"></p>
@@ -404,7 +408,8 @@
         </div>
       </section>
 
-      <section id="enter" class="panel hidden">
+      <section id="enter" aria-labelledby="enter-title" class="panel hidden">
+        <h2 id="enter-title"></h2>
         <p id="enter-ask" class="lead"></p>
         <input id="phrase-in" class="field" type="text" autocomplete="off" autocapitalize="off"
                spellcheck="false" />
@@ -444,7 +449,7 @@
         label: small enough not to compete with the bar, present enough to head the
         empty state, and it is what a screen reader announces the list by.
       -->
-      <section id="home" class="listpane hidden">
+      <section id="home" aria-labelledby="home-title" class="listpane hidden">
         <h2 id="home-title" class="listlabel"></h2>
         <div class="chats" id="channels"></div>
 
@@ -549,7 +554,7 @@
         §7.3.1a's panic action. Its own screen, because it is the one control in
         the product that reaches every device the user has.
       -->
-      <section id="panic" class="panel alarm hidden">
+      <section id="panic" aria-labelledby="panic-title" class="panel alarm hidden">
         <h2 id="panic-title"></h2>
         <p id="panic-reach"></p>
         <p class="note" id="panic-other"></p>
@@ -590,7 +595,7 @@
         detail and the server not at all, and the server is what a person asks
         about.
       -->
-      <section id="ghost" class="panel hidden">
+      <section id="ghost" aria-labelledby="ghost-title" class="panel hidden">
         <h2 id="ghost-title"></h2>
         <p id="ghost-what"></p>
         <p id="ghost-cost"></p>
@@ -612,7 +617,7 @@
         without the leader lock is, because a follower shares the store it reads and
         this one does not.
       -->
-      <section id="duplicate" class="panel alarm hidden">
+      <section id="duplicate" aria-labelledby="dup-title" class="panel alarm hidden">
         <h2 id="dup-title"></h2>
         <p id="dup-body"></p>
         <p class="note mt" id="dup-end-note"></p>
@@ -635,7 +640,7 @@
         with the paragraph above it, which is the same treatment every other "or do this
         instead" in this file gets.
       -->
-      <section id="dormant" class="panel hidden">
+      <section id="dormant" aria-labelledby="dormant-title" class="panel hidden">
         <h2 id="dormant-title"></h2>
         <div id="dormant-body"></div>
         <p><button id="use-here" class="linkish"></button></p>
@@ -646,7 +651,7 @@
         §4.3 in Ghost mode. NOT the lock screen: there is no phrase to ask for, so
         this hides and does not lock, and it says which of the two it is.
       -->
-      <section id="covered" class="panel hidden">
+      <section id="covered" aria-labelledby="covered-why" class="panel hidden">
         <h2 id="covered-why"></h2>
         <p class="note" id="covered-what"></p>
         <div class="row mt">
@@ -655,8 +660,26 @@
         </div>
       </section>
 
-      <section id="progress" class="panel hidden">
+      <section id="progress" aria-labelledby="progress-title" class="panel hidden">
+        <h2 id="progress-title"></h2>
         <ul class="steps" id="steps"></ul>
+        <!--
+          D-187. THE STEPS ADVANCE WITHOUT THE SCREEN CHANGING, so `only()`'s focus
+          move — the thing that makes every other change here perceivable — never
+          fires for them. Measured on 2026-09-01: the list went from "waiting for
+          your friend" to "finishing" and nothing announced it, at the one moment a
+          person is doing nothing but waiting.
+
+          ⚠️ A LIVE REGION ON `#steps` ITSELF WOULD ANNOUNCE NOTHING. The three items
+          keep their text for the whole pairing; what moves is a class and
+          `aria-current`, and an attribute change is not a content change. The
+          announcement has to BE a content change, which is what this line is for.
+
+          ⚠️ It is not `role="alert"`. An alert interrupts whatever is being read, and
+          this is progress, not an alarm — `role="status"` waits for the end of the
+          sentence. Same choice, same reason, as D-185's notices.
+        -->
+        <p id="step-say" class="offscreen" role="status"></p>
         <div id="linkbox" class="hidden">
           <p class="note mt-s mb0" id="link-once"></p>
           <div class="link" id="link"></div>
@@ -758,7 +781,8 @@
         reach each other. ⚠️ Verified with `getComputedStyle` at both themes, never
         with a class list: a cascade collision is invisible to `classList.contains`.
       -->
-      <section id="verify" class="panel hidden">
+      <section id="verify" aria-labelledby="verify-title" class="panel hidden">
+        <h2 id="verify-title"></h2>
         <p id="sas-ask" class="lead"></p>
         <div class="sas" id="sas"></div>
         <div class="note" id="sas-what"></div>
@@ -891,12 +915,12 @@
 
       </section>
 
-      <section id="tripwire" class="panel alarm hidden">
+      <section id="tripwire" aria-labelledby="tripwire-title" class="panel alarm hidden">
         <h2 id="tripwire-title"></h2>
         <p id="tripwire-body"></p>
       </section>
 
-      <section id="failure" class="panel alarm hidden">
+      <section id="failure" aria-labelledby="failure-title" class="panel alarm hidden">
         <h2 id="failure-title"></h2>
         <p id="failmsg"></p>
         <p class="note" id="failcode"></p>

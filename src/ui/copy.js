@@ -172,6 +172,18 @@ export const product = {
   gloss: "haamu is Finnish for ghost",
 
   /**
+   * D-187. THE FIRST SCREEN HAD NO HEADING OF ITS OWN. A person moving through the
+   * page by headings — which is how somebody using a screen reader avoids listening
+   * to all of it — met the wordmark and then four paragraphs of prose with nothing
+   * between them to jump to.
+   *
+   * ⚠️ IT NAMES THE SCREEN, NOT THE PRODUCT. The wordmark directly above already
+   * says "haamu"; a heading repeating it would be a second name for the same thing
+   * and would leave the screen still unlabelled.
+   */
+  title: "What haamu is",
+
+  /**
    * §7.8's landing page names itself in the browser tab, and that is a sentence a
    * person reads. ⭐ The copy gate found it on its first run — the title element is
    * exactly the kind of place prose hides, because nobody thinks of a tab label as
@@ -627,6 +639,24 @@ export const phrase = {
   // it down — and unlike a disk passphrase this secret has no redundant copy.
   writeItDown: "Write it down and keep it somewhere safe. A password manager is ideal.",
 
+  /**
+   * D-187 — the three headings of §7.4's setup, which had none.
+   *
+   * ⚠️ THEY ARE THREE DIFFERENT SENTENCES BECAUSE THEY ARE THREE DIFFERENT SCREENS,
+   * and the confirm screen is the one that has to be distinguishable from the unlock
+   * screen by its heading alone: both ask for the eight words, and only one of them
+   * is asking because it does not yet believe you wrote them down.
+   * ⚠️ D-109: the word is KEY, in capitals, because it is §7.2's eight words.
+   */
+  chooseTitle: "Choose your KEY",
+  writeTitle: "Write down your KEY",
+  // ⭐ HANNU'S WORDING, 2026-09-01, and the reason is worth keeping: a heading that
+  // only names the screen leaves a person wondering why they are being asked twice.
+  // *"here"* is the word that answers it — the eight words went onto paper a moment
+  // ago, and this is the other place they now go. His note: *"as a regular user I
+  // would say this is more understandable and has more info and explains more."*
+  confirmTitle: "Type your KEY again here",
+
   // ⭐ ROUND 7, ITEM 3 — Hannu's wording, plus three words I would like him to rule on.
   // He asked for *"choose the one easiest for you"*; mine was "the one you can copy out
   // most accurately", which is stilted. ⚠️ But "easiest for you" leaves the criterion
@@ -1032,6 +1062,14 @@ export const openLink = {
 
 export const unlock = {
   ask: "Type your KEY.",
+
+  /**
+   * D-187. ⛔ NOT "Sign in", NOT "Log in", NOT "Unlock your account" — D-168 is
+   * explicit that a product with no account may not use the verbs of one, and a
+   * person told they signed in goes looking for a way to sign out. What this screen
+   * does is open conversations that are already on this device.
+   */
+  title: "Open your conversations",
 
   // §7.2 asks for 128 MiB and D-034 measured 1.17 s on a decade-old Android; §7.5
   // records that without PRF this runs on EVERY unlock. A screen that looks frozen
@@ -2392,6 +2430,13 @@ export const primitives = {
 };
 
 export const pairing = {
+  /**
+   * D-187. ⚠️ "invite link", never "link" on its own — the standing rule for every
+   * sentence in this product that names it, because "link" alone is the word a person
+   * has just seen in a chat application meaning something they can press twice.
+   */
+  title: "Your invite link",
+
   // §2.1, D-018: the invite link goes to ONE person, once. Phase 0.5 measured
   // people trying to reuse it, which is why this is the first sentence and not a
   // note.
@@ -3147,6 +3192,13 @@ export const pairing = {
  * conclusion.**
  */
 export const verification = {
+  /**
+   * D-187. The heading names the ACTION rather than the thing, because this screen's
+   * whole purpose is one thing a person has to do out loud with another person, and
+   * §3.6 has no fallback if they do not do it.
+   */
+  title: "Compare the six digits",
+
   unverified: "The [six digits](six-digits) have not been compared for this conversation.",
 
   /**

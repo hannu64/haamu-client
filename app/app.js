@@ -3331,6 +3331,17 @@ $("delete").addEventListener("click", async () => {
 
 let steps = [];
 
+/**
+ * D-187. What `#step-say` last said, so that a step is announced when it ARRIVES and
+ * not every time this function runs.
+ *
+ * ⚠️ `markStep` is called on ordinary event traffic and can be called with the step
+ * that is already current. A live region announces on every content change, including
+ * a change to the same words, so without this a person would hear "Finishing" over
+ * and over while nothing at all was happening.
+ */
+let saidStep = null;
+
 function setSteps(list, active) {
   steps = list;
   $("steps").replaceChildren();
@@ -3339,12 +3350,33 @@ function setSteps(list, active) {
     li.textContent = s;
     $("steps").append(li);
   }
+  // ⚠️ THE FIRST STEP IS NOT AN ANNOUNCEMENT, IT IS PART OF THE SCREEN. The screen is
+  // arriving, `only()` has just moved the cursor onto it, and the reader is about to
+  // read it top to bottom — the step is in there. Saying it a second time over that
+  // is noise. Arm the guard with it, and speak only what comes AFTER.
+  saidStep = active;
+  text("step-say", "");
   markStep(active);
 }
 
-const markStep = (active) =>
+const markStep = (active) => {
+  // D-187 finding 2, measured 2026-09-01: the list advanced from "waiting for your
+  // friend to open it" to "finishing" — the friend had arrived and the pairing was
+  // working — and nothing announced it, because no text changed and no panel was
+  // swapped. This is the text change. `#step-say` is `role="status"`, so it is read
+  // at the end of the current sentence rather than over the top of it.
+  //
+  // ⚠️ GUARDED ON `indexOf` FINDING THE STEP. `steps` holds the RENDERED STRINGS
+  // (see `RERENDER.progress`, which is `null` for exactly this reason), so a lookup
+  // that misses returns -1 — and announcing on -1 would speak a step that is not in
+  // the list. If it misses, nothing is said, which is what the screen already does.
+  const at = steps.indexOf(active);
+  if (at >= 0 && active !== saidStep) {
+    saidStep = active;
+    text("step-say", active);
+  }
   [...$("steps").children].forEach((li, i) => {
-    const on = i === steps.indexOf(active);
+    const on = i === at;
     li.classList.toggle("on", on);
     // ⚠️ D-186. `.on` IS A COLOUR, AND A COLOUR IS NOT IN THE ACCESSIBILITY TREE.
     // Which of the three steps is the current one was carried by the highlight and
@@ -3358,6 +3390,7 @@ const markStep = (active) =>
     if (on) li.setAttribute("aria-current", "step");
     else li.removeAttribute("aria-current");
   });
+};
 
 /**
  * Pairing produced a channel root. §7.3.3 case 2: this is one of the five
@@ -4971,6 +5004,19 @@ function paintCopy() {
   text("lang-en", copy.menu.english);
   text("lang-fi", copy.menu.finnish);
   markLanguage();
+
+  // ── D-187: the seven screens that had no heading ────────────────────────────
+  // ⚠️ THESE ARE ALSO THE SCREENS' ACCESSIBLE NAMES. Each `<section>` carries
+  // `aria-labelledby` pointing at its own heading, which turns it into a named
+  // region — so `only()`'s focus move (D-186) finally announces WHICH screen has
+  // arrived instead of landing on an unnamed container. One string, seen and heard.
+  text("gate-title", copy.product.title);
+  text("setup-title", copy.phrase.chooseTitle);
+  text("write-title", copy.phrase.writeTitle);
+  text("confirm-title", copy.phrase.confirmTitle);
+  text("enter-title", copy.unlock.title);
+  text("progress-title", copy.pairing.title);
+  text("verify-title", copy.verification.title);
 
   // The list and the chat.
   text("home-title", copy.list.title);

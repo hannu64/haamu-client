@@ -5546,6 +5546,95 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-187. ⭐⭐⭐ A transcript of what the product sounds like — and the two things it found
+
+**2026-09-01.** The job Hannu agreed to and parked: *"That 'transcript of what a blind person
+would hear,' we can do once we are done with the current tasks."* It exists because of the
+standing limitation recorded under D-186 — **he does not know anybody who uses a screen reader**,
+so the run by a real user has no route, and a reconstruction is what is available.
+
+**Method.** `Accessibility.getFullAXTree` over a complete pairing between two real browsers, plus
+a third holding the same KEY to raise the own-link failure. Twelve screens, English and Finnish.
+`lpm-probes/probe-transcript.mjs`.
+
+⚠️⚠️ **THE INSTRUMENT'S LIMIT TRAVELS WITH EVERY NUMBER FROM IT.** The roles and names are
+MEASURED — that is the same computation a screen reader consumes. The SPEECH is RECONSTRUCTED:
+NVDA, JAWS, VoiceOver and Orca each say a tree differently. ➡️ **It can prove a gap. It cannot
+prove the absence of one**, and nothing from it may be reported as if a person had heard it.
+
+**What it confirmed.** 66 controls across 12 screens and 2 languages, **none nameless** — D-186's
+finding now holds on `#panic` and `#failure`, which had never been measured. `<html lang>` follows
+the language switch. The QR canvas is correctly silent.
+
+#### Finding 1 — D-186 fixed the keyboard half, and only the keyboard half
+
+Six of twelve screens landed the cursor on a `<section>` with **no accessible name**, which
+computes to `generic`. Tab continued correctly from the new screen — that part was really fixed —
+but arriving announced nothing that said *where*. The other six focus a named field
+(*"Type the KEY — edit field"*) and were already the good case.
+
+#### Finding 2 — the pairing steps advance in complete silence
+
+Measured before and after: the list moved from *"Waiting for your friend to open it…"* to
+*"Finishing"* — the friend had opened the invite link, the pairing was working — with
+`aria-live` **none** on the step list, **none** on the screen, and no panel swapped, so `only()`'s
+focus move never fires. **A person waiting is told nothing until the six digits appear**, and
+waiting is exactly when a change matters most.
+
+#### Finding 3 — seven screens had no heading of their own
+
+`#gate`, `#setup`, `#write`, `#confirm`, `#enter`, `#progress`, `#verify`. Headings are how
+somebody moves through a page without listening to all of it.
+
+⚠️ **`#chat` LOOKED headingless and is not** — its heading is the conversation name in the bar,
+outside the panel being read. **A panel-scoped instrument reports the page's furniture as
+missing**, which is the same class of error as D-186's, one layer down.
+
+#### Findings 4–6, put to Hannu and NOT acted on
+
+The glossary buttons interrupt their own sentences (*"the secret KEY, button, collapsed, to your
+conversations"*, seven times); the eight words arrive as one unbroken run, spoken once, for the
+one thing a person must copy by hand; `reason: own_link` is read with the same weight as the
+sentence above it, because **in speech there is no such thing as small grey text.**
+
+#### The ruling
+
+**Hannu chose the visible heading over an invisible label**, and *"announce each step as it
+happens"* over announcing only the last.
+
+➡️ **ONE STRING DOES BOTH JOBS.** Each of the seven screens gets a visible `<h2>`, and the
+`<section>` is named BY it through `aria-labelledby` — which makes it a region and gives D-186's
+focus move something to announce. **A separate invisible label would have been a second copy of
+the same sentence, free to drift from the one on screen.** Applied to all 17 screens that have a
+heading, swept from the document rather than listed, because `RERENDER` is this codebase's
+standing example of a table somebody forgets to add a row to.
+
+⚠️⚠️ **A LIVE REGION ON THE STEP LIST WOULD HAVE ANNOUNCED NOTHING.** The three items keep their
+text for the whole pairing; what moves is a class and `aria-current`, and **an attribute change is
+not a content change**. So the announcement has to *be* a content change: `#step-say`,
+`role="status"`, written by `markStep` when the active step changes.
+
+⚠️ Three guards on it, each for a way it would have been wrong: it is **not** announced when
+`markStep` is called with the step already current (a status region speaks on every write,
+including a write of the same words); the **first** step is not announced at all, because the
+screen is arriving and the reader is about to read it anyway; and a step `steps.indexOf` cannot
+find is never spoken, because `steps` holds rendered strings — the same fault that makes
+`RERENDER.progress` `null`.
+
+⛔ **`.offscreen` is NOT `display: none` and NOT `visibility: hidden`.** Both remove the element
+from the accessibility tree as well as the page, which would make the live region silent — the
+exact failure it exists to fix.
+
+**Words, in both languages:** *What haamu is* / *Mikä haamu on*; *Choose your KEY* / *Valitse
+AVAIMESI*; *Write down your KEY* / *Kirjoita AVAIMESI muistiin*; *Type your KEY back* / *Kirjoita
+AVAIMESI uudelleen*; *Open your conversations* / *Avaa keskustelusi*; *Your invite link* /
+*Kutsulinkkisi*; *Compare the six digits* / *Vertaa kuutta numeroa*.
+
+⚠️ *Open your conversations* is deliberate under D-168: the product has no account, so the screen
+may not say *sign in*, and a person told they signed in goes looking for a way to sign out.
+
+---
+
 ### D-186. ⭐⭐⭐⭐ Every control already had a name. What no screen had was a way of saying it had arrived
 
 **2026-09-01.** Hannu, on the accessibility question he actually asked (2026-08-31): *"I wonder

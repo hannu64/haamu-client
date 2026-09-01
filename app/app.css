@@ -1475,6 +1475,28 @@ button.term[aria-expanded="true"] { color: var(--accent); border-bottom-style: s
    sounder than requiring every future rule in the file to be weakened. */
 .hidden { display: none !important; }
 
+/* D-187. HEARD BUT NOT SEEN — the one element in this product that is deliberately
+   invisible to everybody except a screen reader.
+   ⛔ NOT `display: none` AND NOT `visibility: hidden`. Both remove the element from
+   the accessibility tree as well as from the page, which would make the live region
+   silent — the exact failure it exists to fix.
+   ⚠️ `clip-path` is the modern half and `clip` the old one; both are kept because a
+   browser that honours neither would place a visible line of text on the screen.
+   ⚠️ `white-space: nowrap` stops a 1px-wide box wrapping its text into a tall column,
+   which some engines then expose with the words in the wrong order. */
+.offscreen {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* §7.3.1a's quarantine and §7.3.2's freshness, and §6.7.1's closing notice.
  *
  * ⚠️ A BANNER IS NOT AN ALARM UNLESS IT SAYS IT IS. The unverified one sits on

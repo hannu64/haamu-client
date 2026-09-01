@@ -146,6 +146,18 @@ export const FI = {
 
   // ── list
   "list.title": "Keskustelut",
+
+  // ── D-187: the seven screens that had no heading ──────────────────────────
+  // ⚠️ D-109 IN FINNISH IS **AVAIN**, and it inflects: AVAIMESI is "your KEY".
+  // ⚠️ D-158: a Finnish stem is not a word — every one of these is a full form.
+  // ⚠️ D-168: no verb of signing in. *kirjoita* is "write", not *kirjaudu*.
+  "product.title": "Mikä haamu on",
+  "phrase.chooseTitle": "Valitse AVAIMESI",
+  "phrase.writeTitle": "Kirjoita AVAIMESI muistiin",
+  "phrase.confirmTitle": "Kirjoita AVAIMESI uudelleen tähän",
+  "unlock.title": "Avaa keskustelusi",
+  "pairing.title": "Kutsulinkkisi",
+  "verification.title": "Vertaa kuutta numeroa",
   "list.empty": "Ei vielä keskusteluja.",
   "list.start": "Aloita uusi keskustelu",
   "list.unnamed": "Ei vielä nimeä",

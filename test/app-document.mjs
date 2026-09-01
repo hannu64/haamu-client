@@ -1434,4 +1434,151 @@ section("D-186 — the screen change is perceivable, and the ring is not around 
   );
 }
 
+// ═══════════════════════════════════ D-187 — the screen says which screen it is
+
+section("D-187 — every screen has a name, and the steps say themselves out loud");
+
+{
+  /**
+   * ⚠️⚠️ WHAT D-186 LEFT UNFINISHED, AND WHY IT LOOKED FINISHED. D-186 moved the
+   * cursor onto every screen that arrives, which fixed the KEYBOARD half for certain:
+   * Tab now continues from the new screen instead of restarting at the top of the
+   * document. The 2026-09-01 transcript run then read the same screens back out of
+   * Chrome's accessibility tree and found the spoken half still missing — the cursor
+   * was landing on a `<section>` with no accessible name, which computes to `generic`,
+   * so arriving announced nothing that said WHERE.
+   *
+   * ➡️ THE REPAIR IS ONE STRING DOING BOTH JOBS. Each screen gets a visible heading,
+   * and the section is named BY that heading through `aria-labelledby` — which makes
+   * it a region and gives the focus move something to announce. A separate invisible
+   * label would have been a second copy of the same sentence, free to drift.
+   *
+   * ⚠️ AND THE SECOND FINDING IS A DIFFERENT SHAPE OF THE SAME PROBLEM. The three
+   * pairing steps advance while the screen does NOT change, so `only()` never runs
+   * for them and there is nothing to focus. Measured: the list went from "waiting for
+   * your friend to open it" to "finishing" — the friend had arrived — and a person
+   * waiting was told nothing at all until the six digits appeared.
+   */
+  const html = read("../app/index.html");
+  const app = code("../app/app.js");
+  const css = read("../app/app.css");
+
+  // ── the seven screens that had no heading ──────────────────────────────────
+  const NEEDED = ["gate", "setup", "write", "confirm", "enter", "progress", "verify"];
+  for (const id of NEEDED) {
+    check(
+      `#${id} has a heading of its own`,
+      new RegExp(`<h2 id="${id}-title">`).test(html),
+      "a screen with no heading is a screen nobody can jump to"
+    );
+  }
+
+  /**
+   * ⭐⭐⭐ THE RULE, NOT THE LIST. Every `<section>` that contains a heading must be
+   * named by one — written as a sweep over the document rather than as seven ids,
+   * because the failure this guards against is a screen somebody adds LATER. That is
+   * `RERENDER`'s standing lesson in this codebase: a table of ids is a table with a
+   * row missing.
+   */
+  const sections = [...html.matchAll(/<section id="([a-z]+)"([^>]*)>/g)].map((m) => ({
+    id: m[1],
+    attrs: m[2],
+  }));
+  const headingIds = new Set([...html.matchAll(/<h2 id="([a-z-]+)"/g)].map((m) => m[1]));
+  const bodies = new Map(
+    [...html.matchAll(/<section id="([a-z]+)"[^>]*>([\s\S]*?)<\/section>/g)].map((m) => [m[1], m[2]])
+  );
+  const withHeading = sections.filter((x) => /<h2 id="/.test(bodies.get(x.id) || ""));
+  const unnamed = withHeading.filter((x) => !/aria-labelledby="/.test(x.attrs));
+  check(
+    "⭐⭐⭐ every screen that HAS a heading is named by one — swept, not listed",
+    unnamed.length === 0,
+    unnamed.map((x) => `#${x.id}`).join(" ") || `${withHeading.length} screens, all named`
+  );
+
+  const dangling = withHeading
+    .map((x) => (x.attrs.match(/aria-labelledby="([a-z-]+)"/) || [])[1])
+    .filter((t) => t && !headingIds.has(t));
+  check(
+    "⚠️ and every name points at a heading that exists — a label naming nothing is worse than none",
+    dangling.length === 0,
+    dangling.join(" ") || "all resolve"
+  );
+
+  // ── the headings are copy, in both languages, not markup ───────────────────
+  for (const [id, path] of [
+    ["gate-title", "copy.product.title"],
+    ["setup-title", "copy.phrase.chooseTitle"],
+    ["write-title", "copy.phrase.writeTitle"],
+    ["confirm-title", "copy.phrase.confirmTitle"],
+    ["enter-title", "copy.unlock.title"],
+    ["progress-title", "copy.pairing.title"],
+    ["verify-title", "copy.verification.title"],
+  ]) {
+    check(
+      `#${id} is written from ${path}`,
+      new RegExp(`text\\("${id}", ${path.replace(/\./g, "\\.")}\\)`).test(app),
+      "a heading hard-coded in the markup is a sentence the Finnish build cannot reach"
+    );
+  }
+  check(
+    "⚠️ and the markup ships them EMPTY, so an unwired heading is visibly missing",
+    NEEDED.every((id) => new RegExp(`<h2 id="${id}-title"></h2>`).test(html)),
+    "text in the markup would paint over a copy path that had stopped being called"
+  );
+
+  // ── the steps announce themselves ──────────────────────────────────────────
+  check(
+    "⭐⭐ the pairing steps have somewhere to be announced from",
+    /<p id="step-say" class="offscreen" role="status"><\/p>/.test(html),
+    "the list's own text never changes, so a live region on the list would say nothing"
+  );
+  check(
+    '⚠️ it is `status`, not `alert` — progress does not interrupt a sentence',
+    !/id="step-say"[^>]*role="alert"/.test(html),
+    "D-185 drew the same line for notices"
+  );
+  check(
+    "⚠️⚠️ it is hidden in the way that KEEPS it in the accessibility tree",
+    /\.offscreen \{[\s\S]*?position: absolute;[\s\S]*?clip-path: inset\(50%\);/.test(css),
+    "`display: none` and `visibility: hidden` both remove it from the tree — silent"
+  );
+  check(
+    "⛔ and it is NOT hidden with the class that would silence it",
+    !/<p id="step-say"[^>]*class="[^"]*\bhidden\b/.test(html),
+    "`.hidden` is `display: none !important` — the one thing this element may not be"
+  );
+
+  check(
+    "⭐ a step is announced when it changes",
+    /if \(at >= 0 && active !== saidStep\) \{\s*saidStep = active;\s*text\("step-say", active\);/.test(app),
+    "the announcement IS the text change; nothing else on this screen makes one"
+  );
+  check(
+    "⚠️ and NOT re-announced when nothing moved — a status region speaks on every write",
+    /let saidStep = null;/.test(app) && /active !== saidStep/.test(app),
+    "`markStep` runs on ordinary event traffic, often with the step already current"
+  );
+  check(
+    "⚠️⚠️ the FIRST step is not announced — the screen is arriving and already reads it",
+    /saidStep = active;\s*text\("step-say", ""\);\s*markStep\(active\);/.test(app),
+    "saying it over the top of the screen a person is being read is noise, not progress"
+  );
+  check(
+    "⛔ and a step the list does not contain is never spoken",
+    /const at = steps\.indexOf\(active\);/.test(app) && /at >= 0 &&/.test(app),
+    "`steps` holds rendered strings, so a miss returns -1 — see `RERENDER.progress`"
+  );
+
+  // ⚠️⚠️ THE CANARY. Every check above is a pattern over source text, and a pattern
+  // that stops matching passes silently forever. Each is shown refusing its opposite.
+  check(
+    "⚠️⚠️ and the patterns still refuse the shapes they exist to refuse",
+    !/<p id="step-say" class="offscreen" role="status"><\/p>/.test('<p id="step-say"></p>') &&
+      /<p id="step-say"[^>]*class="[^"]*\bhidden\b/.test('<p id="step-say" class="offscreen hidden">') &&
+      !/\.offscreen \{[\s\S]*?clip-path: inset\(50%\);/.test(".offscreen { display: none; }"),
+    "a bare status line, a silenced one, and a `display: none` one are all caught"
+  );
+}
+
 done();
