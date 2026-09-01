@@ -5546,6 +5546,132 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-186. ⭐⭐⭐⭐ Every control already had a name. What no screen had was a way of saying it had arrived
+
+**2026-09-01.** Hannu, on the accessibility question he actually asked (2026-08-31): *"I wonder
+if a person who uses a screen reader can use haamu because it has so many alerts and texts and
+pairing possibilities and tasks to get it done."*
+
+**I had answered that question twice from memory and been wrong both times.**
+
+- *"There is no ARIA anywhere in the product."* Repeated for days, including into the memory a
+  later session would read. **29 attributes ship.**
+- *"Four text inputs have no accessible name"* — `#retype`, `#paste-link`, `#phrase-in`,
+  `#panic-phrase` — proposed as the fix and, thankfully, not approved. **All four are given a
+  `placeholder` at boot from `copy.js`, and a placeholder IS a name source.** Chrome computes
+  *"Type the KEY"*, *"Invite link or code"*, *"your KEY"*, *"your KEY"*.
+
+➡️ **A CLAIM ABOUT AN ABSENCE IS THE ONE KIND THAT NOTHING CONTRADICTS.** A wrong claim about
+what a line of code says meets that line again. "There is nothing there" is never met by
+anything, and its own conclusion — *nothing to do* — retires the only investigation that would
+have refuted it.
+
+#### The instrument
+
+`probe-accessible-names.mjs` reads **Chrome's own accessibility engine**
+(`Accessibility.getPartialAXTree`), not the HTML — because reading `aria-label` out of the
+document proves an attribute is present and says nothing about what a browser computes when a
+`<label>`, an `aria-labelledby`, a `title` and a `placeholder` are all in play and exactly one
+of them wins. It reports role, name **and name source** for every control on nine screens,
+behind a real pairing of two real browsers, because `#progress` and `#verify` cannot be reached
+any other way.
+
+⭐ **It is validated before it is believed.** Three controls injected into the live page: a
+button with text (must come back NAMED), a button with nothing (must come back NAMELESS), and a
+field whose only possible name source is a placeholder (the reading that settles the question).
+Without the nameless one, a probe that reported a name for everything would have looked exactly
+like a clean bill of health.
+
+#### What it found
+
+**Thirty controls across nine screens. Not one of them is nameless.** Naming was never the gap.
+
+**The gap is arrival.** On five of the nine screens — `#gate`, `#home`, `#progress`, `#verify`,
+`#chat` — the panel swap left `document.activeElement` on `<body>`. The control that had focus
+was the one just hidden, and a browser whose focused element goes away focuses nothing. So:
+
+- a screen reader says **nothing** — the screen has been replaced and no event announced it;
+- a keyboard user's next Tab starts again at the **top of the document**.
+
+⚠️ **`#verify` is the one that matters.** It carries the six digits, it is where the entire
+security property of the pairing lives, and it arrives **on its own** — nobody presses anything
+to summon it. A person who cannot see it appear is not told it appeared.
+
+The four screens that *were* announced are announced by accident: they move the cursor into
+their own field, and moving focus is what a screen reader follows.
+
+#### The change
+
+**`only()` focuses the panel it has just shown.** `tabIndex = -1`, then
+`focus({ preventScroll: true })` — the line above it has just put the scroller at the top and a
+focus that scrolls would undo it. Behind the same-screen guard, so a repaint of the screen you
+are on moves nothing.
+
+⭐ **The panel, not its first field.** Focusing the first input would be right on the four
+screens that have one and wrong on the conversation, where D-139 deliberately leaves the
+composer alone on a phone so the keyboard does not throw itself over the messages a person just
+opened. Focusing the panel says *you are here* without claiming anybody wants to type. The four
+handlers that do move the cursor into their own field run afterwards and still win.
+
+**`markStep` writes `aria-current="step"`, and removes it.** Which of the three pairing steps is
+the current one was carried by a CSS class and by nothing else, and a colour is not in the
+accessibility tree. ⚠️ Set **without** remove would leave every step a person had passed marked
+current, which says three things are current — worse than saying nothing.
+
+**And the cost was measured, not assumed.** Focusing a panel makes `:focus-visible` match it **at
+boot**: the first screen came up inside a two-pixel accent box, for everybody, mouse and touch
+included — the ring that exists for keyboard users, drawn around a thing nobody moved to.
+`app.css` suppresses it on `[tabindex="-1"]`, which is **the property that makes the ring a
+lie**, not a list of panel names — the same argument `RERENDER` makes. ⚠️ The probe asserts the
+panel is really focused *before* it checks for no ring: read on a screen whose cursor sits in a
+field, "no ring" is true of an element nothing is focusing, and the check passes without the
+product having done anything.
+
+#### What is still open
+
+**Nothing announces a change that does not change the screen.** The pairing steps advance in
+place; `#failure` and the six digits are covered now only because they arrive as screens.
+Notices already carry `role="alert"`/`role="status"` (D-185).
+
+⛔ **And structure is still not experience.** Everything above says the product is *readable* by
+a screen reader. Whether it is *usable* by a person who lives in one is a question only a
+TalkBack or NVDA run by someone who uses one can answer, and that run has not happened.
+
+#### ⛔⛔ The finding that was not part of the task
+
+Running `e2e.sh` — which the D-186 work did not need and which turned out not to have been run
+for a while — showed **two failures that had nothing to do with it**. Both were `e2e-pair.mjs`
+still describing the world **D-181 replaced**, and both had therefore been red on `main` since
+D-181 shipped, was deployed, and was field-tested:
+
+1. *"the pairing session is deleted afterwards (§3.4)"* expected a **404**. `migrations/005`
+   makes J's §3.4 delete a **tombstone** — state USED, `i_pub` dropped, `commit`/`mac`/`j_pub`/
+   `j_mac` kept. Rewritten to assert the tombstone, over **both routes**, because the four
+   fields are split across them: §3.2's offer serves `commit` and `mac`, §3.3's status serves
+   the keys. That is a stronger check than the 404 was — "it is gone" was one bit.
+2. The §3.5 safety block **arranged** its state by deleting the session and re-publishing the
+   offer on the same `L`. After 005 that returns `409 already_exists`, and the file crashed
+   there. ⭐ The route that replaces it is **the one reality uses**: §3.4.1b rule 7 has J save
+   its record *before* it claims, so an interception landing in that window leaves exactly the
+   state the block needs — a device holding a record for a link whose accepted claim is somebody
+   else's. The store is the test's own, so hooking the write that opens the window is enough. No
+   deletion, no second offer, no timing.
+
+➡️ **THE REAL FINDING IS THE PROCESS ONE.** The standing authorisation to push and deploy
+haamu is conditional on the word *tested*, and the list it named was `stamp.sh`, `test.sh` and
+the affected probes. **`e2e.sh` was not in it.** A suite nobody runs is a suite that reports
+nothing, and it stayed silent through a shipped change, a deploy and a field test. It is in the
+list now.
+
+⚠️ **Two of my own three repairs to that file failed first, in the same shape:** `/status` does
+not carry `commit` — §3.2's offer does — so the assertion read `undefined`, and the arrangement
+built a claim over `undefined`, which threw *inside* `saveInFlight`'s `catch`, left the record
+for `join`'s `finally` to delete, and turned the premise into one that **could not have been
+arranged**. A test that fails to set up its own precondition does not look different from one
+whose subject is broken.
+
+---
+
 ### D-185. ⭐⭐⭐ A panel a person may put away — and which ones those are is derived from the panel, not listed
 
 **2026-08-31.** Measured before proposing: **19 `notice()` call sites, 18 distinct panels** —

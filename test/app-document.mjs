@@ -1347,4 +1347,91 @@ section("a panel a person may close is decided by the panel's own shape (D-185, 
   );
 }
 
+// ═══════════════ D-186 — a screen that replaces another takes the cursor with it
+
+section("D-186 — the screen change is perceivable, and the ring is not around it");
+
+{
+  /**
+   * ⚠️⚠️ THIS SECTION EXISTS BECAUSE I WAS WRONG ABOUT AN ABSENCE TWICE. First
+   * "there is no ARIA anywhere in the product" — 29 attributes ship. Then "four text
+   * inputs have no accessible name" — every one of them is given a `placeholder` at
+   * boot, and a placeholder IS a name source; `probe-accessible-names.mjs` reads all
+   * thirty controls out of Chrome's own accessibility engine and none of them is
+   * nameless. What that probe DID find is this: on five of the nine screens a person
+   * walks through, the panel swap left `document.activeElement` on `<body>`, because
+   * the control that had focus was the one just hidden.
+   *
+   * A name answers "what is this". Focus answers "did anything just happen". The
+   * product had the first and not the second, and the second is the one the pairing
+   * screens live or die by — `#verify` carries the six digits and arrives on its own.
+   */
+  const app = code("../app/app.js");
+  const css = read("../app/app.css");
+
+  check(
+    "⭐⭐⭐ `only()` puts the cursor on the panel it has just shown",
+    /const panel = \$\(id\);\s*panel\.tabIndex = -1;\s*panel\.focus\(\{ preventScroll: true \}\);/.test(app),
+    "the panel, not its first field — see the comment there"
+  );
+  check(
+    "⚠️ and asks not to scroll, because the line above it has just scrolled to the top",
+    /panel\.focus\(\{ preventScroll: true \}\)/.test(app),
+    "a focus that scrolls would undo `$(\"screens\").scrollTop = 0`"
+  );
+
+  const guard = app.indexOf("if (id === shownScreen) return;");
+  const move = app.indexOf("panel.focus({ preventScroll: true })");
+  const composer = app.indexOf('id === "chat" && TYPED_ON');
+  check(
+    "⚠️ it is behind the same-screen guard — a repaint of the screen you are on moves nothing",
+    guard !== -1 && move !== -1 && guard < move,
+    "otherwise every redraw would drag the cursor off whatever a person was typing in"
+  );
+  check(
+    "⚠️⚠️ and it runs BEFORE the composer line, so the conversation still wins on a keyboard",
+    composer !== -1 && move < composer,
+    "D-139 leaves the composer alone on a phone; the panel focus must not undo that"
+  );
+
+  check(
+    "⭐ the current pairing step is in the accessibility tree, not only in a colour",
+    /li\.setAttribute\("aria-current", "step"\)/.test(app),
+    "`.on` is a class; a class says nothing to a screen reader"
+  );
+  check(
+    "⚠️⚠️ and it is REMOVED from the others — three current steps is worse than none",
+    /else li\.removeAttribute\("aria-current"\);/.test(app),
+    "set without remove leaves every step a person has passed marked current"
+  );
+
+  check(
+    "⭐⭐ the focus ring is suppressed by the PROPERTY that makes it a lie, not by a list",
+    /\[tabindex="-1"\]:focus,\s*\[tabindex="-1"\]:focus-visible \{\s*outline: none;/.test(css),
+    '`tabindex="-1"` means "script only, never Tab" — exactly where "your keyboard is here" is false'
+  );
+  check(
+    "⛔ and not by naming the panels — a sheet listing screen ids meets a screen nobody added",
+    !/\.(panel|chatpane|gate|home|verify)(:focus|:focus-visible)/.test(css),
+    "the same argument `RERENDER` makes three sections above"
+  );
+  check(
+    "⚠️ the ring every OTHER control gets is untouched",
+    /:focus-visible \{\s*outline: 2px solid var\(--accent\);/.test(css),
+    "a keyboard user must still see where they are"
+  );
+
+  // ⚠️⚠️ THE CANARY. Every check above is a pattern over source text, and a pattern
+  // that stops matching passes silently forever. Each is shown refusing its opposite.
+  check(
+    "⚠️⚠️ and the patterns still refuse the shapes they exist to refuse",
+    !/li\.setAttribute\("aria-current", "step"\)/.test('li.classList.toggle("on", on);') &&
+      !/\[tabindex="-1"\]:focus,\s*\[tabindex="-1"\]:focus-visible \{\s*outline: none;/.test(
+        ".panel:focus { outline: none; }"
+      ) &&
+      /\.(panel|chatpane|gate|home|verify)(:focus|:focus-visible)/.test(".panel:focus { outline: none; }"),
+    "a colour-only step, and a ring suppressed by naming panels, are both caught"
+  );
+}
+
 done();

@@ -1549,6 +1549,22 @@ button.term[aria-expanded="true"] { color: var(--accent); border-bottom-style: s
   outline-offset: 2px;
 }
 
+/* ⚠️⚠️ D-186 — AND NOT AROUND THE WHOLE SCREEN. `only()` now moves the cursor onto the
+   panel it just showed, so a person who cannot see the swap is told a screen changed.
+   Measured consequence of doing that alone: at boot the first screen came up inside a
+   two-pixel accent box, for everybody, mouse and touch included — the ring the rule
+   above exists to give a KEYBOARD user, drawn around a thing nobody moved to.
+
+   ⭐ THE SELECTOR IS THE PROPERTY, NOT A LIST OF PANEL NAMES. `tabindex="-1"` says
+   exactly "reachable by script, never by Tab", and a ring means "your keyboard is
+   here" — so the one element in the product that carries that attribute is the one
+   element the ring is a lie on. Nothing is lost: the next Tab lands on a real control
+   and rings it. */
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

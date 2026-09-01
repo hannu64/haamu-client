@@ -180,15 +180,37 @@ section("§3 — two clients pair");
   check("the initiator cleared its in-flight state", (await flow.loadInFlight(iStore)) === null);
   check("the joiner cleared its in-flight state", (await flow.loadInFlight(jStore)) === null);
 
-  // §3.4: J deletes the session, so nothing survives the handshake.
+  // ⚠️⚠️ §3.4 NO LONGER REMOVES THE ROW, AND THIS ASSERTION USED TO SAY IT DID.
+  // `migrations/005` (D-181) turns J's §3.4 delete on a CLAIMED or REVEALED session
+  // into a TOMBSTONE: state USED, `i_pub` dropped, and the four fields a late arrival
+  // needs to judge for itself kept. This file was last touched before that landed and
+  // nobody ran it afterwards, so the check below has been red on `main` since D-181
+  // shipped — found 2026-09-01, by running `e2e.sh`, which is not in the pre-push
+  // list that `test.sh` and the probes are in. That gap is the real finding.
+  //
+  // ⭐ AND THE TOMBSTONE IS WORTH MORE THAN THE 404 WAS. "It is gone" was one bit;
+  // this says the row that remains carries exactly what §3.5's arrival check reads
+  // and NOT the initiator's key, which is the property D-181 exists for.
+  //
+  // ⚠️ IT TAKES BOTH ROUTES, BECAUSE THE FOUR FIELDS ARE SPLIT ACROSS THEM: §3.2's
+  // offer serves `commit` and `mac`, §3.3's status serves the two keys. A late
+  // arrival reads both, so a check of one proves half a tombstone.
   const { pairingId } = await pairing.derivePairing(pairing.parseLink(link));
-  let gone = false;
-  try {
-    await api.get(`/api/pair/${b64uEncode(pairingId)}/status`);
-  } catch (err) {
-    gone = err?.status === 404;
-  }
-  check("the pairing session is deleted afterwards (§3.4)", gone);
+  const idPath = `/api/pair/${b64uEncode(pairingId)}`;
+  const offer = await api.get(idPath);
+  const spent = await api.get(`${idPath}/status`);
+  equal("§3.4 leaves a tombstone rather than a hole (D-181)", spent.state, "used");
+  equal("and §3.2's route says the same word about it", offer.state, "used");
+  check(
+    "⭐⭐ the initiator's key is NOT in it — §3.3 discarded it and the row may not keep it",
+    !spent.i_pub,
+    `i_pub: ${JSON.stringify(spent.i_pub)}`
+  );
+  check(
+    "⭐⭐⭐ but everything a late arrival judges the link by IS",
+    Boolean(offer.commit && offer.mac && spent.j_pub && spent.j_mac),
+    "commit + mac say the offer is the one this link describes; j_pub + j_mac say whoever took it held L"
+  );
 }
 
 // ------------------------------------------------- §2.2, over the same wire
@@ -922,25 +944,63 @@ async function initiatorDiscardedAfterPublishing(storage) {
   const jStore = crashable(memRecords());
   const { run: iRun, link } = await initiatorWithLink(iStore);
   const linkSecret = pairing.parseLink(link);
+  const { pairingId, macKey } = await pairing.derivePairing(linkSecret);
+  const idPath = `/api/pair/${b64uEncode(pairingId)}`;
+  // ⚠️ §3.2's ROUTE, NOT §3.3's. `commit` is on the OFFER; `/status` carries the two
+  // keys and never the commitment, so reading it here built a claim over `undefined`
+  // — which threw inside the hook, left the record uncrashed, and turned the check
+  // below into one that could not have passed.
+  const { commit: commitB64 } = await api.get(idPath);
+  // ⚠️ DECODED. The route serves base64url and `buildClaim` MACs raw bytes; a string
+  // handed to it produces a claim the server refuses, the hook throws inside
+  // `saveInFlight`'s catch, and the record is left for `join`'s `finally` to delete —
+  // a premise that quietly fails to be arranged rather than an error anybody sees.
+  const commit = b64uDecodeExact(commitB64, 32, "commit_I");
 
-  await joinerDiscardedAfterClaiming(link, jStore);
+  /*
+   * ⚠️⚠️ THE ARRANGEMENT CHANGED ON 2026-09-01. THE PROPERTY DID NOT.
+   *
+   * It used to delete the session and re-publish the offer on the same `L`, so that a
+   * second holder could claim it. `migrations/005` (D-181) made that impossible: a
+   * delete on a CLAIMED row is now a tombstone, so the re-publish came back
+   * `409 already_exists` and this file has crashed here since D-181 shipped. Nobody
+   * saw it, because `e2e.sh` was not in the list run before a push.
+   *
+   * ⭐ AND THE ROUTE THAT REPLACES IT IS THE ONE REALITY USES, which the old one never
+   * was. §3.4.1b rule 7 has J save its record BEFORE it claims — so an interception
+   * that lands in that window leaves exactly the state this block needs: a device
+   * holding a record for a link whose accepted claim belongs to somebody else. The
+   * store is the test's own, so hooking the write that opens the window is enough; no
+   * timing, no abort, no second offer.
+   *
+   * ⚠️ `crash()` INSIDE THE HOOK, NOT AFTER. `join` clears the record in a `finally`,
+   * and the `finally` runs when the 409 below turns into a thrown `already_claimed`.
+   * Crashing the store first is what makes the record outlive the attempt — which is
+   * the whole premise, and without it the check under this would find an empty store
+   * and pass by having nothing to look at.
+   */
+  const write = jStore.set;
+  let armed = true;
+  jStore.set = async (k, v) => {
+    await write(k, v);
+    if (!armed) return;
+    armed = false;
+    const attacker = await x25519.generateKeyPair();
+    await api.post(`${idPath}/claim`, await pairing.buildClaim(macKey, attacker.publicKey, commit));
+    jStore.crash();
+  };
+  await flow.join({ api, link, storage: jStore }).catch(() => {});
+  jStore.set = write;
+  jStore.reboot();
   check("this device holds a record for the link", jStore.size === 1);
-
-  // The session this device claimed goes, and the same link is offered again — this
-  // time to somebody else who holds `L`.
-  const { pairingId } = await pairing.derivePairing(linkSecret);
-  await api.del(`/api/pair/${b64uEncode(pairingId)}`).catch(() => {});
-  await iRun.catch(() => {});
-  const s = await freshOffer(linkSecret);
-  const attacker = await x25519.generateKeyPair();
-  await api.post(`${s.idPath}/claim`, await pairing.buildClaim(s.macKey, attacker.publicKey, s.commit));
 
   await expectFailure(
     flow.join({ api, link, storage: jStore }),
     "already_claimed",
     "⭐⭐⭐ a claim that is NOT this device's own still raises §3.5's alarm"
   );
-  await api.del(s.idPath).catch(() => {});
+  await iRun.catch(() => {});
+  await api.del(idPath).catch(() => {});
 }
 
 // -------------------------------------- §3.4.1b rule 10, for the three writes

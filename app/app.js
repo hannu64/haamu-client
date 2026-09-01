@@ -347,6 +347,28 @@ const only = (id) => {
   // the scroller, so the conversation's own log — scrolled by `line()` — is the only
   // thing that has to be at the end, and it already is.
   $("screens").scrollTop = 0;
+  // ⚠️⚠️ D-186 — A SCREEN THAT REPLACES ANOTHER HAS TO TAKE THE CURSOR WITH IT.
+  // Measured rather than assumed: on five of the nine screens a person walks
+  // through, the swap left `document.activeElement` on `<body>`, because the control
+  // that had focus was the one just hidden. A browser whose focused element goes
+  // away focuses nothing — and "nothing" is a screen reader saying nothing, and a
+  // Tab that starts again at the top of the document. The same measurement found
+  // every control in the product already has an accessible name, so a name was never
+  // what was missing here; a signal that the screen had changed at all was.
+  //
+  // ⭐ THE PANEL, NOT ITS FIRST FIELD. Focusing the first input would be right on the
+  // four screens that have one and wrong on the conversation, where D-139
+  // deliberately leaves the composer alone on a phone so the keyboard does not throw
+  // itself over the messages a person just opened. Focusing the panel says "you are
+  // here" without claiming anybody wants to type. The four handlers that do move the
+  // cursor into their own field run after this and still win — including the line
+  // below, which is why it stays below.
+  //
+  // ⚠️ `preventScroll`, because the line above has just put the scroller at the top
+  // and a focus that scrolls would undo it.
+  const panel = $(id);
+  panel.tabIndex = -1;
+  panel.focus({ preventScroll: true });
   // ⚠️ ROUND 19: *"when I choose a conversation the cursor does not automatically go
   // into where I should type."* Only where a keyboard is — see `TYPED_ON`. A disabled
   // field ignores this, which is exactly right on a closed conversation.
@@ -3321,7 +3343,21 @@ function setSteps(list, active) {
 }
 
 const markStep = (active) =>
-  [...$("steps").children].forEach((li, i) => li.classList.toggle("on", i === steps.indexOf(active)));
+  [...$("steps").children].forEach((li, i) => {
+    const on = i === steps.indexOf(active);
+    li.classList.toggle("on", on);
+    // ⚠️ D-186. `.on` IS A COLOUR, AND A COLOUR IS NOT IN THE ACCESSIBILITY TREE.
+    // Which of the three steps is the current one was carried by the highlight and
+    // by nothing else, so a person who cannot see the highlight was told the steps
+    // and never told where in them they were. `aria-current` is the same fact in the
+    // place a screen reader reads.
+    //
+    // ⚠️ SET **AND REMOVED**. A list in which every step has been current at some
+    // point and none has had the attribute taken away is worse than one with no
+    // attribute at all: it says three things are current, which is false.
+    if (on) li.setAttribute("aria-current", "step");
+    else li.removeAttribute("aria-current");
+  });
 
 /**
  * Pairing produced a channel root. §7.3.3 case 2: this is one of the five
