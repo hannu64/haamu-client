@@ -1524,6 +1524,8 @@ button.term[aria-expanded="true"] { color: var(--accent); border-bottom-style: s
   overflow-x: auto;
   margin: 0.5rem 0 0;
 }
+/* The copy control sits under the readout; `.diagbox` has no bottom margin of its own. */
+.diagbox + .linkish { margin-top: 0.6rem; }
 
 /*
   §2.1.2's QR symbol.

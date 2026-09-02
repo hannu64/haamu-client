@@ -4469,6 +4469,12 @@ $("go-ghost").addEventListener("click", async () => {
     await enterGhost();
   } catch (err) {
     session = null;
+    // ⚠️⚠️ THE PANEL GETS IT AS WELL AS THE SCREEN, WHICH IT DID NOT UNTIL 2026-09-02.
+    // `failcode` below is ON THE SCREEN; the copy control takes `#diag-body` and
+    // nothing else, so a refusal recorded only there is a refusal that can be read and
+    // cannot be sent — and this screen is a dead end, so there is no later moment at
+    // which the panel could learn about it.
+    noteProblem(err);
     await haltWith(copy.ghost.noStore);
     // ⚠️ `detailOf`, NOT `err.message` (D-165, outside review slice C #11). §12 keeps
     // exceptions off the screen, and every other `failcode` on this page already used
@@ -4715,7 +4721,11 @@ function noteProblem(err) {
   // ⚠️ D-170 — WHICH RECORD, WHEN THE REASON ALONE DOES NOT SAY. Hannu's Firefox
   // panel read `OperationError ×1` and there was no route from it to a record; the
   // reason is the fix for that, and `which` is what makes the next report name the
-  // row. It is `hwm` or `sent` and carries nothing of the record's contents.
+  // row. It carries nothing of the record's CONTENTS, only which one.
+  // ⚠️ It was documented here as "`hwm` or `sent`" and that stopped being true on
+  // 2026-09-02, when §0.2's stop began passing the curves it is missing. The field is
+  // whatever narrows the reason, and the rule that matters is the one below it: a
+  // NAME, never prose, because this row is now something a person can copy and send.
   if (typeof err?.which === "string" && err.which) name = `${name}/${err.which}`;
   // ⚠️⚠️ CHANGING YOUR MIND IS NOT A PROBLEM. Cancelling a pairing and abandoning
   // a link both unwind by throwing, because that is how you stop work that is
@@ -4826,7 +4836,40 @@ function renderDiagnostics() {
     `screen      ${window.innerWidth}×${window.innerHeight}`,
     `browser     ${navigator.userAgent}`,
   ];
+  // ⛔⛔ THE SELECTION SURVIVES THE RE-RENDER, AND IT DID NOT UNTIL `probe-diag-copy`
+  // PRESSED THE BUTTON IN A BROWSER THAT SAYS NO.
+  //
+  // The panel is drawn twice on every open: once immediately, and again when
+  // `askServedBuild` answers — up to four seconds later, and it takes the FULL four on
+  // a sick network, which is the network this panel is opened on. The refusal path
+  // below selects the readout and tells the person to copy it themselves. Writing
+  // `textContent` destroys every node the selection is anchored in, so the second draw
+  // silently took the selection away and left that sentence standing over nothing.
+  //
+  // ➡️ **A screen that tells somebody to act on what they can see owes them the
+  // seeing for as long as the sentence is up.** Restored only when the selection was
+  // the WHOLE readout — that is the one this code made; a person who has picked out a
+  // single row picked it on purpose and it is not ours to widen.
+  const selection = window.getSelection();
+  const ours = selection?.toString() !== "" && selection?.toString() === $("diag-body").textContent;
   text("diag-body", lines.join("\n"));
+  if (ours) selectTheReadout();
+}
+
+/**
+ * The nine rows, selected whole, for a browser that would not take them itself.
+ *
+ * ⚠️ IT IS NOT A CONVENIENCE. "Select it and copy" is two gestures on a telephone held
+ * in one hand, at the end of a session that has already gone wrong, by somebody who is
+ * doing us a favour. This leaves one.
+ */
+function selectTheReadout() {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents($("diag-body"));
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 $("diag-toggle").addEventListener("click", () => {
@@ -4837,6 +4880,9 @@ $("diag-toggle").addEventListener("click", () => {
     // answer would be the wrong one.
     servedBuild = { state: "unasked" };
     renderDiagnostics();
+    // The control says what it does again, not what it did last time. A panel reopened
+    // an hour later must not still be reading "Copied" over numbers nobody has copied.
+    sayOfTheCopy(copy.diagnostics.copy);
     askServedBuild().then(() => {
       if (!$("diag").classList.contains("hidden")) renderDiagnostics();
     });
@@ -4845,12 +4891,109 @@ $("diag-toggle").addEventListener("click", () => {
   text("diag-toggle", showing ? copy.diagnostics.hide : copy.diagnostics.show);
 });
 
+/**
+ * ⚠️ THE LABEL GOES BACK BY ITSELF, AND THE SECOND PRESS IS WHY. "Copied" that never
+ * expires answers the first press and then silently swallows every one after it — a
+ * person whose paste went into the wrong app presses again, reads the same word that
+ * was already there, and cannot tell whether anything happened. Read at fire time so
+ * the sentence comes back in whatever language `copy-language.js` has since installed.
+ *
+ * ⛔⛔ ONLY THE CONFIRMATION FADES, AND THE DIFFERENCE IS WHAT THE SENTENCE IS FOR.
+ * "Copied" reports something that is over. `copyManually` is an INSTRUCTION, standing
+ * above a selection this code has just made and is asking the person to act on — and
+ * four seconds is nothing to somebody hunting for a context menu on a telephone with
+ * one hand. Taking that sentence away on a timer would leave the selection lit and
+ * nothing on the screen saying why. It goes when the panel is next opened, which is
+ * the moment the person has moved on.
+ */
+let copyLabelTimer = null;
+function sayOfTheCopy(label) {
+  clearTimeout(copyLabelTimer);
+  text("diag-copy", label);
+  if (label === copy.diagnostics.copied) {
+    copyLabelTimer = setTimeout(() => text("diag-copy", copy.diagnostics.copy), 4000);
+  }
+}
+
+/**
+ * ⭐⭐ D-085's PANEL, MADE SENDABLE BY THE PERSON AND STILL NOT BY THE PRODUCT.
+ *
+ * ⚠️⚠️ IT COPIES `#diag-body` AND BUILDS NOTHING OF ITS OWN. The temptation here is a
+ * nicer report — a wall clock, a header naming the app, a field the panel does not
+ * show — and every one of those breaks the promise in `diagnostics.note`, which says
+ * this is on screen so you can read it. A clipboard holding more than the screen is a
+ * person sending what they never saw. If a fact is worth sending it becomes a ROW,
+ * where `renderDiagnostics` puts it in front of them first.
+ *
+ * ⚠️ THE REFUSAL PATH SELECTS RATHER THAN INSTRUCTS. Firefox and a locked-down
+ * configuration both refuse `writeText`, and this panel's whole reason for existing is
+ * an unreproduced Firefox failure — so the one browser most likely to need it is the
+ * one most likely to say no. "Select it and copy" is an instruction to do a fiddly
+ * thing on a telephone with one hand; selecting the nine lines for them leaves a
+ * single gesture, which is the difference between a report arriving and not.
+ */
+$("diag-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("diag-body").textContent);
+    sayOfTheCopy(copy.diagnostics.copied);
+  } catch {
+    selectTheReadout();
+    sayOfTheCopy(copy.diagnostics.copyManually);
+  }
+});
+
 // ---------------------------------------------------------------------- boot
 
 // §7.8 step 0. Armed at BOOT and not at the ending: a handler registered during an
 // ending is a handler the restored document may not have. A build measured to
 // return from the back/forward cache brings the whole heap with it.
 endings.armBfcacheDefence();
+
+/**
+ * ⛔⛔ AND IT RUNS BEFORE §0.2's STOP BELOW, WHICH IT DID NOT UNTIL 2026-09-02.
+ *
+ * The rule above says the language is settled BEFORE A SENTENCE IS WRITTEN INTO the
+ * document, and one screen was written before it: the feature-detection halt painted
+ * `copy.primitives.missing` while `copy.js` was still holding English, so the browser
+ * that cannot run this product at all was told so in the wrong language — on the one
+ * screen a person can never get past to find the language control.
+ *
+ * ⚠️ IT ALSO LEFT THE DIAGNOSTICS FOOTER BLANK, which is what turned a wording fault
+ * into a reporting one. `paintCopy` is what puts a label on "Show timings", and until
+ * it has run there is no control to press: the panel recording WHY the boot stopped
+ * sat under an unlabelled button on the only screen where it was the whole report.
+ *
+ * ➡️ **The earliest thing that can paint has to be later than the paint.** Moving
+ * these four lines up is the whole fix; nothing between here and where they used to
+ * be writes to the screen at all.
+ */
+/**
+ * D-159 — the language this document is in, settled before a sentence is written
+ * into it, and settled ONCE.
+ *
+ * ⚠️⚠️ THE ORDER OF THESE THREE LINES IS THE WHOLE OF IT. `setLanguage` rewrites the
+ * objects `ui/copy.js` exports; `paintCopy` reads them. Reversed, the page would be
+ * painted in English and then hold Finnish nobody had asked it to show — which is
+ * not a flash, it is a hundred and twenty sentences that never change.
+ *
+ * ⭐ `setLanguage("en")` IS FREE, and that matters because most visitors are English:
+ * `copy-language.js` returns at its own first line when the language it is asked for
+ * is the one it is already holding, so nothing is walked and nothing is copied.
+ *
+ * ⚠️⚠️ AND `langs.apply` IS CALLED HERE EVEN THOUGH `app/lang-boot.js` HAS ALREADY
+ * STAMPED THE SAME VALUE ON THE SAME ELEMENT. It is not a second opinion, it is the
+ * opposite: the sentences and the `<html lang>` attribute now come from ONE variable
+ * in one statement pair, so they cannot disagree. If the two implementations of the
+ * decision ever drifted apart — the thing `test/lang.mjs`'s 576 cases exist to catch
+ * — the failure without this line is a page whose sentences are Finnish and whose
+ * `lang` says English: a screen reader reading Finnish aloud in an English voice, and
+ * a browser offering to translate a page that is already translated. With this line
+ * the drift is a flash of the gloss instead, which is visible and harmless.
+ */
+const openedIn = langs.resolve();
+setLanguage(openedIn);
+langs.apply(openedIn);
+paintCopy();
 
 // ⚠️⚠️ §0.2's FEATURE DETECTION, FIRST, FOR THE REASON THE SECTION STATES ITSELF:
 // "The client MUST feature-detect at startup and fall back to a WASM
@@ -4873,9 +5016,30 @@ endings.armBfcacheDefence();
     // The algorithm name goes here rather than in the message: the person reading
     // it cannot act on "X25519", and the tester who can already looks at this line.
     text("failcode", primitives.reason ?? "");
+    // ⚠️⚠️ AND THE PANEL, FOR THE SAME REASON THE GHOST HALT ABOVE NOW DOES — but this
+    // is the one that matters to the friend round. An unusual browser on an old
+    // telephone is exactly who reaches this line, and this is the earliest and most
+    // final stop in the product: the person cannot get anywhere else to produce a
+    // second reading, so whatever the panel holds here is the whole report.
+    //
+    // ⚠️ A NAME, NEVER `primitives.reason`. That string is prose and quotes the
+    // browser's own exception back — `noteProblem`'s header is explicit that the panel
+    // records names and not messages, and the copy control means the panel is now a
+    // thing that gets SENT. The screen keeps the sentence; the row keeps the name.
+    //
+    // ⭐ The two shapes are worth telling apart: `fallback: false` here means
+    // `client/curve/` itself would not load (WASM refused, or the network went while
+    // it was being asked for), and `fallback: true` means it loaded and the browser
+    // still has neither. `which` carries what is actually missing.
+    const missing = new Error(`§0.2: ${primitives.reason ?? "a primitive is unavailable"}`);
+    missing.reason = primitives.fallback ? "curve_missing_after_fallback" : "curve_fallback_unloadable";
+    missing.which = [!primitives.x25519 && "x25519", !primitives.ed25519 && "ed25519"]
+      .filter(Boolean)
+      .join("+");
+    noteProblem(missing);
     // Nothing below this line may run. Every path in this app leads to a key
     // agreement or a signature, so there is no reduced mode to offer.
-    throw new Error(`§0.2: ${primitives.reason ?? "a primitive is unavailable"}`);
+    throw missing;
   }
 }
 
@@ -5065,35 +5229,9 @@ function paintCopy() {
   // D-085's timings.
   text("diag-toggle", copy.diagnostics.show);
   text("diag-note", copy.diagnostics.note);
+  text("diag-copy", copy.diagnostics.copy);
 }
 
-/**
- * D-159 — the language this document is in, settled before a sentence is written
- * into it, and settled ONCE.
- *
- * ⚠️⚠️ THE ORDER OF THESE THREE LINES IS THE WHOLE OF IT. `setLanguage` rewrites the
- * objects `ui/copy.js` exports; `paintCopy` reads them. Reversed, the page would be
- * painted in English and then hold Finnish nobody had asked it to show — which is
- * not a flash, it is a hundred and twenty sentences that never change.
- *
- * ⭐ `setLanguage("en")` IS FREE, and that matters because most visitors are English:
- * `copy-language.js` returns at its own first line when the language it is asked for
- * is the one it is already holding, so nothing is walked and nothing is copied.
- *
- * ⚠️⚠️ AND `langs.apply` IS CALLED HERE EVEN THOUGH `app/lang-boot.js` HAS ALREADY
- * STAMPED THE SAME VALUE ON THE SAME ELEMENT. It is not a second opinion, it is the
- * opposite: the sentences and the `<html lang>` attribute now come from ONE variable
- * in one statement pair, so they cannot disagree. If the two implementations of the
- * decision ever drifted apart — the thing `test/lang.mjs`'s 576 cases exist to catch
- * — the failure without this line is a page whose sentences are Finnish and whose
- * `lang` says English: a screen reader reading Finnish aloud in an English voice, and
- * a browser offering to translate a page that is already translated. With this line
- * the drift is a flash of the gloss instead, which is visible and harmless.
- */
-const openedIn = langs.resolve();
-setLanguage(openedIn);
-langs.apply(openedIn);
-paintCopy();
 
 // The link is held here and followed inside `withIdentity` — see the note there.
 // ⚠️ `takeLinkFromUrl` STRIPS AS IT READS (§2.1). It is not `location.href` any more,

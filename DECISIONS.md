@@ -5626,9 +5626,44 @@ from the accessibility tree as well as the page, which would make the live regio
 exact failure it exists to fix.
 
 **Words, in both languages:** *What haamu is* / *Mikä haamu on*; *Choose your KEY* / *Valitse
-AVAIMESI*; *Write down your KEY* / *Kirjoita AVAIMESI muistiin*; *Type your KEY back* / *Kirjoita
-AVAIMESI uudelleen*; *Open your conversations* / *Avaa keskustelusi*; *Your invite link* /
-*Kutsulinkkisi*; *Compare the six digits* / *Vertaa kuutta numeroa*.
+AVAIMESI*; *Write down your KEY* / *Kirjoita AVAIMESI muistiin*; ***Type your KEY again here* /
+*Kirjoita AVAIMESI uudelleen tähän***; *Open your conversations* / *Avaa keskustelusi*; *Your
+invite link* / *Kutsulinkkisi*; *Compare the six digits* / *Vertaa kuutta numeroa*.
+
+⭐⭐ **THE CONFIRM SCREEN IS HANNU'S WORDING AND IT IS THE BEST LINE OF THE SEVEN.** Mine was
+*"Type your KEY back"*, which names the screen and leaves the obvious question unanswered. His:
+*"as a regular user I would say this is more understandable and has more info and explains more
+if it would be: Type your KEY again here… after the user has written it in the personal notes."*
+➡️ **"here" is doing the work.** The eight words went onto paper a moment ago; the heading's job
+is to say that this is the *other* place they now go. ⭐ **A heading that only names the screen
+answers "what is this". A person on this particular screen is asking "why again".** Same
+correction, in Finnish, as *tähän*.
+
+⚠️ It repeats a word from the sentence below it (*here* / *tähän*). Left deliberately: the
+heading is the part read first and often alone, and a heading that leans on the paragraph under
+it to make sense is not doing its job.
+
+⭐⭐⭐ **AND THE OTHER HALF OF THE RULING, WHICH CORRECTS SOMETHING I HAD HALF-LEARNED FROM D-183.**
+I flagged the write-it-down screen as redundant — heading *"Write down your KEY"* over
+*"Write it down and keep it somewhere safe"*, and in Finnish two idioms for one act (*muistiin*
+in the heading, *ylös* in the body). Hannu's ruling: ***"very easy to understand and just the
+words I would use. I do not care if there is something said twice or so. That is very clear and
+easy to understand."*** **Kept exactly as written.**
+
+➡️ **D-183 CUT A SENTENCE BECAUSE IT DID NOT HELP — *"It does not help the user"* were his words —
+NOT BECAUSE IT REPEATED.** I had generalised his edit into a rule against redundancy, and that is
+not his rule. **His test is whether a person understands it immediately, and repetition costs
+nothing against that test.** ⚠️ The two rulings in D-187 point the same way and only look opposite:
+he ADDED words to the confirm screen (*again here*) and KEPT words on the write screen — both
+times choosing the version that explains more. **Economy is not one of his criteria. Clarity is
+the only one.**
+
+**Deployed 2026-09-01**, `lpm d14a288`, stamp `05712fc09854d99e`. Rollback `/opt/lpm/client.prev`
+= `lpm 6dc9620` / `c0d41bbd92c6a38c`, which is the build Hannu field-tested on Firefox. Client
+files only — no migration, no binary, no restart. Verified: `client/test.sh` **1624**, `e2e.sh`
+**293**, `run-all.sh` **39/39**, **62/62 byte-identical to haamu.app over HTTPS**,
+`probe-live-boot` and `probe-d154-live` clean, mirror `--verify` 61/61 and **1624 green from a
+fresh clone**.
 
 ⚠️ *Open your conversations* is deliberate under D-168: the product has no account, so the screen
 may not say *sign in*, and a person told they signed in goes looking for a way to sign out.

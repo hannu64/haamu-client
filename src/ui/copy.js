@@ -3358,10 +3358,42 @@ export const closing = {
 export const diagnostics = {
   label: "Timings on this device",
 
-  note: "Nothing here is sent anywhere. It is on screen so you can read it out.",
+  note:
+    "Nothing here is sent anywhere. It is on screen so you can read it out, or copy it and " +
+    "send it to us yourself.",
 
   show: "Show timings",
   hide: "Hide timings",
+
+  /**
+   * ⭐⭐ THE PANEL COULD BE READ AND COULD NOT BE SENT, WHICH FOR A TESTER ROUND IS THE
+   * SAME AS NOT EXISTING.
+   *
+   * D-085 put the numbers on a screen so a person could read them out, and that works
+   * when the person is Hannu: he is motivated, he is on the telephone, and he will
+   * transcribe `Mozilla/5.0 (Android 13; Mobile; rv:141.0)` by hand if he is asked to.
+   * ⚠️⚠️ A FRIEND WILL NOT. A friend who hits the Firefox unlock failure shrugs and
+   * stops using the app, and the one panel that could have said which failure it was
+   * dies on their screen. The whole of the next round is people who are doing us a
+   * favour, and a diagnosis that costs nine hand-copied lines will not be collected.
+   *
+   * ⚠️⚠️ THE CLIPBOARD CARRIES EXACTLY WHAT THE PANEL SHOWS AND NOT ONE FIELD MORE.
+   * The note above is a promise about a screen — it is here so you can read it out —
+   * and the moment the copy contained something the panel does not display, a person
+   * would be sending something they had not read. So the button copies `#diag-body`'s
+   * own text: no wall clock, no identifier, no second collection pass. Anything worth
+   * sending has to become a row on the panel first, where it can be read.
+   */
+  copy: "Copy timings",
+  copied: "Copied",
+
+  /**
+   * ⚠️ NOT `pairing.copyManually`, AND THE DIFFERENCE IS THE HANDLER'S DOING. §3's link
+   * says *"Select it and copy"* because nothing has been selected; here the refusal path
+   * selects the panel first, so the only thing left to ask for is the copy itself. Two
+   * sentences because two situations — the same word in both would be wrong in one.
+   */
+  copyManually: "Selected — copy it yourself",
 
   /**
    * D-085's build line, WHICH WAS TYPED IN `app/app.js` UNTIL 2026-08-24.

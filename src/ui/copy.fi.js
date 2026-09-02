@@ -99,9 +99,17 @@ export const FI = {
 
   // ── diagnostics
   "diagnostics.label": "Ajat tällä laitteella",
-  "diagnostics.note": "Mitään tästä ei lähetetä minnekään. Se on ruudulla, jotta voit lukea sen ääneen.",
+  "diagnostics.note":
+    "Mitään tästä ei lähetetä minnekään. Se on ruudulla, jotta voit lukea sen ääneen tai " +
+    "kopioida sen ja lähettää sen meille itse.",
   "diagnostics.show": "Näytä ajat",
   "diagnostics.hide": "Piilota ajat",
+  // ⚠️ THE THREE VERBS MATCH THE THREE ABOVE THEM. `Näytä` / `Piilota` / `Kopioi` are one
+  // vocabulary on one panel, and `ajat` is the same noun in all three — the English row
+  // labels under them stay English by the decision `test/copy.mjs` records.
+  "diagnostics.copy": "Kopioi ajat",
+  "diagnostics.copied": "Kopioitu",
+  "diagnostics.copyManually": "Valittu — kopioi se itse",
   "diagnostics.notDerived": "ei vielä johdettu",
 
   // ── ending
