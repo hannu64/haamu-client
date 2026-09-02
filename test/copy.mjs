@@ -1232,10 +1232,15 @@ check(
   // The two thresholds are §4.3's, in milliseconds, and `copy.js` has a separate
   // helper for them precisely because passing them to the seconds one produced
   // "Locked after 10000 minutes without use" on this suite's first run.
+  //
+  // ⚠️ THE NOUN IS PART OF WHAT IS CHECKED SINCE D-190, and the digit alone was not
+  // enough. Both thresholds moved to 24 hours; a sentence still reading "24 minutes"
+  // would have contained `String(IDLE_MS / 3600000)` and passed. Pinning the digit AND
+  // the unit together is the only form of this check that fails when a unit goes stale.
   const idle = copy.lock.coveredIdle;
   const blurred = copy.lock.coveredBlurred;
-  check(`§4.3's idle threshold is ${IDLE_MS / 60000} minutes`, idle.includes(String(IDLE_MS / 60000)), idle);
-  check(`§4.3's blur threshold is ${BLUR_MS / 60000} minute`, blurred.includes(String(BLUR_MS / 60000)), blurred);
+  check(`§4.3's idle threshold is ${IDLE_MS / 3600000} hours`, idle.includes(copy.plural(IDLE_MS / 3600000, "hour")), idle);
+  check(`§4.3's blur threshold is ${BLUR_MS / 3600000} hours`, blurred.includes(copy.plural(BLUR_MS / 3600000, "hour")), blurred);
 }
 
 // ==================================================== §0.2's one sentence to a person
@@ -1616,11 +1621,26 @@ section("§4.3 — the thresholds, and the sentences that carry them");
 {
   const blurred = copy.lock.blurred;
   check(
-    `⭐ the blur sentence agrees with the constant, plural and all (${BLUR_MS / 60000})`,
-    blurred.includes(copy.plural(BLUR_MS / 60000, "minute")),
+    `⭐ the blur sentence agrees with the constant, plural and all (${BLUR_MS / 3600000})`,
+    blurred.includes(copy.plural(BLUR_MS / 3600000, "hour")),
     blurred
   );
-  check(`§4.3's idle threshold is ${IDLE_MS / 60000} minutes`, copy.lock.idle.includes(String(IDLE_MS / 60000)), copy.lock.idle);
+  check(
+    `⭐ and so does the idle sentence, which carried a bare noun until D-190 (${IDLE_MS / 3600000})`,
+    copy.lock.idle.includes(copy.plural(IDLE_MS / 3600000, "hour")),
+    copy.lock.idle
+  );
+
+  // ⭐⭐ D-190's OWN DEFECT CLASS, ASSERTED DIRECTLY: a threshold that changes magnitude
+  // leaves the UNIT behind, and the arithmetic goes on being right the whole time. The
+  // four sentences above are the only ones that state either threshold, so the unit they
+  // no longer use may not appear in any of them.
+  {
+    const carrying = ["idle", "blurred", "coveredIdle", "coveredBlurred"].filter((k) =>
+      /\bminutes?\b/.test(copy.lock[k])
+    );
+    equal("⛔ no §4.3 sentence still states a unit its constant has left behind", carrying.join(", "), "");
+  }
 }
 
 /**
@@ -1661,7 +1681,7 @@ section("§4.3 — the thresholds, and the sentences that carry them");
   // idle for 30 minutes. A duration in this sentence is that defect, whatever its number.
   check(
     "⛔ the manual lock explains no elapsed time, because none elapsed",
-    !/\d/.test(copy.lock.manual) && !/minute|without use|background/i.test(copy.lock.manual),
+    !/\d/.test(copy.lock.manual) && !/minute|hour|without use|background/i.test(copy.lock.manual),
     copy.lock.manual
   );
 

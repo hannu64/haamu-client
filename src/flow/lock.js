@@ -48,11 +48,35 @@
  * both jobs. `ui/copy.js` interpolates both numbers, so the sentences follow by
  * construction; the *reason* they are what they are has no such mechanism and
  * lives in §4.3.
+ *
+ * ⚠️⚠️ BOTH ARE 24 HOURS FOR THE FRIEND TEST, AND THEY ARE EQUAL ON PURPOSE (D-190,
+ * 2026-09-02). D-082 moved the blur threshold once already, for this exact reason and
+ * one step short: five minutes is longer than pasting a link takes, and shorter than
+ * the rest of what a tester does — put the phone down, answer something else, come
+ * back after lunch. Every one of those cost a 128 MiB Argon2id derivation, and a round
+ * spent retyping eight words measures the lock rather than the product.
+ *
+ * ⭐ 24 hours is not an arbitrary round number here: §6.6 deletes a message at 24 hours,
+ * so this is exactly as long as anything it protects can live. A device that remembered
+ * the phrase longer would be holding a key to an empty store.
+ *
+ * ⛔ WHAT THIS COSTS, SAID PLAINLY. §4.3's lock defends against somebody picking up an
+ * unlocked device, and for the length of the test that defence is withdrawn: a phone
+ * left on a table with this in a background tab opens on a touch for a day. That is a
+ * deliberate trade for a tester round among friends and it is NOT the shipping value —
+ * see §4.3, which carries the same sentence and the way back.
  */
-export const IDLE_MS = 30 * 60 * 1000;
+export const IDLE_MS = 24 * 60 * 60 * 1000;
 
-/** §4.3: the tab-blur threshold. See above — it was 60 seconds until D-082. */
-export const BLUR_MS = 5 * 60 * 1000;
+/**
+ * §4.3: the tab-blur threshold. It was 60 seconds until D-082 and 5 minutes until D-190.
+ *
+ * ⭐ IT IS THE ONE THAT ACTUALLY BIT, which is why raising the idle threshold alone
+ * would have changed nothing a tester notices. §3's central flow leaves this app to
+ * send the link, and a phone that leaves this app makes the document hidden — so the
+ * rule that fires on a tester is this one, on the path D-082 already identified.
+ */
+export const BLUR_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How often the timer looks, when nothing else has happened.
@@ -78,7 +102,7 @@ export const BLURRED = "blurred";
  * here and locking somebody "because they asked" when they did not.
  *
  * ⭐ It exists at all because the reason is what `app.js` puts on the lock screen, and
- * *"locked after 30 minutes without use"* under a button pressed one second ago is a
+ * *"locked after 24 hours without use"* under a button pressed one second ago is a
  * false sentence — see `copy.lock.manual`.
  */
 export const MANUAL = "manual";

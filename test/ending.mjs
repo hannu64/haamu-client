@@ -379,16 +379,24 @@ section("§4.3 — when a session locks, and why the reason is shown");
     "null"
   );
   equal(
-    `${lock.IDLE_MS / 60000} minutes without use locks it`,
+    `${lock.IDLE_MS / 3600000} hours without use locks it`,
     lock.dueToLock({ lastActivity: t0, hiddenSince: null, now: t0 + lock.IDLE_MS }),
     lock.IDLE
   );
   equal(
-    `and ${lock.BLUR_MS / 1000} seconds in the background locks it sooner`,
+    `and ${lock.BLUR_MS / 3600000} hours in the background locks it too`,
     lock.dueToLock({ lastActivity: t0, hiddenSince: t0, now: t0 + lock.BLUR_MS }),
     lock.BLURRED
   );
-  check("⚠️ the blur threshold is the shorter of the two, or it would never fire", lock.BLUR_MS < lock.IDLE_MS);
+  // ⚠️ THE INVARIANT IS "NEVER THE LONGER", AND IT WAS WRITTEN AS "STRICTLY SHORTER"
+  // UNTIL D-190 SET BOTH TO 24 HOURS. The reason attached to it — *or it would never
+  // fire* — is only true of the `>` case: `dueToLock` tests blur FIRST, and a hidden tab
+  // is by construction also an idle one, so at equality BLURRED still wins the tie and is
+  // still returned. Longer is what makes it unreachable, because then the idle rule
+  // always concludes first. ⭐ So this is the guard stating the property it always meant,
+  // not a guard relaxed to admit a change: reachability itself is asserted directly by
+  // the two cases above, which return IDLE and BLURRED at these very values.
+  check("⚠️ the blur threshold is never the longer of the two, or it could never fire", lock.BLUR_MS <= lock.IDLE_MS);
   equal(
     "⭐ being in the background is not enough on its own",
     String(lock.dueToLock({ lastActivity: t0, hiddenSince: t0, now: t0 + lock.BLUR_MS - 1 })),

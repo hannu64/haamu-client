@@ -22,7 +22,7 @@
  * ⚠️⚠️ THE NUMBERS ARE TYPED HERE, AND THAT IS DELIBERATE — READ THIS BEFORE "FIXING" IT.
  * Every number in `copy.js` is interpolated from the constant it describes, because prose
  * that describes a constant is checked by nothing. This file does the opposite: *"7
- * päivää"*, *"16 merkkiä"*, *"30 minuutin"* are written out. The reason is that the same
+ * päivää"*, *"16 merkkiä"*, *"24 tunnin"* are written out. The reason is that the same
  * guarantee is available here more cheaply and in a form a Finn can read. **The gate
  * requires that every number in a Finnish sentence agrees with the number in the English
  * sentence at the same path** — normalising time units first, because Finnish says *24 h*
@@ -190,12 +190,12 @@ export const FI = {
   // salasanaa* — rather than *pyydä*, which is a person asking a person.
   "lock.control": "Lukitse ja kysy AVAINTANI uudelleen",
   "lock.controlNote": "Mitään ei poisteta. Viestisi säilyvät tässä selaimessa ja aukeavat uudelleen, kun kirjoitat AVAIMESI.",
-  "lock.idle": "Lukittu 30 minuutin käyttämättömyyden jälkeen. Kirjoita AVAIMESI jatkaaksesi.",
-  "lock.blurred": "Lukittu, koska tämä oli taustalla yli 5 minuuttia. Kirjoita AVAIMESI jatkaaksesi.",
+  "lock.idle": "Lukittu 24 tunnin käyttämättömyyden jälkeen. Kirjoita AVAIMESI jatkaaksesi.",
+  "lock.blurred": "Lukittu, koska tämä oli taustalla yli 24 tuntia. Kirjoita AVAIMESI jatkaaksesi.",
   "lock.cost": "Uudelleen avaaminen vie hetken.",
   "lock.manual": "Lukittu. Kirjoita AVAIMESI jatkaaksesi.",
-  "lock.coveredIdle": "Peitetty 30 minuutin käyttämättömyyden jälkeen.",
-  "lock.coveredBlurred": "Peitetty, koska tämä oli taustalla yli 5 minuuttia.",
+  "lock.coveredIdle": "Peitetty 24 tunnin käyttämättömyyden jälkeen.",
+  "lock.coveredBlurred": "Peitetty, koska tämä oli taustalla yli 24 tuntia.",
   "lock.coveredWhat": "Tämä vain piilottaa sen. Kuka tahansa tätä laitetta käyttävä voi näyttää sen uudelleen — tässä tilassa ei ole AVAINTA suojaamassa keskustelua.",
   "lock.show": "Näytä keskustelu",
 

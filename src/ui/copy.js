@@ -83,14 +83,21 @@ const days = (seconds) => Math.round(seconds / 86400);
 const MAILBOX_LIFE_S = 2 * EPOCH_SECONDS;
 
 /**
- * ⚠️ SEPARATE FROM `minutes` BECAUSE THE UNITS DIFFER AND NOTHING ELSE WOULD SAY
+ * ⚠️ SEPARATE FROM `hours` BECAUSE THE UNITS DIFFER AND NOTHING ELSE WOULD SAY
  * SO. §4.3's thresholds are milliseconds — they are compared against `Date.now()`
  * — while §3's and §6's are seconds. Passing one to the other's helper produced
  * "Locked after 10000 minutes without use", which `test/copy.mjs` caught on the
  * first run. That is the check earning its keep on a mistake nobody would find by
  * reading, and the reason the two helpers are not one clever one.
+ *
+ * ⚠️ IT ROUNDED TO MINUTES UNTIL D-190 MOVED BOTH THRESHOLDS TO 24 HOURS, and the
+ * rename is the point rather than tidying: the same function rounding to minutes would
+ * have gone on being correct and put *"Locked after 1440 minutes without use"* on a
+ * screen. ➡️ **A helper names a UNIT, so it stops being the right helper when the
+ * constant changes magnitude — and nothing in a build notices that, because the
+ * arithmetic is still right.** Same class as the one above it, one size up.
  */
-const minutesFromMs = (ms) => Math.round(ms / 60000);
+const hoursFromMs = (ms) => Math.round(ms / 3600000);
 
 /**
  * A quantity reaches a person as a DIGIT. (D-153)
@@ -2016,12 +2023,16 @@ export const lock = {
   // ⚠️ §4.3, and it must not be sold as more than it is: while the keys are in
   // memory a lock is a UI overlay that does not resist devtools or an XSS
   // foothold (§11). What it defends against is somebody picking up the device.
-  idle: `Locked after ${minutesFromMs(IDLE_MS)} minutes without use. Type your KEY to carry on.`,
+  idle: `Locked after ${plural(hoursFromMs(IDLE_MS), "hour")} without use. Type your KEY to carry on.`,
 
   // ⚠️ THE PLURAL IS COMPUTED, because D-082 moved this threshold from one minute
   // to five and the hardcoded "minute" would have survived the change silently —
   // the exact class `test/copy.mjs` exists for, one grammatical step down.
-  blurred: `Locked because this was in the background for more than ${plural(minutesFromMs(BLUR_MS), "minute")}. Type your KEY to carry on.`,
+  // ⭐ D-190 MOVED IT AGAIN, TO 24 HOURS, AND THE NOUN MOVED WITH IT. `idle` above was
+  // the one still carrying a bare "minutes"; it now computes its plural too, because the
+  // argument for doing so was never about the plural — it is that the sentence must not
+  // be able to state a unit the constant has left behind.
+  blurred: `Locked because this was in the background for more than ${plural(hoursFromMs(BLUR_MS), "hour")}. Type your KEY to carry on.`,
 
   // ⚠️ It costs a full key derivation, and saying so beforehand is better than a
   // screen that looks frozen — §7.2 asks for 128 MiB of Argon2id on every unlock
@@ -2034,7 +2045,7 @@ export const lock = {
   // ⚠️ THE THIRD REASON, AND IT IS THE ONE THAT NEEDS NO EXPLANATION. `idle` and
   // `blurred` exist because something happened TO the person and they are owed the
   // reason; this one happened because they pressed a button one second ago. Saying
-  // "locked after 30 minutes without use" here would be false, and explaining a
+  // "locked after 24 hours without use" here would be false, and explaining a
   // deliberate act back to the person who performed it is noise.
   manual: "Locked. Type your KEY to carry on.",
 
@@ -2047,9 +2058,9 @@ export const lock = {
   // the wording must keep the two apart: a Kept lock costs an Argon2id to lift, and
   // a cover costs a click. Claiming the first while doing the second is exactly the
   // kind of sentence §7.6 says has to be exact.
-  coveredIdle: `Covered after ${minutesFromMs(IDLE_MS)} minutes without use.`,
+  coveredIdle: `Covered after ${plural(hoursFromMs(IDLE_MS), "hour")} without use.`,
 
-  coveredBlurred: `Covered because this was in the background for more than ${plural(minutesFromMs(BLUR_MS), "minute")}.`,
+  coveredBlurred: `Covered because this was in the background for more than ${plural(hoursFromMs(BLUR_MS), "hour")}.`,
 
   // ⚠⚠ D-148 REMOVED THE LAST SENTENCE, AND THE REASON IS THE BEST KIND — IT IS ABOUT
   // WHO IS HOLDING THE DEVICE. It read *"If the device is not in your hands, end the

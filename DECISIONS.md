@@ -5546,6 +5546,216 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-190. ⭐⭐⭐ The lock the testers would have met is the one D-082 already fixed once — and raising the number it named would have changed nothing
+
+**2026-09-02.** Hannu, one friend into the test round: *"I noticed that currently the 8-words
+get removed from the browser quite soon after inactivity. Is that 1 hours or how much? I think
+my desktop Chrome browser lost the 8 words even faster than that."*
+
+**It was never one number, and neither of them was an hour.** §4.3 has two: `IDLE_MS`, 30
+minutes with no touch at all, and `BLUR_MS`, **5 minutes with the tab in the background**. His
+desktop lost it faster because on a desktop the second rule is the one that runs — switching
+tabs or minimising a window makes the document hidden, so a person who tabs away is on the
+five-minute clock and not the thirty-minute one. ⭐ **He had measured the difference between
+the two rules without knowing there were two**, and reported it as one number behaving oddly.
+
+Both are now **24 hours**, for the length of the tester round.
+
+⭐⭐⭐ **THE FINDING IS THAT THE OBVIOUS CHANGE WAS THE USELESS ONE.** The number he could see
+was the idle one; the request was to raise "the time"; and raising `IDLE_MS` alone would have
+shipped, tested green, read correctly on the screen and left his testers complaining in exactly
+the same words. §3's central flow **leaves this app to send the link** — that is what
+link-paired means — and a phone that leaves this app makes the document hidden. So on the one
+path every single user must walk, the rule that fires is the five-minute one, and the
+thirty-minute one is nearly unreachable. ➡️ **When two rules can produce one symptom, the one
+the user can name is not evidence about which one fired.** The reported number and the
+responsible number were different numbers.
+
+⚠️⚠️ **AND D-082 HAD ALREADY FOUND THIS, AT 60 SECONDS, AND STOPPED ONE STEP SHORT.** Its own
+words: a threshold measured against *"how long before an unattended device is a risk"* had never
+been measured against *"how long the product's own primary task takes."* It then moved the blur
+threshold to five minutes — enough for pasting a link, which is the task it had just measured,
+and not enough for anything a tester does *between* two uses: put the phone down, answer
+something else, come back after lunch. Each one cost a 128 MiB Argon2id derivation. ⭐ **The
+correction was right and the new value was still derived from the same too-narrow question**,
+which is the more useful half of this: a fix can adopt a finding and keep the frame that caused
+it.
+
+**Equal on purpose, and equal is the boundary rather than a collapse.** `dueToLock` tests blur
+first and a hidden tab is by construction also an idle one, so BLURRED still wins the tie and
+both reasons stay reachable. ⚠️ `test/ending.mjs` asserted `BLUR_MS < IDLE_MS` *"or it would
+never fire"* — and that reason is only true of the `>` case, where the idle rule always
+concludes first. The guard now says **never the longer**, which is the property it always meant;
+the mutation run proved it, and proved the old strictness was not what carried reachability:
+at 25 hours the suite failed both this check *and* "being in the background is not enough on its
+own", which is reachability failing directly.
+
+⭐ **24 hours is not a round number chosen for being round.** §6.6 deletes a message at 24
+hours, so the device remembers the phrase for exactly as long as anything the phrase protects
+can live. A longer window would hold a key to an empty store.
+
+⚠️⚠️ **THE HELPER WAS NAMED AFTER A UNIT, AND ARITHMETIC DOES NOT NOTICE THAT.**
+`minutesFromMs` would have gone on being perfectly correct and put *"Locked after 1440 minutes
+without use"* on a screen. It is now `hoursFromMs`, and the four sentences interpolate through
+`plural` — including `idle`, which had carried a bare "minutes" because at 30 the plural was
+never in doubt. ➡️ **A quantity helper stops being the right helper when the constant changes
+magnitude, and nothing in a build can see it, because nothing computed the wrong answer.** The
+existing checks could not see it either: they asserted the digit appeared, and a sentence
+reading *"24 minutes"* contains `String(IDLE_MS / 3600000)`. They now pin the digit **and** the
+noun, and a new check refuses any §4.3 sentence that still states a unit its constant has left
+behind.
+
+⛔ **WHAT IT COSTS, RECORDED RATHER THAN GLOSSED.** §4.3 says a lock defends against somebody
+picking up an unlocked device, and for the length of the round that defence is withdrawn: a
+phone left on a table with this in a background tab opens on a touch for a day. That is a
+deliberate trade for a test among friends, not a discovery that the lock was worth less than it
+looked, and the way back is one edit to two constants — every sentence in both languages follows
+them.
+
+⚠️⚠️ **AND THE LARGER HALF OF HIS COMPLAINT IS NOT FIXED BY THIS, WHICH HE HAD TO BE TOLD
+BEFORE BRIEFING ANYONE.** The derived keys are memory-only and §7.5's unlock record does not
+exist yet, so a reload, a closed tab, or a phone browser evicting the page still costs the eight
+words however these constants read. **Raising them removes the lockouts the product inflicts on
+itself while the page is alive; it does not make an unlock survive the page.** ➡️ **A timeout
+change cannot buy persistence, and the two are easy to confuse from the outside because they
+produce the identical symptom** — the app asking for the phrase again. #3's quick re-entry cover
+and §7.5's PRF are the items that reach the other half, and neither is built.
+
+### D-188. ⭐⭐⭐ D-085's panel can be SENT — and the rule that costs is that the clipboard may hold nothing the screen does not
+
+**2026-09-02.** The first item on Hannu's agreed order, and it exists for one reason: the friend
+round. D-085 put the numbers on a screen *"so you can read them out"*, and that is enough when
+the reader is Hannu — he is motivated, he is on the telephone, and he will transcribe
+`Mozilla/5.0 (Android 13; Mobile; rv:141.0)` by hand if he is asked to. ⚠️⚠️ **A FRIEND WILL
+NOT.** Somebody doing us a favour who hits the unreproduced Firefox unlock failure shrugs and
+stops using the app, and the nine rows that could have said *which* failure it was die on their
+screen. **A diagnosis that costs nine hand-copied lines will not be collected.**
+
+**What shipped.** A **Copy timings** control under the readout, in the toggle's own vocabulary
+(`Show timings` / `Hide timings` / `Copy timings`; `Näytä ajat` / `Piilota ajat` / `Kopioi ajat`).
+`diagnostics.note` gains one clause: *"…so you can read it out, **or copy it and send it to us
+yourself**."* The product still sends nothing; the person may.
+
+#### ⛔⛔ The rule: the clipboard carries exactly what the panel shows, and not one field more
+
+The obvious improvement is a better report — a wall clock, a header naming the app, a build
+identifier the panel does not display. **Every one of those is forbidden here**, and the reason
+is in the sentence directly above the control. `diagnostics.note` is a promise about a **screen**:
+it is on screen *so you can read it*. The moment the clipboard holds something the panel does not
+show, the person is **sending something they never saw** — which is the same fault as telemetry,
+arrived at by a friendlier road.
+
+➡️ **A FACT WORTH SENDING HAS TO BECOME A ROW FIRST**, where `renderDiagnostics` puts it in front
+of them. That is the whole cost of the rule and it is the right cost: it makes the panel the
+single place where "what we may learn" is decided, and it keeps that decision visible to the
+person deciding it.
+
+⚠️ **This is also why D-189's `problem` row may hold a NAME and never prose.** The row was always
+a name by D-085's own reasoning — `noteProblem` records `err.name`, never `err.message`, because
+the messages cite `PROTOCOL.md §0.2` and `client/curve/README.md`. That was a rule about a
+**screen**. It is now a rule about a **transmission**, which is strictly stronger, and the
+comment on `noteProblem` says so.
+
+#### The refusal path selects rather than instructs
+
+Firefox and hardened configurations refuse `navigator.clipboard.writeText`, so **the browser most
+likely to need this control is the one most likely to say no** — and an unreproduced Firefox
+failure is the reason the panel exists at all. §3's link says *"Select it and copy"* because
+nothing has been selected. Here the handler selects the readout first, so the only thing left to
+ask for is the copy: **"Selected — copy it yourself"** / *"Valittu — kopioi se itse"*. Two
+gestures become one, on a telephone held in one hand at the end of a session that has already
+gone wrong.
+
+⚠️ **Only the confirmation expires.** "Copied" reverts after four seconds so a second press can
+be felt — a label that never changes back answers the first press and silently swallows every one
+after it. `copyManually` does **not** revert, because it is an INSTRUCTION standing over a live
+selection, and four seconds is nothing to somebody hunting for a context menu. It clears when the
+panel is next opened, which is the moment the person has moved on. ➡️ **A confirmation reports
+something that is over; an instruction is still being acted on. They may not share a timer.**
+
+#### ⛔⛔ And the selection was destroyed three seconds after the code made it
+
+Found by `probe-diag-copy.mjs` pressing the button, not by reading the source. The panel is drawn
+**twice on every open**: once immediately, and again when `askServedBuild` answers — up to four
+seconds later, and it takes the **full four on a sick network, which is the network this panel is
+opened on**. Writing `textContent` destroys every node a selection is anchored in, so the second
+draw silently took the selection away and left *"Selected — copy it yourself"* standing over
+nothing.
+
+➡️ **A SCREEN THAT TELLS SOMEBODY TO ACT ON WHAT THEY CAN SEE OWES THEM THE SEEING FOR AS LONG AS
+THE SENTENCE IS UP.** `renderDiagnostics` now restores it, and **only when the selection was the
+whole readout** — that is the one this code made; a person who has picked out a single row picked
+it on purpose and it is not ours to widen.
+
+⭐ **The probe had to be built to catch it.** On this server the second draw lands in single-digit
+milliseconds, so a probe that simply clicked and looked would sail past the bug every time. It
+**holds the `/app/build.js` fetch open on purpose**, which puts the click inside the gap where a
+person on a bad network already is. It also **seeds the clipboard with a sentinel first**: a read
+that returns the panel's text because the panel's text was already there is not a reading of
+anything.
+
+⚠️ **The instrument itself reported a fault that was not one.** Chrome refused `writeText` under
+puppeteer's `overridePermissions` — under a real click, on a focused document, in a secure
+context. `Browser.grantPermissions` over CDP with the protocol's own spellings
+(`clipboardReadWrite`, `clipboardSanitizedWrite`) is what actually lands. ➡️ **Before believing a
+denial, check that the instrument was ever granted the thing it reports denied.**
+
+### D-189. ⛔⛔⛔⛔ §0.2's stop was in the wrong language, said nothing about itself, and could not be opened — three faults, one cause: it painted before the paint
+
+**2026-09-02.** Once D-188 made the panel something a person **sends**, the question stopped
+being *"can this be read?"* and became *"does it hold anything?"* — and on the two screens a
+person cannot get past, the answer was **`problem none`**.
+
+**Ghost mode, on a browser that refuses storage.** `haltWith` put the refusal in `#failcode`,
+which is on the SCREEN — and the copy control takes `#diag-body` and nothing else. It could be
+read and it could not be sent, on a dead-end screen with no later moment at which the panel could
+learn about it. `noteProblem` now sees it: `SecurityError ×1, 0 s ago`.
+
+**§0.2's feature-detection stop was worse on three counts, and it is the one that matters** — an
+unusual browser on an old telephone is exactly who reaches it, and it is the earliest and most
+final screen in the product.
+
+1. **The row said nothing.** It now carries a name and never `primitives.reason`, which is prose
+   and quotes the browser's own exception back (D-188's rule). The screen keeps the sentence, the
+   row keeps the name. The two shapes are worth telling apart and are:
+   `curve_fallback_unloadable` — `client/curve/` itself would not load (WASM refused, or the
+   network went while it was being asked for) — and `curve_missing_after_fallback` — it loaded
+   and the browser still has neither. `which` carries what is actually missing:
+   `curve_fallback_unloadable/x25519+ed25519`.
+
+2. ⭐⭐⭐⭐⭐ **AN UNLABELLED BUTTON IS UNCLICKABLE, NOT MERELY UNREADABLE.** `paintCopy()` had
+   not run when this screen was painted, so `#diag-toggle` had no text — and a `.linkish` button
+   with no text has **no box**. Puppeteer's own answer when `probe-dead-end-report.mjs` pressed
+   it against the old build: *"Node is either not clickable or not an Element."* The panel
+   recording why the boot stopped sat under a control that could not be pressed. ➡️ **"Unlabelled"
+   is a RENDERING fact before it is an accessibility one** — D-186 and D-187 measured names on
+   controls that existed as boxes; this one had no box to name.
+
+3. **The screen was English on a Finnish browser.** `setLanguage` ran *after* it, while
+   `app/lang-boot.js` had already stamped `lang="fi"` on the document — **exactly** the drift the
+   comment on those four lines warns about: *"a screen reader reading Finnish aloud in an English
+   voice."* The browser that cannot run this product at all was told so in the wrong language, on
+   the one screen a person can never get past to reach the language control.
+
+**The fix for 2 and 3 is one move.** The comment on those lines already stated the rule — *"the
+language this document is in, settled **before a sentence is written into it**, and settled
+ONCE"* — and one screen was written before it. The block now runs **before the earliest thing
+that can paint**. Nothing between its old home and its new one writes to the screen at all.
+
+➡️ **THE RULE WAS CORRECT, WRITTEN DOWN, AND ONE LINE ABOVE THE ONLY CODE THAT BROKE IT.** Same
+shape as D-076 and as §6's header block: a normative statement whose exception is not visible
+from where the statement lives. ⚠️ And the exception was a **hard stop** — the code path least
+likely to be exercised, most likely to be read rather than run, and the only one where a person
+has no second chance to produce a reading.
+
+⚠️ `noteProblem`'s own note said `which` *"is `hwm` or `sent`"*. That stopped being true here and
+was corrected in the same commit — the field is whatever narrows the reason, and the rule that
+matters is the one under it.
+
+**Both probes were proved able to fail** against the previous commit — `probe-diag-copy` 1 of 22,
+`probe-dead-end-report` 7 of 12 — before either was believed. Both are in `run-all.sh`; the
+standing sweep is 41.
+
 ### D-187. ⭐⭐⭐ A transcript of what the product sounds like — and the two things it found
 
 **2026-09-01.** The job Hannu agreed to and parked: *"That 'transcript of what a blind person

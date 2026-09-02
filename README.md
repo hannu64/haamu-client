@@ -363,6 +363,9 @@ by reading — see PROTOCOL.md 0.9.0 and D-079/D-081. What they left in this dir
   honest answer rather than a polite refusal.
 - **`flow/lock.js`'s thresholds are testing-period values** — 30 minutes idle, 5
   minutes blur (D-082). Not measurements. `ARCHITECTURE.md` §4.3 says why.
+  ⭐ **Both are 24 hours as of D-190** (2026-09-02), for the tester round: the same
+  argument D-082 made, one step further, plus the finding that the blur rule is the
+  one that actually fires on a phone. §4.3 carries the current pair and the way back.
 
 ### What the second sitting changed (step 16, 2026-08-13)
 
