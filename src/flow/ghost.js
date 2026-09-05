@@ -58,6 +58,25 @@ export const CHANNEL_KEY = "channel";
 export const LOG_PREFIX = "log.";
 
 /**
+ * §4.3's cover PIN, in the mode whose whole storage rule is one sentence.
+ *
+ * ⚠️⚠️ §7.6 IS NORMATIVE HERE AND THIS OBEYS IT RATHER THAN MAKING AN EXCEPTION:
+ * *"everything §7.8 calls CONVERSATION STATE lives in `sessionStorage` and nowhere
+ * else."* A PIN chosen for this tab belongs to this tab, dies with it, and never
+ * reaches IndexedDB — which is also the only place it COULD go in a mode that opens no
+ * database at all.
+ *
+ * ⭐ IT IS NOT A SECRET THIS AREA HAS TO PROTECT, and that is worth stating rather than
+ * assuming. Anybody who can read `lpm.ghost.pin` can read `lpm.ghost.channel` beside it,
+ * and the channel root IS the conversation. The record is a salted hash all the same, so
+ * that a PIN reused from somewhere that matters is not handed over in the clear.
+ *
+ * ⚠️ A DUPLICATED TAB IS HANDED A COPY OF THIS, LIKE EVERYTHING ELSE HERE. That is
+ * correct: it is the same person, on the same device, in the same conversation.
+ */
+export const PIN_KEY = "pin";
+
+/**
  * A Ghost session ran out of room in `sessionStorage`.
  *
  * ⚠️ IT IS REPORTABLE AND MUST NOT BE SWALLOWED. Ghost mode's entire store is one

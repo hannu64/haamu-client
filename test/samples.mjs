@@ -39,6 +39,16 @@ export const SAMPLES = {
   "diagnostics.build.current": [["9b61457b8a287bd1"]],
   "diagnostics.build.stale": [["9b61457b8a287bd1", "d3cbcfdaee75cd15"]],
 
+  // ⚠️⚠️ §4.3's SECOND TIER, AND BOTH BRANCHES OF THE COUNTDOWN ARE HERE ON PURPOSE.
+  // `wrongLeft` reads "1 more try" at one and "3 more tries" at three — the first
+  // irregular plural in the product, which `copy.plural` cannot build and which a single
+  // sample would have hidden from every prose rule and from the translation sheet.
+  "pin.wrongLeft": [[3], [1]],
+  // ⭐ TWO POSITIONS RATHER THAN ONE, because the sentence a person hears at the last box
+  // is the one that tells them how many are left, and a sample that never reaches it is
+  // D-151's missing home again.
+  "pin.digit": [[1, 8], [8, 8]],
+
   "chat.unreadable": [["a reason"]],
   "chat.reconnect.some": [[1], [3]],
   "deletion.confirmOne": [["Maija"]],

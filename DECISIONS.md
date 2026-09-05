@@ -5546,6 +5546,190 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-195. ⭐⭐⭐⭐ §4.3's second tier is built — and the sentence that sold it was one the cover could never keep
+
+**2026-09-05, agreed item #3.** The build is the two-tier lock `ARCHITECTURE.md` §4.3 has
+named as its end state since D-082: a **cover** at 30 minutes idle and 5 minutes in the
+background, lifted by a **PIN** of 6 to 8 digits, standing in front of the **lock** at 24
+hours that still drops the derived keys and still costs the eight words.
+
+⛔⛔⛔ **THE FIRST FINDING WAS THAT §4.3 PROMISED SOMETHING THE COVER CANNOT DELIVER, AND
+IT HAD BEEN CARRIED FORWARD INTO FOUR MEMORY FILES AND INTO THE ORDER OF THE WORK.** The
+section read: *"Raising them removes the lockouts this product inflicts on itself; it does
+not make an unlock survive the page. That is what the quick re-entry cover and §7.5 are
+for."* **The cover cannot make an unlock survive the page.** Surviving a reload means
+storing the derived keys wrapped under something, and a short PIN is exactly the wrapper
+`PROTOCOL.md` §7.5 declines — *"it costs exactly the convenience §7.5 exists to buy"* —
+which is also the objection that killed the core of the outside Grok/Kimi design brought in
+the same week (D-193). Only §7.5's PRF reaches that half.
+
+➡️ ⭐⭐⭐ **A SPECIFICATION THAT NAMES TWO FIXES FOR ONE PROBLEM MUST SAY WHICH FIX REACHES
+WHICH HALF.** Otherwise the half nobody has built gets credited to the half somebody did,
+and the credit survives every review, because both halves are real and both are named in
+the same sentence.
+
+⭐⭐ **WHAT THE COVER ACTUALLY BUYS, STATED SO IT CANNOT BE OVERSOLD AGAIN.** Against the
+build that was live this morning it changes nothing about how often the eight words are
+typed. What it does is make D-190's numbers honest again: 24 hours was a deliberate
+withdrawal of the defence §4.3 exists for — *"a phone left on a table with this in a
+background tab opens on a touch for a day"* — and the queued job to bring it back down
+could not be done while one tier carried both prices. **A cover changes the price, not the
+argument.** So the 24-hour values stop being testing values and become the correct
+thresholds for the tier that asks for the phrase (§6.6: a message dies at 24 hours, so a
+longer window holds a key to an emptying store), and the pre-launch item that said they
+must come down is closed by the tier rather than left open beside it.
+
+**Hannu's three decisions, and he moved on all three of my recommendations.**
+
+- **6 to 8 digits, the person choosing inside the range.** Four was recommended and
+  declined: *"Four is too short. 6-8 were recommended."* Letters were declined on
+  behaviour rather than entropy: *"then people start to write it down and also typing
+  becomes so slow on mobiles that users again gasp for air."* ⭐ **A secret that gets
+  written down is a secret on the same table as the device it covers.**
+- **Everybody must set one.** Two gentler shapes were offered — off until turned on, and
+  offered once with a skip — and he took the one that guarantees the defence exists.
+- **Ghost mode too.** Its cover had no protection at all: anybody holding the phone
+  pressed one button and read the conversation, in the mode §7.6 calls the one the
+  highest-risk person reaches for.
+
+**And the name is his.** *"For the haamu user the PIN / PIN is the easiest, shortest and
+most understood."* On screen it is a `PIN` in both languages; in the documents it is the
+`cover PIN`, because §7.5 records a different, rejected short PIN and one word for both
+would need disambiguating by every future reader. ⭐ **The rejected one wraps key material
+at rest; this one wraps nothing at all.**
+
+⚠️ **THE FIELD IS A MEASUREMENT HE ALREADY OWNS.** He asked for *"that mechanism we used in
+seku/privis and privsend that the numbers are typed in such a field that password managers
+do not remember them"* — the "B2" one-digit-per-box `type="password"` field he tested on
+2026-07-09 against Edge, Chrome, Firefox and Bitwarden. ⭐ **And his guess about the eight
+words was right for a reason worth writing down:** `#phrase-in` is `type="text"`, carries
+no `name`, and sits outside any `<form>` — the three things a manager looks for — so it has
+been un-autofillable by accident for the whole life of the product.
+
+⛔⛔ **THE ONE REAL DEFECT IN THE FIRST BUILD WAS FOUND BY LOOKING AT A PICTURE OF THE
+SCREEN.** `#menu-create` runs `runInitiate()`, and the bar showed it on every screen that
+was not the conversation — so **one tap on the ⋮ menu over the cover started a pairing and
+put the app back on screen with no PIN typed**, and the same tap walked past a step the
+product now requires of everybody. Every suite was green; nothing could see it. ⭐ **The
+class is not "the menu is dangerous."** It is that `barMode` decided what to show from ONE
+question — *is this the conversation?* — which was an exhaustive question right up until a
+screen existed whose whole job is to stand in the way. It is now hidden **and** refused
+over one named set, because a rule stated at a single call site is not a rule.
+
+⛔⛔⛔ **AND A GUARD IN `test/copy.mjs` WAS REQUIRING A SENTENCE THAT HAD BECOME FALSE.** It
+asserted `/Anybody using this device can show it again/` in the Ghost cover's copy — true
+for the whole life of that cover, and false the instant a PIN stood in front of it. The
+same claim was in `ARCHITECTURE.md` §4.3 as a MUST. ➡️ ⭐⭐⭐ **A GUARD THAT PINS THE
+WORDING OUTLIVES ITS OWN CORRECTNESS; WRITE THE RULE.** The rule is that a cover may not
+claim to be a lock and must say what it leaves open. Both were rewritten that way, and the
+Kept cover now has its own sentence because the two modes differ on the only thing a person
+has to decide: what stands behind the cover.
+
+**Smaller things worth keeping.**
+
+- ⚠️ **Ghost mode has one tier, and its missing second is a statement rather than an
+  omission.** `watchIdleness` reads an absent lock callback as *"this mode has nothing to
+  lock to"* — true of §7.6 (D-073) and false everywhere else.
+- ⚠️ **Five wrong entries escalate in Kept mode and must not in Ghost mode.** There is
+  nothing to escalate to there, so five guesses by whoever picked the phone up would
+  destroy the conversation — D-016's tab loss by a fifth route.
+- ⚠️ **Tapping at a covered screen is not use.** Without that, somebody trying PINs would
+  hold off the one gate that drops the keys.
+- ⚠️ **The record is a salted SHA-256 and a KDF here would be a half-defence against an
+  attacker already inside.** In both storage locations, whoever can read the record already
+  holds the keys it would guard. The one real harm left — a PIN reused from somewhere that
+  matters — is answered in a sentence to the reader instead.
+- ⚠️ **`copy.plural` wrote "3 trys".** "try" is the first irregular plural to reach a
+  sentence in this product; it spells itself out rather than teaching the helper an
+  exception list, which would put a grammar table where D-153 has just removed a number
+  table.
+- ⚠️ **Two notes stacked under two buttons both opened "Nothing is deleted".** Not an
+  economy fault — D-187 settled that — but a clarity one: **a note is only a note about
+  something if it is next to it.**
+
+### D-194. ⛔⛔⛔⛔ The one row in the sweep that could go red was decided by scheduling, and five rows that could not go red were counted as passes
+
+**2026-09-05.** The queued job was `probe-tripwire-browser`, carried into this session as
+*"§3.5's alarm never reaches the screen — a security alarm, take it before the cover work."*
+**That framing was wrong, and the record already said so.** `lpm-probes/README.md`'s own row for
+`probe-tripwire-rate` reads: *"12/12 at flow level — which is what proved the browser flakiness
+was the HARNESS and not the product."* It was written on 2026-08-31 with D-181 and it answers the
+question I re-opened as an alarm five days later.
+
+⭐⭐⭐⭐ **A RED PROBE IS A CLAIM ABOUT THE PRODUCT ONLY IF THE PROBE IS GREEN WHEN THE PRODUCT IS
+RIGHT**, and the four consecutive red runs I reported never tested that. Bisecting to `f45ff7a`
+proved the red **predated my changes**; it could not prove it was a defect, because a coin flip
+predates everything.
+
+#### What it actually is, measured
+
+| | plain | with request logging attached |
+|---|---|---|
+| green out of five runs | 3 | 3 |
+
+Ten runs, one unchanged build (`lpm 7770ad8`), the same server in the same half hour. Six of ten
+green. Flow level in the same window: `probe-tripwire-rate`, **12 of 12**.
+
+The cause is D-181's own number. §3.5 needs two claims in flight against one compare-and-set, and
+that window is about twelve milliseconds. `await Promise.all([b.click(…), c.click(…)])` dispatches
+two CDP messages down two separate connections; the skew between them sits **on** that boundary.
+Nothing decides the run but Linux scheduling.
+
+⚠️⚠️ **AND FIVE OF THE PROBE'S SIX CHECKS ARE NOT ABOUT TIMING AT ALL.** They ask whether the
+warning survives §3.6.2's three answers, a re-entry, and a reload with the KEY typed back —
+§3.5's *non-dismissable* requirement, which is a property of the **roster** and has no race in
+it. Hanging them off the race meant they ran about half the time, and a green run could not say
+which half it had been. ➡️ **A flaky gate does not merely cost attention; it silently stops
+testing everything downstream of the flake.**
+
+#### The fix — stage the race instead of hoping for it
+
+The loser's claim is held **on the wire** by request interception, *after* its own `GET` has read
+`open` — so the decision to claim is the client's, unaltered — until the winner's claim has been
+accepted. Then it is released, and the server refuses it. **That is what a race IS**: two claims
+in flight, one compare-and-set, the server picking. The only thing controlled is when the packet
+leaves, which is the one part of a real race a test can hold still, and no product code can tell
+the difference. **Nine of nine green after.**
+
+⭐ Note what was NOT changed: not one line of the client or the server. `probe-spent-link` (the
+late arrival, which is the case a real interception produces) and `probe-tripwire-rate` were both
+green throughout. **The product was never the thing that was wrong.**
+
+#### ⛔⛔ The second finding, which is worse, and which the first one only uncovered
+
+`run-all.sh`'s first group was called `NO_BROWSER` — named after the one thing its five members
+have in common **that does not matter**. What they actually have in common is that
+`probe-tripwire-rate`, `probe-tripwire-window`, `probe-two-ends-one-browser`,
+`probe-two-identities-inflight` and `probe-two-identities-one-browser` **assert nothing**. Each
+prints what it saw and exits 0 whatever that was. All five were counted in the sweep's `ok`
+total.
+
+**So the number that says how many probes passed contained five that could not fail.** And
+`README.md` had already written the rule being broken — *"a tool must never be listed as an
+instrument, because green is not a thing it can be"* — in a bullet that named
+`probe-tripwire-window` as a Tool while `run-all.sh` ran it as an instrument.
+
+⭐⭐⭐ **THE RULE WAS WRITTEN DOWN AND NOTHING ENFORCED IT, WHICH IS THE SAME FAULT THE FOLDER WAS
+REORGANISED TO FIX** (2026-08-28's five stale probes, and the "one-off investigations" bucket
+emptied on 2026-08-30). A classification kept in prose beside a list kept in code will drift,
+and the drift is invisible in the direction that matters: **a category error that INFLATES a
+pass count is never noticed by a passing run.**
+
+They are still run — a throw still exits non-zero, which catches a construction that has stopped
+existing — but they print `ran`, not `ok`, and are totalled on their own line. What they cannot
+catch, and now do not claim to catch, is a wrong **answer**. The sweep afterwards reads
+**`36 ok, 0 failed, 5 ran without asserting anything`**, where it used to read 41 ok.
+
+#### The lesson, and it is the session's own
+
+⭐⭐⭐⭐⭐ **BEFORE REPORTING A RED PROBE AS A PRODUCT DEFECT, RUN IT ENOUGH TIMES TO KNOW ITS PASS
+RATE, AND READ WHAT THE FOLDER ALREADY SAYS ABOUT IT.** Both were one command away. The first
+would have shown 6/10; the second was a sentence in a table naming this exact flakiness and its
+exact cause. This is D-180's *"a measuring device must be shown to resolve the quantity before
+its readings mean anything"* pointed at the **reader** rather than at the instrument — and it is the
+verify-before-claiming rule met on the other side: I checked whether the failure
+was **mine** and never whether it was **real**.
+
 ### D-193. ⭐⭐ Hannu's ruling on the outside auth design: the OPRF is a seku/privis idea, not a haamu one
 
 **2026-09-05**, after reading the commentary on

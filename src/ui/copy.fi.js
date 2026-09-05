@@ -194,10 +194,47 @@ export const FI = {
   "lock.blurred": "Lukittu, koska tämä oli taustalla yli 24 tuntia. Kirjoita AVAIMESI jatkaaksesi.",
   "lock.cost": "Uudelleen avaaminen vie hetken.",
   "lock.manual": "Lukittu. Kirjoita AVAIMESI jatkaaksesi.",
-  "lock.coveredIdle": "Peitetty 24 tunnin käyttämättömyyden jälkeen.",
-  "lock.coveredBlurred": "Peitetty, koska tämä oli taustalla yli 24 tuntia.",
-  "lock.coveredWhat": "Tämä vain piilottaa sen. Kuka tahansa tätä laitetta käyttävä voi näyttää sen uudelleen — tässä tilassa ei ole AVAINTA suojaamassa keskustelua.",
+  // ⚠️⚠️ NÄMÄ KAKSI SIIRTYIVÄT TOISEEN PORTAASEEN. Ne kertovat §4.3:n PEITOSTA, joten ne
+  // kantavat peiton vakiot — 30 minuuttia ja 5 minuuttia — eivät lukituksen 24:ää tuntia.
+  "lock.coveredIdle": "Peitetty 30 minuutin käyttämättömyyden jälkeen.",
+  "lock.coveredBlurred": "Peitetty, koska tämä oli taustalla yli 5 minuuttia.",
+  // ⚠️⚠️ EDELLINEN LAUSE OLI TOTTA SIIHEN ASTI, KUNNES PEITON ETEEN TULI PIN. Se kuului
+  // *"Kuka tahansa tätä laitetta käyttävä voi näyttää sen uudelleen"* — ja siitä tuli
+  // väärä väite tuotteesta sinä hetkenä, kun peiton nostamiseen tarvittiin numerot.
+  "lock.coveredWhat.0": "Tämä vain piilottaa näytön. Mitään ei poisteta eikä mitään suljeta. Se, joka tuntee tämän selaimen hyvin, pääsee silti käsiksi siihen mitä sen takana on.",
+  "lock.coveredWhat.1": "Haamu-tilassa ei ole AVAINTA, joten jos et muista PIN-numeroasi, keskustelun lopettaminen on ainoa tie eteenpäin.",
+  "lock.coveredWhatKept.0": "Tämä vain piilottaa näytön. Mitään ei poisteta eikä mitään suljeta, ja keskustelusi palaavat heti kun kirjoitat PIN-numerosi. Se, joka tuntee tämän selaimen hyvin, pääsee silti käsiksi siihen mitä sen takana on.",
+  "lock.coveredWhatKept.1": "AVAIMESI on näistä vahvempi, ja haamu kysyy sitä 24 tunnin käyttämättömyyden jälkeen.",
+  "lock.wrongPin": "Väärä PIN 5 kertaa. Kirjoita AVAIMESI jatkaaksesi.",
+  "lock.useKey": "En muista PIN-numeroani — kysy AVAINTANI sen sijaan",
   "lock.show": "Näytä keskustelu",
+
+  // ── pin — §4.3:n toinen porras
+  // ⚠️⚠️ KÄYTTÄJÄLLE SE ON **PIN** MOLEMMILLA KIELILLÄ, JA SE ON HANNUN PÄÄTÖS.
+  // Suomessa PIN taipuu luontevimmin yhdyssanana, joten omistusmuodot kirjoitetaan
+  // *PIN-numerosi* ja perusmuoto jää lyhyeksi: *Valitse PIN*, *Väärä PIN*.
+  // ⛔ EI "koodi", koska `pairing.failure.code_malformed` käyttää sitä §2.2:n
+  // kutsukoodista — kaksi eri asiaa yhdellä sanalla samassa tuotteessa.
+  "pin.title": "Valitse PIN",
+  "pin.lead": "haamu peittää näytön, kun lasket tämän laitteen kädestäsi. PIN-numerosi näyttää keskustelusi uudelleen, ilman AVAINTASI ja ilman odotusta.",
+  "pin.ask": "6–8 numeroa.",
+  "pin.confirmAsk": "Kirjoita se uudelleen.",
+  "pin.save": "Tallenna PIN",
+  "pin.what": "PIN ei ole AVAIMESI eikä korvaa sitä. Se piilottaa sen mitä näytöllä on siltä, joka ottaa tämän laitteen käteensä. Se ei salaa mitään, ja se joka tuntee tämän selaimen hyvin pääsee silti käsiksi siihen mitä sen takana on.",
+  "pin.warn": "Älä käytä PIN-numeroa, jota käytät jossain muualla, äläkä kirjoita sitä mihinkään, mitä säilytät tämän laitteen vieressä.",
+  "pin.refused.not_digits": "PIN on pelkkiä numeroita.",
+  "pin.refused.too_short": "PIN on vähintään 6 numeroa.",
+  "pin.refused.too_long": "PIN on enintään 8 numeroa.",
+  "pin.refused.all_same": "Valitse PIN, jossa ei ole samaa numeroa toistuvasti.",
+  "pin.refused.run": "Valitse PIN, joka ei ole suora numerosarja.",
+  "pin.refused.mismatch": "Tämä ei täsmää sen kanssa, minkä kirjoitit yllä. Kirjoita se uudelleen.",
+  "pin.changed": "PIN-numerosi on tallennettu.",
+  "pin.change": "Vaihda PIN-numeroni",
+  "pin.changeNote": "Mitään ei poisteta. Uusi PIN otetaan käyttöön seuraavan kerran, kun näyttö peitetään.",
+  "pin.boxes": "PIN-numerosi",
+  "pin.coverAsk": "Kirjoita PIN.",
+  "pin.wrong": "Väärä PIN.",
+  "pin.slow": "Odota hetki ja yritä uudelleen.",
 
   // ── menu
   "menu.back": "Keskustelut",
@@ -536,6 +573,16 @@ export const FI_BUILT = {
   "diagnostics.build.current": (id) => `${id}, nykyinen versio`,
   "diagnostics.build.stale": (id, served) =>
     `${id} — VANHA. Palvelimella on ${served}. Lataa tämä sivu uudelleen.`,
+  // ── pin
+  // ⚠️ SUOMESSA "yritys" TAIPUU SÄÄNNÖLLISESTI, joten englannin epäsäännöllinen
+  // try/tries ei toistu tässä — mutta yksikkö ja monikko kirjoitetaan silti erikseen,
+  // koska partitiivi eroaa: *1 yritys* ja *3 yritystä*.
+  "pin.wrongLeft": (n) =>
+    n === 1
+      ? `Väärä PIN. Vielä ${n} yritys ennen kuin haamu kysyy AVAINTASI.`
+      : `Väärä PIN. Vielä ${n} yritystä ennen kuin haamu kysyy AVAINTASI.`,
+  "pin.digit": (i, n) => `Numero ${i} / ${n}`,
+
   // ── chat
   "chat.unreadable": (reason) => `Saapui viesti, jota ei voitu lukea (${reason}).`,
 

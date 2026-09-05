@@ -337,6 +337,35 @@ section("§4.3 — the lock is reachable, and locking still deletes nothing (D-1
     "the only occurrence is the one inside #home"
   );
 
+  /* ⛔⛔⛔ A SCREEN THAT STANDS IN FRONT OF SOMETHING MAY NOT HAVE A DOOR IN THE BAR.
+   *
+   * ⚠️⚠️ THIS WAS SHIPPED-SHAPED AND NO TEST COULD SEE IT. `#menu-create` runs
+   * `runInitiate()` and `barMode` showed it on every screen that was not the
+   * conversation — so on §4.3's cover, one tap on the menu started a pairing and put the
+   * app back on screen with no PIN typed, and on `#pin-set` the same tap walked past a
+   * step the product requires of everybody. It was found by taking a picture of the
+   * screen and looking at the corner of it.
+   *
+   * ⭐ THE RULE IS CHECKED IN BOTH PLACES BECAUSE IT IS ENFORCED IN BOTH: hidden, so the
+   * interface is honest, and refused, so a `classList` change somewhere else cannot make
+   * it live again.
+   */
+  check(
+    "⛔⛔ the gated screens are §4.3's cover and the PIN screen",
+    /const GATED = new Set\(\["covered", "pin-set"\]\)/.test(appCode),
+    "GATED names both"
+  );
+  check(
+    "⛔ and the bar withholds the 'start a conversation' door on them",
+    /show\("menu-home", !chat && !gated\)/.test(appCode),
+    "menu-home is hidden while gated"
+  );
+  check(
+    "⛔⛔ and the control itself refuses, so hiding it is not the only defence",
+    /\$\("menu-create"\)\.addEventListener\([^]*?if \(GATED\.has\(shownScreen\)\) return;/.test(appCode),
+    "menu-create returns early on a gated screen"
+  );
+
   check(
     "⭐ it is wired to the lock, and it says the person asked",
     /\$\("lock-now"\)\.addEventListener\([^]*?lockNow\(lockFlow\.MANUAL\)/.test(appCode),

@@ -52,6 +52,7 @@ import * as vaults from "/src/storage/vault.js";
 import * as tabsFlow from "/src/flow/tabs.js";
 import * as endings from "/src/flow/ending.js";
 import * as lockFlow from "/src/flow/lock.js";
+import * as pinFlow from "/src/flow/pin.js";
 import { BUILD } from "/app/build.js";
 import * as copy from "/src/ui/copy.js";
 import * as themes from "/src/ui/theme.js";
@@ -219,6 +220,7 @@ const SCREENS = [
   "home", "progress", "verify", "chat", "failure", "panic",
   "ghost", "duplicate", "covered", "paste",
   "dormant", // ARCHITECTURE §4.2.2 — this identity is already open in another tab
+  "pin-set", // ARCHITECTURE §4.3 — the cover PIN, chosen once per KEY per browser
 ];
 /**
  * The screen on show, so that a re-render of the SAME one leaves the page alone.
@@ -282,8 +284,26 @@ const REPORT_NOTICES = ["closing"];
  * it was raised on; an OPEN MENU belongs to the screen it was opened on even more
  * plainly, because it is anchored to a bar whose contents just changed underneath it.
  */
+/**
+ * ⛔⛔ SCREENS THAT STAND IN FRONT OF SOMETHING, SO NOTHING IN THE BAR MAY WALK AROUND
+ * THEM.
+ *
+ * ⚠️⚠️ THIS WAS A REAL HOLE AND IT WAS FOUND BY LOOKING AT THE SCREEN RATHER THAN BY
+ * ANY TEST. `#menu-create` is shown on every screen that is not the conversation, and it
+ * runs `runInitiate()` — so on the cover, one tap on the menu started a pairing and put
+ * the app back on screen without the PIN. The same tap on `#pin-set` skipped a step the
+ * product now requires of everybody.
+ *
+ * ⭐ THE CLASS IS NOT "THE MENU IS DANGEROUS". It is that `barMode` decided what to show
+ * from ONE question — *is this the conversation?* — which was an exhaustive question
+ * while every other screen was somewhere a person could freely leave. A screen whose
+ * whole job is to stand in the way is the first one that is not.
+ */
+const GATED = new Set(["covered", "pin-set"]);
+
 const barMode = (id) => {
   const chat = id === "chat";
+  const gated = GATED.has(id);
   show("bar-chat", chat);
   // ⚠️ THE ARROW OBEYS THE SAME RULE AS `#back-home`, AND IT HAS TO BE THE SAME
   // RULE RATHER THAN THE SAME VALUE. §7.6's Ghost mode has no conversation list, so
@@ -299,7 +319,9 @@ const barMode = (id) => {
   show("menu-chat", chat);
   // ⚠️ AND ITS OPPOSITE. "Start a new conversation" means nothing while a conversation
   // is open, and the ＋ button it doubles is not on that screen either.
-  show("menu-home", !chat);
+  // ⛔ AND IT IS WITHHELD ON THE GATED SCREENS, where it would not be meaningless but
+  // effective — it navigates, and both of those screens exist to stop navigation.
+  show("menu-home", !chat && !gated);
   // ⚠️ See the comment on `#diagfoot` in `index.html`: it is the last child of the
   // scroller, so on the conversation — the one screen that is a full-height pane —
   // it wedges sixty-one pixels between the composer and the floor of the window.
@@ -505,14 +527,21 @@ const RERENDER = {
   panic: null,
   ghost: () => showGhostStart(),
   duplicate: () => showDuplicate(),
-  // ⚠️ NOT OFFERED — §4.3's cover is over the app, the bar is behind it, and `coverNow`
-  // needs the reason it was raised with, which is not kept.
+  // ⚠️⚠️ NOT OFFERED, AND THE REASON IS NOW A SECURITY ONE RATHER THAN A PRACTICAL ONE.
+  // It used to be that `coverNow` needed the reason it was raised with and nothing kept
+  // it. Since §4.3 grew a second tier, repainting this screen would clear the PIN field
+  // AND reset the count of wrong entries — so a menu press would be an escape from the
+  // one gate that drops the keys after five of them.
   covered: null,
   // ⚠️ NOT OFFERED — there is a link half-typed in the field and `openPasteLink()` clears
   // it. Losing what somebody pasted in order to change the language of the label above it
   // is a worse trade than reading that label in English.
   paste: null,
   dormant: () => showDormant(),
+  // ⚠️ NOT OFFERED — there are two half-typed PIN fields on this screen and repainting
+  // it would empty them. Same trade as `paste` above: losing what somebody has typed in
+  // order to change the language of the label over it is the worse of the two.
+  "pin-set": null,
 };
 
 /**
@@ -635,6 +664,13 @@ const GHOST_RECORD_SCOPE = "ghost";
  */
 const scopeOfRecords = () => session?.recordScope ?? GHOST_RECORD_SCOPE;
 let openEntry = null; // the conversation on screen
+
+// §4.3's second tier. All four are per-document and none of them is written anywhere:
+// the cover is a screen, and everything it counts dies with the page that raised it.
+let coveredFrom = null; // the screen to go back to when the right PIN arrives
+let pinWrong = 0; // wrong entries since the cover went up
+let pinSlowUntil = 0; // Ghost mode only — the instant another try is allowed
+let pinAfter = null; // what to run once a PIN has been chosen
 let channel = null; // its message flow — this tab's, for SENDING
 let seen = new Map(); // channelHash → msg ids already in the log
 let pendingJoin = null; // a link this tab arrived with, held until there is a roster
@@ -958,13 +994,25 @@ async function withIdentity(phrase, run) {
     };
     await run(opened);
     session = opened;
+    // §4.3's second tier, read before the watcher below is armed. `attempt` is used
+    // rather than `get` so that another identity's record in this browser is not read as
+    // "no PIN yet" and quietly overwritten.
+    session.pinRecord = await readPinRecord();
     if (leaderDeferred) {
       leaderDeferred = false;
       await becameLeader();
     }
     // §4.3, started only now: a watcher armed before the session exists would fire
     // into `lockNow` with nothing to lock.
-    lockWatch = lockFlow.watchIdleness({ onLock: (reason) => void lockNow(reason) });
+    //
+    // ⚠️⚠️ BOTH TIERS, AND THE LONG ONE IS PASSED EVERY TIME. `watchIdleness` treats an
+    // absent `onLock` as a deliberate statement that this mode has nothing to lock to —
+    // true of Ghost and false here — so a change that dropped it would silently remove
+    // the only gate that takes the derived keys out of memory.
+    lockWatch = lockFlow.watchIdleness({
+      onCover: coverDue,
+      onLock: (reason) => void lockNow(reason),
+    });
 
     // ⚠️⚠️ ARCHITECTURE §4.2.2, AND IT COMES BEFORE THE JOIN DELIBERATELY. Another
     // client of this identity was already delivering when this document opened, so this
@@ -1144,7 +1192,9 @@ async function enterGhost() {
     pickleKey: ghost.pickleKey,
     messages: ghost.messages,
     root: null, // the channel root's bytes, once there is one — §7.8 step 2 wipes it
+    pinRecord: null, // §4.3's second tier — filled in immediately below
   };
+  session.pinRecord = await readPinRecord();
 
   // ⚠️⚠️ §7.6's DUPLICATED TAB, AND THE CENSUS IS WHAT SEES IT. `sessionStorage` is
   // per-tab, so two Ghost tabs never contend — but "Duplicate tab" hands the new
@@ -1178,6 +1228,17 @@ async function enterGhost() {
 async function continueGhost() {
   const { ghost } = session;
   ghostInert = false;
+
+  // ⚠️⚠️ §4.3's SECOND TIER IS MANDATORY AND THIS IS WHERE GHOST MODE MEETS IT — before
+  // a conversation exists, rather than after. ⭐ The placement is the same argument
+  // `openConversation` makes about arming the watcher: *"the screen it would cover is the
+  // one holding a single-use link the person is trying to send."* A PIN demanded at that
+  // moment would stand between somebody and the one act this mode exists for; demanded
+  // here it costs a calm minute before anything is at stake.
+  if (!session.pinRecord) {
+    await showPinSet(continueGhost);
+    return;
+  }
 
   await ghost.messages.sweep(epochs.nowSeconds()); // §6.6, on the only occasion there is
 
@@ -1814,6 +1875,7 @@ async function lockNow(reason) {
 
   const locked = await stopEverything();
   if (!locked) return;
+  coveredFrom = null; // §4.3's cover is gone with the session it was over
   endings.overwriteKeys(locked.keys);
   locked.tabs.close(); // a locked tab must not hold the connections for the others
   locked.db.close();
@@ -1841,6 +1903,7 @@ function lockSaid(reason) {
     [lockFlow.IDLE]: copy.lock.idle,
     [lockFlow.BLURRED]: copy.lock.blurred,
     [lockFlow.MANUAL]: copy.lock.manual,
+    [lockFlow.WRONG_PIN]: copy.lock.wrongPin,
   }[reason];
 }
 
@@ -1856,11 +1919,277 @@ function lockSaid(reason) {
  * hands sits next to it, and it is the ending.
  */
 function coverNow(reason) {
-  text("covered-why", reason === lockFlow.BLURRED ? copy.lock.coveredBlurred : copy.lock.coveredIdle);
-  text("covered-what", copy.lock.coveredWhat);
+  pinWrong = 0;
+  pinSlowUntil = 0;
+  // ⚠️ WHERE TO GO BACK TO, CAPTURED BEFORE THE COVER REPLACES IT. A cover tears nothing
+  // down, so the screen underneath is still built and `only()` alone restores it — but
+  // only if this remembers which one it was. Guarded against covering a cover, which
+  // would otherwise make the way back the way here.
+  if (shownScreen !== "covered") coveredFrom = shownScreen;
+  const ghost = isGhost();
+  text("covered-why", coverSaid(reason));
+  text("covered-ask", copy.pin.coverAsk);
+  text("covered-note", "");
+  prose("covered-what", ghost ? copy.lock.coveredWhat : copy.lock.coveredWhatKept);
   text("uncover", copy.lock.show);
+  text("covered-key", copy.lock.useKey);
   text("covered-end", copy.ghost.end);
+  // ⚠️⚠️ EXACTLY ONE WAY OUT OF A FORGOTTEN PIN IS SHOWN, AND WHICH ONE IS THE WHOLE
+  // DIFFERENCE BETWEEN THE MODES. Kept mode falls back to the KEY, which costs a
+  // derivation and loses nothing. Ghost mode has no KEY — §7.6's first sentence — so the
+  // only honest offer there is §7.8's ending, and offering the KEY would be a button
+  // that cannot work.
+  show("covered-key", !ghost);
+  show("covered-end", ghost);
+  paintPinBoxes("covered-boxes", session?.pinRecord?.len ?? pinFlow.PIN_MIN);
   only("covered");
+}
+
+/**
+ * Which sentence the cover screen carries, by the reason it was raised.
+ *
+ * ⚠️ IT IS A MAP RATHER THAN A TERNARY, AND THIS IS THE SECOND TIME. D-163 records what
+ * a ternary over two values costs when a third arrives: `reason === BLURRED ? blurred :
+ * idle` was an exhaustive match right up to the moment it silently stopped being one.
+ * `coverNow` carried exactly that ternary until this tier was built.
+ *
+ * ⚠️ A REASON WITH NO SENTENCE PAINTS NOTHING RATHER THAN THE WRONG THING, which is the
+ * failure this shape is chosen for: an empty heading is visible and a confident wrong
+ * sentence is not.
+ */
+function coverSaid(reason) {
+  return (
+    {
+      [lockFlow.IDLE]: copy.lock.coveredIdle,
+      [lockFlow.BLURRED]: copy.lock.coveredBlurred,
+    }[reason] ?? ""
+  );
+}
+
+// -------------------------------------------- §4.3's second tier — the cover PIN
+
+/**
+ * Where the record lives in Kept mode.
+ *
+ * ⚠️ NAMED FOR THE IDENTITY AND NOT FOR THE BROWSER (D-170). One browser is one
+ * database and two KEYs can share it; a record named for the browser is a record two
+ * identities write over each other. `recordScope` is already the digest every other
+ * per-identity record here is named with.
+ *
+ * ⚠️ IT GOES IN `DURABLE`, WHICH §7.8's ORDINARY ENDING DOES NOT REACH. That is
+ * deliberate and it is the same reasoning as the high-water mark next to it: the
+ * ordinary ending removes the conversations and leaves the person using this browser,
+ * and a PIN is a fact about the person rather than about the conversations. The THOROUGH
+ * ending takes the whole origin, and takes this with it.
+ */
+const pinRecordName = (scope) => `lpm.pin.${scope}`;
+
+async function readPinRecord() {
+  if (!session) return null;
+  if (isGhost()) return (await session.ghost.store.get(ghostFlow.PIN_KEY)) ?? null;
+  // ⚠️ `attempt` RATHER THAN `get`, AND THE THIRD ANSWER IS WHY (D-170). A record that
+  // will not open is another identity's or is damaged, and reading either as "no PIN
+  // yet" would silently offer to overwrite it. Only `ours` counts as a PIN.
+  const got = await session.vault.durable.attempt(pinRecordName(session.recordScope));
+  return got.ours ? got.value : null;
+}
+
+async function writePinRecord(rec) {
+  if (isGhost()) await session.ghost.store.set(ghostFlow.PIN_KEY, rec);
+  else await session.vault.durable.set(pinRecordName(session.recordScope), rec);
+  session.pinRecord = rec;
+}
+
+/**
+ * §4.3's PIN field — the "B2" shape Hannu measured against four password managers on
+ * 2026-07-09 for seku/privis, and asked for here by name.
+ *
+ * ⚠️⚠️ `type="password"` IS THE MEASUREMENT AND NOT A PREFERENCE. The CSS-only variant
+ * tested alongside it showed plaintext in Firefox; this one masks natively everywhere.
+ * ⚠️ No `<form>`, no `name`, `autocomplete="off"` — the three things a manager looks for
+ * before offering to remember something. `#phrase-in` has had all three by accident for
+ * the life of the product, which is why the eight words have never been offered to one.
+ *
+ * ⚠️ THE PASTE IS ITS OWN HANDLER AND HAS TO BE. `maxLength = 1` truncates a pasted
+ * string to its first character before any `input` event sees it, so a paste-to-
+ * distribute written on top of `input` silently keeps one digit.
+ */
+function paintPinBoxes(id, count) {
+  const row = $(id);
+  row.replaceChildren();
+  row.setAttribute("aria-label", copy.pin.boxes);
+  for (let i = 0; i < count; i++) {
+    const box = document.createElement("input");
+    box.className = "pinbox";
+    box.type = "password";
+    box.inputMode = "numeric";
+    box.autocomplete = "off";
+    box.maxLength = 1;
+    box.setAttribute("aria-label", copy.pin.digit(i + 1, count));
+    box.addEventListener("input", () => {
+      const kept = pinFlow.digitsOnly(box.value).slice(-1);
+      box.value = kept;
+      if (kept) focusPinBox(row, i + 1);
+    });
+    box.addEventListener("keydown", (event) => {
+      if (event.key === "Backspace" && box.value === "") focusPinBox(row, i - 1);
+      else if (event.key === "ArrowLeft") focusPinBox(row, i - 1);
+      else if (event.key === "ArrowRight") focusPinBox(row, i + 1);
+      else return;
+      if (event.key !== "Backspace") event.preventDefault();
+    });
+    box.addEventListener("paste", (event) => {
+      const digits = pinFlow.digitsOnly(event.clipboardData?.getData("text") ?? "");
+      if (!digits) return;
+      event.preventDefault();
+      const boxes = [...row.children];
+      for (let j = 0; j < digits.length && i + j < boxes.length; j++) boxes[i + j].value = digits[j];
+      focusPinBox(row, Math.min(i + digits.length, boxes.length - 1));
+    });
+    row.appendChild(box);
+  }
+}
+
+function focusPinBox(row, i) {
+  const boxes = [...row.children];
+  if (i < 0 || i >= boxes.length) return;
+  boxes[i].focus();
+  boxes[i].select?.();
+}
+
+const readPinBoxes = (id) => [...$(id).children].map((box) => box.value).join("");
+
+function clearPinBoxes(id) {
+  for (const box of $(id).children) box.value = "";
+}
+
+/**
+ * Choose a PIN, or change one.
+ *
+ * ⚠️⚠️ THERE IS NO WAY PAST IT THE FIRST TIME, AND THAT IS HANNU'S DECISION RATHER THAN
+ * a default: *"Everybody must set one."* Two gentler shapes were offered — off until
+ * turned on, and offered once with a skip — and he chose the one that guarantees the
+ * defence exists. ⚠️ The cancel control therefore appears only when there is already a
+ * PIN to fall back to, which is what makes it a CHANGE rather than an escape.
+ */
+async function showPinSet(after = null) {
+  pinAfter = after;
+  text("pin-set-title", copy.pin.title);
+  text("pin-set-lead", copy.pin.lead);
+  text("pin-set-ask", copy.pin.ask);
+  text("pin-set-confirm-ask", copy.pin.confirmAsk);
+  text("pin-set-note", "");
+  text("pin-set-go", copy.pin.save);
+  text("pin-set-cancel", copy.nav.cancel);
+  text("pin-set-what", copy.pin.what);
+  text("pin-set-warn", copy.pin.warn);
+  paintPinBoxes("pin-set-boxes", pinFlow.PIN_MAX);
+  paintPinBoxes("pin-set-confirm", pinFlow.PIN_MAX);
+  show("pin-set-cancel", Boolean(session?.pinRecord));
+  only("pin-set");
+}
+
+/**
+ * ⚠️ THE LENGTH IS STORED BESIDE THE HASH, AND IT IS FOR DRAWING RATHER THAN FOR
+ * CHECKING. `matches` compares hashes and never consults it. What it buys is a cover
+ * screen with the right number of boxes on it, so a person is not left counting empty
+ * ones — and what it costs is that somebody holding the device learns the length, which
+ * against five attempts is worth nothing.
+ */
+async function savePin() {
+  const chosen = readPinBoxes("pin-set-boxes");
+  const again = readPinBoxes("pin-set-confirm");
+  const why = pinFlow.validate(chosen);
+  if (why) {
+    refused("pin-set-note", copy.pin.refused[why]);
+    return;
+  }
+  if (chosen !== again) {
+    refused("pin-set-note", copy.pin.refused.mismatch);
+    clearPinBoxes("pin-set-confirm");
+    return;
+  }
+  const record = await pinFlow.record(chosen);
+  record.len = chosen.length;
+  await writePinRecord(record);
+  clearPinBoxes("pin-set-boxes");
+  clearPinBoxes("pin-set-confirm");
+  const next = pinAfter;
+  pinAfter = null;
+  // ⚠️ `backToStart` RATHER THAN `openHome` AS THE FALLBACK, because this screen is
+  // reached in both modes and Ghost mode has no list to go back to.
+  if (next) await next();
+  else await backToStart();
+}
+
+/**
+ * The PIN typed at the cover.
+ *
+ * ⚠️⚠️ THE TWO MODES END DIFFERENTLY AND ONE OF THEM MUST NOT ESCALATE. Kept mode's
+ * fifth wrong entry drops the derived keys — strictly stronger, and the owner types the
+ * eight words. Ghost mode has nothing to escalate to: no phrase, no roster, no server
+ * copy, so an escalation there would destroy a conversation on five guesses by whoever
+ * picked the phone up. It slows down and never gives up, and §7.8's ending stays on the
+ * screen as the deliberate way out.
+ */
+async function liftCover() {
+  if (pinSlowUntil && Date.now() < pinSlowUntil) {
+    refused("covered-note", copy.pin.slow);
+    return;
+  }
+  const typed = readPinBoxes("covered-boxes");
+  if (await pinFlow.matches(session?.pinRecord ?? null, typed)) {
+    clearPinBoxes("covered-boxes");
+    text("covered-note", "");
+    pinWrong = 0;
+    lockWatch?.uncovered();
+    // ⭐ BACK TO THE SCREEN THAT WAS COVERED, NOT TO THE START. Nothing was torn down, so
+    // a conversation that was open is still built, still connected and still correct —
+    // and landing somebody on the list after they typed their PIN would make the cover
+    // feel like a lock, which is the one impression this tier may not give.
+    if (coveredFrom === "chat" && openEntry) only("chat");
+    else await backToStart();
+    coveredFrom = null;
+    return;
+  }
+
+  pinWrong += 1;
+  clearPinBoxes("covered-boxes");
+  focusPinBox($("covered-boxes"), 0);
+
+  if (isGhost()) {
+    if (pinWrong >= pinFlow.WRONG_BEFORE_LOCK) {
+      pinSlowUntil = Date.now() + pinFlow.SLOW_MS;
+      refused("covered-note", copy.pin.slow);
+      return;
+    }
+    refused("covered-note", copy.pin.wrong);
+    return;
+  }
+
+  const left = pinFlow.WRONG_BEFORE_LOCK - pinWrong;
+  if (left <= 0) {
+    await lockNow(lockFlow.WRONG_PIN);
+    return;
+  }
+  refused("covered-note", copy.pin.wrongLeft(left));
+}
+
+/**
+ * The short window came due.
+ *
+ * ⚠️⚠️ A COVER WITH NO PIN BEHIND IT WOULD BE A LOCKOUT WITH NO WAY OUT, so a session
+ * that has somehow reached this without a record takes the stronger answer instead of a
+ * gate it cannot open. It should be unreachable — the PIN is chosen before either
+ * watcher is armed — and it is written down because "should be unreachable" is not a
+ * property this file can prove about a screen.
+ */
+function coverDue(reason) {
+  if (session?.pinRecord) {
+    coverNow(reason);
+    return;
+  }
+  if (!isGhost()) void lockNow(reason);
 }
 
 /** Stop, drop the keys, and say why. Not an ending — nothing is cleared. */
@@ -2365,6 +2694,21 @@ function renderWarnings() {
  * conversations are gone; it does not need to be true for long to do its damage.
  */
 async function openHome() {
+  // ⚠️⚠️ §4.3's SECOND TIER IS MANDATORY, AND THIS IS THE DOOR IT STANDS IN. Every Kept
+  // path that reaches a conversation list comes through here — the ordinary unlock, a
+  // resumed pairing, a joiner who has just finished one — so one check covers all of
+  // them, and `savePin` comes straight back to this function afterwards.
+  if (session && !isGhost() && !session.pinRecord) {
+    // ⚠️ RE-READ BEFORE DEMANDING, AND ONLY THEN. One browser can hold two tabs of the
+    // same identity (§4.2), and the tab that did not choose the PIN would otherwise
+    // demand a second one and write over the first. The read costs nothing on the
+    // ordinary path because the ordinary path never reaches this branch twice.
+    session.pinRecord = await readPinRecord();
+  }
+  if (session && !isGhost() && !session.pinRecord) {
+    await showPinSet(openHome);
+    return;
+  }
   await watch(null); // this tab is displaying nothing; the leader can stop for it
   text("home-title", copy.list.title);
   // D-139: `#create` is the floating button, so its name is an attribute.
@@ -2654,8 +2998,14 @@ async function openConversation(entry) {
     // §4.3's watcher, armed here rather than at the start of the session: before
     // there is a conversation there is nothing to cover, and the screen it would
     // cover is the one holding a single-use link the person is trying to send.
+    //
+    // ⚠️⚠️ ONE TIER, AND THE ABSENT `onLock` IS THE STATEMENT RATHER THAN AN OMISSION.
+    // §7.6 has no phrase and no roster, so dropping the derived set here is not a lock
+    // but a silent ending on a timer — D-073, found by building it. What this mode can
+    // honestly do is cover, so it covers, and it goes on covering for as long as the tab
+    // lives instead of stopping after one long window.
     lockWatch?.stop();
-    lockWatch = lockFlow.watchIdleness({ onLock: (reason) => void lockNow(reason) });
+    lockWatch = lockFlow.watchIdleness({ onCover: coverDue });
   }
 
   // ⚠️ THIS TAB'S OWN CHANNEL OBJECT, AND IT EXISTS WHETHER OR NOT THIS TAB LEADS.
@@ -4013,6 +4363,11 @@ $("create").addEventListener("click", () => {
 // from here would work today and would silently acquire whatever `#create` gains later
 // — a hidden state, a confirmation — without this path being considered.
 $("menu-create").addEventListener("click", () => {
+  // ⛔ HIDDEN **AND** REFUSED, over the same set. Hiding it is the honest interface;
+  // refusing it is the guard, because a hidden control is one `classList` change away
+  // from being a live one and this project has already learned that a rule stated at a
+  // single call site is not a rule.
+  if (GATED.has(shownScreen)) return;
   pairingRun = runInitiate();
 });
 
@@ -4557,9 +4912,30 @@ const endGhostHere = async () => {
 $("ghost-end").addEventListener("click", endGhostHere);
 $("covered-end").addEventListener("click", endGhostHere);
 
-// §4.3's cover, lifted. It drops nothing, so there is nothing to restore — and
-// `openConversation` re-arms the watcher, which stopped itself when it fired.
-$("uncover").addEventListener("click", () => void backToStart());
+// §4.3's cover, lifted — with the PIN since the second tier was built. It drops
+// nothing, so there is nothing to restore; the watcher never stopped, and `uncovered()`
+// is what tells it the person is present again.
+$("uncover").addEventListener("click", () => void liftCover());
+
+// ⚠️ THE WAY OUT OF A FORGOTTEN PIN, IN THE MODE THAT HAS ONE. It is the same lock the
+// list screen's control runs and it carries the same sentence, because it is the same
+// act: the person asked for the KEY. ⛔ NOT `WRONG_PIN` — nothing was mistyped, and that
+// sentence tells somebody their device was in another pair of hands.
+$("covered-key").addEventListener("click", () => void lockNow(lockFlow.MANUAL));
+
+// §4.3's second tier, chosen. `savePin` returns to whatever asked for it.
+$("pin-set-go").addEventListener("click", () => void savePin());
+
+// ⚠️ ONLY REACHABLE WHEN THERE IS ALREADY A PIN — `showPinSet` hides this control
+// otherwise, which is what keeps "mandatory" true on the first pass.
+$("pin-set-cancel").addEventListener("click", () => {
+  pinAfter = null;
+  void backToStart();
+});
+
+// The list screen's control. It changes a PIN and deletes nothing, which is why it sits
+// with the lock rather than with the two endings under it.
+$("change-pin").addEventListener("click", () => void showPinSet(openHome));
 
 // ARCHITECTURE §4.2.2 rule 2. Nothing is ended and nothing is cleared: the two tabs
 // swap which of them is the client, and every conversation is in the store they share.
@@ -5220,6 +5596,8 @@ function paintCopy() {
   text("delete", copy.nav.delete);
   text("lock-now", copy.lock.control);
   text("lock-note", copy.lock.controlNote);
+  text("change-pin", copy.pin.change);
+  text("pin-note", copy.pin.changeNote);
   text("end-here", copy.ending.control);
   text("end-clear", copy.ending.thoroughControl);
 

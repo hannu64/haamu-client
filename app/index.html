@@ -602,8 +602,32 @@
         -->
         <div class="row sep">
           <button id="lock-now" class="secondary"></button>
+          <!--
+            §4.3's SECOND TIER, AS A CONTROL. ⚠️ It is in the lock's group and not in the
+            endings' group below, and the rule that decides which is the one already
+            written above: this one keeps everything and the two below it do not. A PIN
+            change deletes nothing.
+
+            ⚠️ There is no "cover now" beside it, deliberately. `#lock-now` already
+            answers *"put this away right now"* and answers it more strongly; a fourth
+            button on a screen a tester round has just called crowded would be buying a
+            weaker version of a control that is already here.
+          -->
         </div>
         <p class="note mt-s" id="lock-note"></p>
+
+        <!--
+          ⚠️⚠️ ITS OWN ROW, WITH ITS OWN NOTE UNDER IT, AND THE FIRST ARRANGEMENT WAS
+          WRONG IN A WAY ONLY A PICTURE SHOWED. Both controls sat in one row and both
+          notes were stacked beneath the pair — two paragraphs that BOTH open *"Nothing
+          is deleted"*, with nothing saying which belonged to which button. ⭐ The fault
+          is not the repetition: D-187 settled that economy is not a criterion here.
+          It is that a note is only a note about something if it is next to it.
+        -->
+        <div class="row mt">
+          <button id="change-pin" class="secondary"></button>
+        </div>
+        <p class="note mt-s" id="pin-note"></p>
 
         <!--
           §7.8's ending, and §7.8 step 5's separate control beside it.
@@ -723,15 +747,84 @@
       </section>
 
       <!--
-        §4.3 in Ghost mode. NOT the lock screen: there is no phrase to ask for, so
-        this hides and does not lock, and it says which of the two it is.
+        §4.3's SECOND TIER, in both modes. NOT the lock screen: nothing is dropped and
+        nothing is closed, so a pairing that is waiting for a friend keeps running
+        underneath it — and the copy says which of the two it is, because a cover costs
+        digits typed into the same page and a lock costs a derivation from the eight
+        words.
+
+        ⚠️⚠️ IT USED TO BE GHOST MODE ONLY, AND THE MODE IS NOW THE SMALLER DIFFERENCE.
+        Both modes cover, both ask for a PIN, and what changes is the way out of a
+        forgotten one: `#covered-key` in the mode that has a KEY to fall back to,
+        `#covered-end` in the mode that does not. Exactly one of the two is ever shown.
+
+        ⚠️ `#covered-boxes` IS EMPTY IN THIS FILE ON PURPOSE, like `#create-label` above.
+        `visibleText()` in `test/copy.mjs` reads this file, so a digit typed here would
+        be a stray sentence; `paintPinBoxes()` builds the inputs with `createElement`,
+        which is also what Trusted Types requires.
       -->
       <section id="covered" aria-labelledby="covered-why" class="panel hidden">
         <h2 id="covered-why"></h2>
-        <p class="note" id="covered-what"></p>
+        <p class="note" id="covered-ask"></p>
+        <div class="pinrow" id="covered-boxes" role="group"></div>
+        <p class="note" id="covered-note"></p>
         <div class="row mt">
           <button id="uncover"></button>
+        </div>
+        <!-- ⚠️ A `<div>` rather than a `<p>`, because `prose()` builds one `<p>` per
+             paragraph and a `<p>` may not contain another. Same reason as the four
+             server disclosures on the list screen. -->
+        <div class="note mt" id="covered-what"></div>
+        <div class="row mt">
+          <button id="covered-key" class="secondary"></button>
           <button id="covered-end" class="secondary"></button>
+        </div>
+      </section>
+
+      <!--
+        §4.3's second tier, where it is chosen. Reached once per browser per KEY, and
+        once per Ghost conversation, because Hannu made it mandatory: *"Everybody must
+        set one."*
+
+        ⚠️⚠️ THE BOXES ARE `type="password"`, ONE DIGIT EACH, AND THAT SHAPE IS A
+        MEASUREMENT RATHER THAN A STYLE. It is the "B2" field Hannu tested on 2026-07-09
+        against Edge, Chrome, Firefox and Bitwarden for the seku/privis unlock key: no
+        manager could capture it silently, and `type="password"` masks natively in every
+        browser where the CSS-only variant showed plaintext in Firefox. ⭐ He asked for
+        it here by name — *"that mechanism we used in seku/privis and privsend that the
+        numbers are typed in such a field that password managers do not remember them."*
+
+        ⭐ AND THE EIGHT WORDS ALREADY HAD THIS PROPERTY BY ACCIDENT, WHICH IS WHY HE HAS
+        NEVER SEEN THEM OFFERED TO A MANAGER: `#phrase-in` is `type="text"`, carries no
+        `name`, and sits outside any `<form>` — the three things a manager looks for.
+        Worth knowing before anybody "tidies" that field into a form.
+
+        ⚠️ NO `<form>` HERE EITHER, for the same reason, and because a form would submit.
+      -->
+      <section id="pin-set" aria-labelledby="pin-set-title" class="panel hidden">
+        <h2 id="pin-set-title"></h2>
+        <p id="pin-set-lead" class="lead"></p>
+        <!-- ⚠️⚠️ THE REUSE WARNING IS ABOVE THE FIELDS AND NOT UNDER THE BUTTON, because
+             it is an instruction for CHOOSING rather than a fact about what was chosen.
+             D-192's finding in one line: position and weight. A sentence a person meets
+             after pressing Save has arrived too late to change anything. -->
+        <p class="note" id="pin-set-warn"></p>
+        <p class="note mt" id="pin-set-ask"></p>
+        <div class="pinrow" id="pin-set-boxes" role="group"></div>
+        <p class="note mt" id="pin-set-confirm-ask"></p>
+        <div class="pinrow" id="pin-set-confirm" role="group"></div>
+        <p class="note" id="pin-set-note"></p>
+        <div class="row mt">
+          <button id="pin-set-go"></button>
+          <button id="pin-set-cancel" class="secondary"></button>
+        </div>
+        <!--
+          ⚠️ THE HONEST PARAGRAPH IS ON THE SCREEN AND NOT IN A CONFIRMATION. §4.3's own
+          rule for the Ghost cover, applied one screen earlier: a person deciding how much
+          to trust this is deciding before any dialog opens.
+        -->
+        <div class="sep">
+          <p class="note" id="pin-set-what"></p>
         </div>
       </section>
 

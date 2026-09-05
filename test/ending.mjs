@@ -513,6 +513,188 @@ section("§4.3 — when a session locks, and why the reason is shown");
   watcher.stop();
 }
 
+// ================================== §4.3's SECOND TIER — the cover, and its ordering
+
+section("§4.3 — two tiers, and the invariant between them");
+
+// ⚠️⚠️ A TIER LONGER THAN THE TIER ABOVE IT IS A TIER THAT NEVER FIRES. §4.3 already
+// records this shape once, for blur against idle — *"at longer it becomes unreachable,
+// because the idle rule always concludes first"* — and adding a second pair of numbers
+// makes it four ways to get wrong instead of one. These are the four.
+check("the cover's idle window is never longer than the lock's", lock.COVER_IDLE_MS <= lock.IDLE_MS);
+check("the cover's blur window is never longer than the lock's", lock.COVER_BLUR_MS <= lock.BLUR_MS);
+check("blur is never the longer of the two inside the cover tier", lock.COVER_BLUR_MS <= lock.COVER_IDLE_MS);
+check("⚠️ and the cover actually fires first, or the second tier is decoration", lock.COVER_BLUR_MS < lock.BLUR_MS);
+
+{
+  const t0 = 4_000_000;
+  const away = { lastActivity: t0, hiddenSince: t0, now: t0 + lock.COVER_BLUR_MS };
+  equal("the short window covers", lock.dueToCover(away), lock.BLURRED);
+  equal("⭐ and the same moment does not lock — that is the whole feature", String(lock.dueToLock(away)), "null");
+}
+
+{
+  // ⭐⭐ THE SESSION THAT SAT BEHIND ITS COVER ALL DAY STILL LOCKS. Covering tears
+  // nothing down, so a watcher that stopped itself at the short window would leave the
+  // derived keys in memory for as long as the tab lived, behind a gate that costs six
+  // digits. That is the failure this whole tier could most easily have introduced.
+  const covered = [];
+  const locked = [];
+  let clock = 7_000_000;
+  const watcher = lock.watchIdleness({
+    onCover: (reason) => covered.push(reason),
+    onLock: (reason) => locked.push(reason),
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc: { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} },
+    now: () => clock,
+    checkMs: 1e9,
+  });
+
+  clock += lock.COVER_IDLE_MS;
+  watcher.evaluate();
+  equal("the short window covers it", covered.join(","), lock.IDLE);
+  check("and the watcher is still running", !watcher.stopped);
+
+  // ⚠️ TAPPING AT A COVERED SCREEN IS NOT USE, and this is a hole rather than a nicety:
+  // without it, somebody trying PINs on a phone they picked up would hold off the one
+  // gate that drops the keys.
+  clock += lock.IDLE_MS - lock.COVER_IDLE_MS - 1000;
+  watcher.touch();
+  watcher.evaluate();
+  equal("a covered screen that is being tapped does not restart the lock clock", locked.join(","), "");
+
+  clock += 2000;
+  watcher.evaluate();
+  equal("⭐ so the long window still arrives", locked.join(","), lock.IDLE);
+  check("and NOW the watcher stops", watcher.stopped);
+  equal("and it covered exactly once on the way", String(covered.length), "1");
+}
+
+{
+  // The right PIN arrived: both clocks start again from that moment.
+  const covered = [];
+  const locked = [];
+  let clock = 11_000_000;
+  const watcher = lock.watchIdleness({
+    onCover: (reason) => covered.push(reason),
+    onLock: (reason) => locked.push(reason),
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc: { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} },
+    now: () => clock,
+    checkMs: 1e9,
+  });
+
+  clock += lock.COVER_IDLE_MS;
+  watcher.evaluate();
+  check("covered", watcher.covered);
+
+  watcher.uncovered();
+  check("lifting the cover clears the flag", !watcher.covered);
+
+  clock += lock.COVER_IDLE_MS - 1;
+  watcher.evaluate();
+  equal("and the short clock restarted with it", String(covered.length), "1");
+  clock += 2;
+  watcher.evaluate();
+  equal("⭐ then covers again on its own schedule", String(covered.length), "2");
+  watcher.stop();
+}
+
+{
+  // ⭐ COMING BACK IS STILL THE EVENT THAT MATTERS, and now it has two answers.
+  let visibility = "visible";
+  const handlers = {};
+  const covered = [];
+  const locked = [];
+  let clock = 13_000_000;
+  const doc = {
+    get visibilityState() {
+      return visibility;
+    },
+    addEventListener: (type, fn) => (handlers[type] = fn),
+    removeEventListener: () => {},
+  };
+  const watcher = lock.watchIdleness({
+    onCover: (reason) => covered.push(reason),
+    onLock: (reason) => locked.push(reason),
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc,
+    now: () => clock,
+    checkMs: 1e9,
+  });
+
+  visibility = "hidden";
+  handlers.visibilitychange();
+  clock += lock.COVER_BLUR_MS + 1;
+  visibility = "visible";
+  handlers.visibilitychange();
+  equal("an absence past the short window covers on return", covered.join(","), lock.BLURRED);
+  equal("and does not lock", locked.join(","), "");
+  check("and the watcher is still running", !watcher.stopped);
+
+  // ⚠️ AND A LONG ABSENCE TAKES THE STRONGER ANSWER, not both. The long tier is asked
+  // first for exactly this: a session owed a lock must not be handed a cover instead.
+  watcher.uncovered();
+  visibility = "hidden";
+  handlers.visibilitychange();
+  clock += lock.BLUR_MS + 1;
+  visibility = "visible";
+  handlers.visibilitychange();
+  equal("⭐⭐ an absence past the long window locks and does not cover", locked.join(","), lock.BLURRED);
+  equal("the cover was not raised on the way past", String(covered.length), "1");
+}
+
+{
+  // ⚠️⚠️ AND WITHOUT `onLock` THERE IS NO LONG TIER AT ALL — which is §7.6's Ghost mode,
+  // where dropping the derived set is not a lock but a silent ending on a timer (D-073).
+  // ⭐ THE PROPERTY THAT MATTERS HERE IS THAT IT NEVER STOPS. A watcher that stopped at
+  // the long window would cover a Ghost conversation once and then never again for the
+  // life of the tab, and nothing on the screen would say so.
+  const covered = [];
+  let clock = 19_000_000;
+  const watcher = lock.watchIdleness({
+    onCover: (reason) => covered.push(reason),
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc: { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} },
+    now: () => clock,
+    checkMs: 1e9,
+  });
+
+  clock += lock.COVER_IDLE_MS;
+  watcher.evaluate();
+  clock += lock.IDLE_MS * 3;
+  watcher.evaluate();
+  check("⭐⭐ a cover-only watcher never stops, however long the session sits", !watcher.stopped);
+  equal("and it covered once rather than locking", String(covered.length), "1");
+
+  watcher.uncovered();
+  clock += lock.COVER_IDLE_MS;
+  watcher.evaluate();
+  equal("⭐ and it can still cover again afterwards", String(covered.length), "2");
+  watcher.stop();
+}
+
+{
+  // ⚠️ WITHOUT `onCover` THE SHORT TIER IS INERT, which is for the tests above this one
+  // and for nothing else — `app.js` always passes both. A caller exercising the long
+  // window alone should not have to sit through the short one first.
+  const locked = [];
+  let clock = 17_000_000;
+  const watcher = lock.watchIdleness({
+    onLock: (reason) => locked.push(reason),
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc: { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} },
+    now: () => clock,
+    checkMs: 1e9,
+  });
+  clock += lock.COVER_IDLE_MS + 1;
+  watcher.evaluate();
+  check("no cover callback, no covering", !watcher.covered);
+  clock += lock.IDLE_MS;
+  watcher.evaluate();
+  equal("and the long window is untouched by any of it", locked.join(","), lock.IDLE);
+}
+
 // ================================== §7.8 step 2a, the plan and the key it needs
 
 section("§7.8 step 2a — the plan is built before the key that builds it is destroyed");

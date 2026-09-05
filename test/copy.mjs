@@ -27,7 +27,7 @@ import { MAX_CANDIDATE_SETS, PHRASE_WORDS, PHRASE_WORDS_LONG } from "../src/prot
 import { PAIRING_TTL_SECONDS } from "../src/protocol/pairing.js";
 import { CODE_ALPHABET, CODE_CHARS, SPELLING, normalise } from "../src/protocol/code.js";
 import { EPOCH_SECONDS } from "../src/protocol/epoch.js";
-import { BLUR_MS, IDLE_MS } from "../src/flow/lock.js";
+import { BLUR_MS, COVER_BLUR_MS, COVER_IDLE_MS, IDLE_MS } from "../src/flow/lock.js";
 import { USER_CHECK_INTERVAL_S } from "../src/flow/roster.js";
 import { segments, plain, hasBalancedEmphasis, markedTerms, hasUnconsumedMarks } from "../src/ui/emphasis.js";
 import { check, equal, section, done } from "./harness.mjs";
@@ -1204,10 +1204,52 @@ for (const [name, sentence] of [["idle", copy.lock.coveredIdle], ["blurred", cop
   );
 }
 
+/* ⛔⛔⛔ THIS CHECK USED TO READ `/Anybody using this device can show it again/`, AND
+ * REPLACING IT IS THE POINT RATHER THAN A CHORE.
+ *
+ * That sentence was true for the whole life of the Ghost cover, because a click lifted
+ * it. The second tier put a PIN in front of it — and **a guard asserting a sentence that
+ * has quietly become false is worse than no guard**, because it makes the false claim a
+ * requirement. It failed the moment the cover changed, which is the only reason it was
+ * noticed; nothing in a build breaks when a true sentence stops being true.
+ *
+ * ⚠️ WHAT THE RULE ACTUALLY IS, WRITTEN AS THE RULE THIS TIME. A cover may not claim to
+ * be a lock, in either mode. It costs digits typed into the same page the conversation
+ * is sitting in, so what it stops is somebody who picked the device up — and what it
+ * does not stop has to be on the screen, in both modes, because §7.6 says this is the
+ * mode the highest-risk person reaches for and the claim has to be exact.
+ */
+// ⚠️ JOINED EXPLICITLY. Both are ARRAYS of paragraphs since `prose()` started rendering
+// them, and a regex tested against an array coerces it silently — which passes here and
+// would go on passing if one of the paragraphs disappeared.
+const joined = (v) => [].concat(v).join(" ");
+for (const [mode, sentence] of [["Ghost", joined(copy.lock.coveredWhat)], ["Kept", joined(copy.lock.coveredWhatKept)]]) {
+  check(
+    `⭐⭐⭐ the ${mode} cover says out loud what it does NOT stop`,
+    /still reach what is behind it/.test(sentence) && /only hides the screen/.test(sentence),
+    sentence
+  );
+  check(`⚠️ and the ${mode} cover does not call itself a lock`, !/\block(ed|s)?\b/i.test(sentence), sentence);
+  check(`⚠️ nor claims anything is deleted by it`, /Nothing is deleted/.test(sentence), sentence);
+}
+
+// ⚠️⚠️ AND THE TWO MODES DIFFER ON THE ONE THING A PERSON HAS TO DECIDE: what stands
+// behind the cover. Ghost has no KEY, so a forgotten PIN there ends the conversation;
+// Kept falls back to the eight words. A shared sentence would be wrong in one of them.
 check(
-  "⭐⭐⭐ and it says out loud that anybody can lift it",
-  /Anybody using this device can show it again/.test(copy.lock.coveredWhat),
-  copy.lock.coveredWhat
+  "⚠️ both are two paragraphs, which is what `prose()` renders and `text()` flattened",
+  [].concat(copy.lock.coveredWhat).length === 2 && [].concat(copy.lock.coveredWhatKept).length === 2
+);
+
+check(
+  "⭐⭐ Ghost's version says there is no KEY behind it",
+  /Ghost mode has no KEY/.test(joined(copy.lock.coveredWhat)) && /ending the conversation/.test(joined(copy.lock.coveredWhat)),
+  joined(copy.lock.coveredWhat)
+);
+check(
+  "⭐⭐ and Kept's says the KEY is the stronger one",
+  /Your KEY is the stronger one/.test(joined(copy.lock.coveredWhatKept)),
+  joined(copy.lock.coveredWhatKept)
 );
 
 // ⚠️⚠️⚠️ DELETED, NOT RE-POINTED, AND THAT IS THE UNUSUAL CASE (D-148). The check
@@ -1237,10 +1279,13 @@ check(
   // enough. Both thresholds moved to 24 hours; a sentence still reading "24 minutes"
   // would have contained `String(IDLE_MS / 3600000)` and passed. Pinning the digit AND
   // the unit together is the only form of this check that fails when a unit goes stale.
+  // ⚠️⚠️ THESE TWO SENTENCES CHANGED TIER. They belong to §4.3's COVER, so they carry
+  // the cover's constants — and this check read the LOCK's until the second tier was
+  // built, which is the same drift it exists to catch, one level up.
   const idle = copy.lock.coveredIdle;
   const blurred = copy.lock.coveredBlurred;
-  check(`§4.3's idle threshold is ${IDLE_MS / 3600000} hours`, idle.includes(copy.plural(IDLE_MS / 3600000, "hour")), idle);
-  check(`§4.3's blur threshold is ${BLUR_MS / 3600000} hours`, blurred.includes(copy.plural(BLUR_MS / 3600000, "hour")), blurred);
+  check(`§4.3's cover idle threshold is ${copy.span(COVER_IDLE_MS / 1000)}`, idle.includes(copy.span(COVER_IDLE_MS / 1000)), idle);
+  check(`§4.3's cover blur threshold is ${copy.span(COVER_BLUR_MS / 1000)}`, blurred.includes(copy.span(COVER_BLUR_MS / 1000)), blurred);
 }
 
 // ==================================================== §0.2's one sentence to a person
@@ -1635,11 +1680,33 @@ section("§4.3 — the thresholds, and the sentences that carry them");
   // leaves the UNIT behind, and the arithmetic goes on being right the whole time. The
   // four sentences above are the only ones that state either threshold, so the unit they
   // no longer use may not appear in any of them.
+  //
+  // ⚠️⚠️ IT USED TO LOOK FOR THE WORD "minute" IN ALL FOUR, WHICH WAS RIGHT WHILE ALL
+  // FOUR WERE HOURS AND BECAME WRONG THE DAY TWO OF THEM WERE MINUTES ON PURPOSE. The
+  // rule is not "no minutes anywhere" — it is that **each sentence states the unit ITS
+  // OWN constant produces and no other**, which is what the old form was reaching for
+  // and could not say while it had one unit hard-coded into it.
   {
-    const carrying = ["idle", "blurred", "coveredIdle", "coveredBlurred"].filter((k) =>
-      /\bminutes?\b/.test(copy.lock[k])
+    const stated = {
+      idle: copy.plural(IDLE_MS / 3600000, "hour"),
+      blurred: copy.plural(BLUR_MS / 3600000, "hour"),
+      coveredIdle: copy.span(COVER_IDLE_MS / 1000),
+      coveredBlurred: copy.span(COVER_BLUR_MS / 1000),
+    };
+    const stale = [];
+    for (const [k, want] of Object.entries(stated)) {
+      const mine = want.split(" ")[1].replace(/s$/, "");
+      for (const unit of ["second", "minute", "hour", "day"])
+        if (unit !== mine && new RegExp(`\\b${unit}s?\\b`).test(copy.lock[k])) stale.push(`${k} says ${unit}`);
+    }
+    equal("⛔ no §4.3 sentence states a unit its OWN constant has left behind", stale.join(", "), "");
+    // ⚠️ THE CANARY. A sweep over four sentences that matched no unit at all would pass
+    // this silently, which is the shape of half the defects in this file.
+    equal(
+      "⚠️ and each of the four does state its own",
+      Object.entries(stated).filter(([k, want]) => !copy.lock[k].includes(want)).map(([k]) => k).join(", "),
+      ""
     );
-    equal("⛔ no §4.3 sentence still states a unit its constant has left behind", carrying.join(", "), "");
   }
 }
 

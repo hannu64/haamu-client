@@ -120,6 +120,15 @@ echo "=== ending.mjs — §7.8's ORDER, §7.7's overwrite, §4.3's lock ==="
 node test/ending.mjs
 
 echo
+echo "=== pin.mjs — §4.3's second tier, the cover PIN ==="
+# ⚠️ Nothing here claims the PIN protects anything: §4.3's cover keeps every key in
+# memory, so a PIN in front of it stops somebody who picked the device up and stops
+# nobody who opens devtools. What is guarded is what is reachable — the refusals are the
+# ones the design chose, a record round-trips, and a damaged one answers `false` rather
+# than throwing at a screen with a person standing in front of it.
+node test/pin.mjs
+
+echo
 echo "=== visibility.mjs — §3.4.1b rule 11, which has now been missed twice ==="
 # ⚠️ D-140 taught rule 11 to the poll and not to the retry ladder; D-141 taught it to
 # the parking and not to the budget wrapped around it. Both were bugs in how two

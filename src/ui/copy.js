@@ -67,7 +67,8 @@ import { CANDIDATES_PER_SET, MAX_CANDIDATE_SETS, PHRASE_WORDS, PHRASE_WORDS_LONG
 import { PAIRING_TTL_SECONDS } from "../protocol/pairing.js";
 import { CODE_CHARS } from "../protocol/code.js";
 import { EPOCH_SECONDS } from "../protocol/epoch.js";
-import { BLUR_MS, IDLE_MS } from "../flow/lock.js";
+import { BLUR_MS, COVER_BLUR_MS, COVER_IDLE_MS, IDLE_MS } from "../flow/lock.js";
+import { PIN_MAX, PIN_MIN, WRONG_BEFORE_LOCK } from "../flow/pin.js";
 
 const hours = (seconds) => Math.round(seconds / 3600);
 const minutes = (seconds) => Math.round(seconds / 60);
@@ -2079,6 +2080,14 @@ export const lock = {
   // deliberate act back to the person who performed it is noise.
   manual: "Locked. Type your KEY to carry on.",
 
+  // ⚠️⚠️ THE FOURTH REASON, AND IT EXISTS BECAUSE D-163's RULE SAYS IT MUST. Each reason
+  // a session locked gets its own sentence and there is no default: this one would
+  // otherwise inherit `manual` and tell somebody who has just mistyped a PIN five times
+  // that they pressed a button. ⭐ It also has to be the truth rather than the tactful
+  // version — a person who did NOT do this is being told their device was in somebody
+  // else's hands, and that is worth knowing.
+  wrongPin: `${WRONG_BEFORE_LOCK} wrong PINs. Type your KEY to carry on.`,
+
   // ⚠️⚠️ §4.3 IN GHOST MODE IS NOT THE SAME PROPERTY UNDER THE SAME NAME (0.8.14,
   // D-073). §4.3 requires a lock after ten idle minutes and says unlocking "requires
   // the PRF touch, or the passphrase where PRF is unavailable" — and §7.6's first
@@ -2088,9 +2097,9 @@ export const lock = {
   // the wording must keep the two apart: a Kept lock costs an Argon2id to lift, and
   // a cover costs a click. Claiming the first while doing the second is exactly the
   // kind of sentence §7.6 says has to be exact.
-  coveredIdle: `Covered after ${plural(hoursFromMs(IDLE_MS), "hour")} without use.`,
+  coveredIdle: `Covered after ${span(COVER_IDLE_MS / 1000)} without use.`,
 
-  coveredBlurred: `Covered because this was in the background for more than ${plural(hoursFromMs(BLUR_MS), "hour")}.`,
+  coveredBlurred: `Covered because this was in the background for more than ${span(COVER_BLUR_MS / 1000)}.`,
 
   // ⚠⚠ D-148 REMOVED THE LAST SENTENCE, AND THE REASON IS THE BEST KIND — IT IS ABOUT
   // WHO IS HOLDING THE DEVICE. It read *"If the device is not in your hands, end the
@@ -2103,11 +2112,171 @@ export const lock = {
   // the MECHANISM — no phrase exists, so no prompt can be shown — and left the reader to
   // work out the consequence. His version names the consequence and drops the mechanism:
   // what is missing is not a prompt, it is the protection.
-  coveredWhat:
-    "This only hides it. Anybody using this device can show it again — there is no KEY in this " +
-    "mode to protect the conversation.",
+  // ⚠️⚠️ THIS SENTENCE WAS TRUE UNTIL THE COVER GREW A PIN, AND THE OLD ONE IS THE
+  // REASON TO CHECK EVERY OTHER SENTENCE IN THIS FILE WHEN A MECHANISM CHANGES. It read
+  // *"Anybody using this device can show it again — there is no KEY in this mode to
+  // protect the conversation."* Both halves were correct when a click lifted the cover.
+  // The second half is still correct; **the first became a false statement about the
+  // product the moment a PIN stood in front of it** — and nothing in a build breaks when
+  // a true sentence quietly stops being true. ⭐ D-151's class, arriving from the
+  // opposite direction: not a missing sentence, a sentence left behind.
+  //
+  // ⚠️ WHAT IT STILL HAS TO SAY, because §4.3 requires it and §7.6 requires it exactly:
+  // a cover is not a lock. Lifting a LOCK costs a derivation from a secret only the
+  // person has; lifting this costs digits typed into the same page the conversation is
+  // sitting in, so it stops somebody who picked the device up and stops nobody who knows
+  // the browser. Ghost mode has no KEY to fall back to, so a forgotten PIN there leaves
+  // exactly one way on and this says which.
+  // ⚠️ TWO ENTRIES RATHER THAN ONE STRING WITH A BREAK IN IT, AND THE SCREEN IS WHY.
+  // `text()` writes `textContent`, where a `\n\n` is whitespace and nothing else — the
+  // two paragraphs rendered as one wall of grey, which is how it was found. `prose()`
+  // takes an array and builds a `<p>` for each, which is the same shape `product.what`
+  // has used since the gate was written.
+  coveredWhat: [
+    "This only hides the screen. Nothing is deleted and nothing is closed. Somebody who knows " +
+      "this browser well can still reach what is behind it.",
+    "Ghost mode has no KEY, so if you cannot remember your PIN, ending the conversation is the " +
+      "only way on.",
+  ],
+
+  // ⚠️ THE SAME TWO FACTS IN THE MODE THAT HAS A WAY BACK. The difference between the
+  // two modes is not how strong the cover is — it is identical — but what stands behind
+  // it, and that is the half a person needs in order to choose what to do next.
+  coveredWhatKept: [
+    "This only hides the screen. Nothing is deleted and nothing is closed, and your conversations " +
+      "come back the moment you type your PIN. Somebody who knows this browser well can still reach " +
+      "what is behind it.",
+    `Your KEY is the stronger one, and haamu asks for it after ${plural(hoursFromMs(IDLE_MS), "hour")} without use.`,
+  ],
 
   show: "Show the conversation",
+
+  // ⚠️ THE WAY OUT OF A FORGOTTEN PIN, IN THE MODE THAT HAS ONE. It runs the same lock
+  // the control on the list screen runs — the keys go, and the eight words bring them
+  // back. ⭐ It is on the cover screen rather than behind an "are you sure", because the
+  // person reading it has already discovered that they cannot remember something.
+  useKey: "I do not remember my PIN — ask for my KEY instead",
+};
+
+// --------------------------------------------- §4.3's second tier — the cover PIN
+
+/**
+ * ⚠️⚠️ ON SCREEN IT IS A **PIN**, IN BOTH LANGUAGES, AND THAT IS HANNU'S CALL RATHER
+ * THAN A DEFAULT. *"For the haamu user the PIN / PIN is the easiest, shortest and most
+ * understood so that should be what is visible for the user."* Three names were offered
+ * and the other two were plainer English; he chose the one every person already owns
+ * from a phone and a bank card. ⭐ **The documents call it the `cover PIN`** because
+ * `PROTOCOL.md` §7.5 records a different, REJECTED short PIN — one mixed into
+ * `wrap_key` — and a reader meeting one word for both would have to work out which is
+ * meant every time.
+ *
+ * ⛔ IT MAY NOT BE CALLED "six digits". That phrase is §3.6.2's glossary term for the
+ * check two friends read to each other, it is linked from four screens, and this is a
+ * different thing that happens to be able to have six digits in it.
+ *
+ * ⛔ AND IT MAY NOT BE CALLED A KEY, in either case (D-109). The KEY is the eight words
+ * and nothing else. Every sentence here that names both has to keep them apart, because
+ * the whole point of the second tier is that they are not the same strength.
+ */
+export const pin = {
+  title: "Choose a PIN",
+
+  // ⚠️ THE LEAD SAYS WHAT IT IS FOR BEFORE IT ASKS FOR ANYTHING. A field demanding a
+  // second secret from somebody who came here to read a message is a wall; the same
+  // field under a sentence naming the thing it prevents is a choice.
+  lead:
+    "haamu covers the screen when you put this device down. Your PIN shows your conversations again, " +
+    "without your KEY and without the wait.",
+
+  // D-153: the range is two digits, from the two constants.
+  ask: `${PIN_MIN} to ${PIN_MAX} digits.`,
+  confirmAsk: "Type it again.",
+  save: "Save my PIN",
+
+  /**
+   * ⚠️⚠️ THE HONEST PARAGRAPH, AND IT GOES ON THE SCREEN WHERE THE CHOICE IS MADE.
+   * §4.3's Ghost rule is the precedent and it is explicit about the placement: a person
+   * choosing between controls chooses before any dialog opens. Somebody who believes a
+   * PIN protects their messages the way their KEY does will make different decisions
+   * about where this device is left.
+   */
+  what:
+    "A PIN is not your KEY and does not replace it. It hides what is on the screen from somebody " +
+    "who picks up this device. It does not encrypt anything, and somebody who knows this browser " +
+    "well can still reach what is behind it.",
+
+  /**
+   * ⭐ THE ONE REAL HARM THAT ARITHMETIC COULD NOT FIX, ANSWERED IN WORDS. The stored
+   * record is a salted hash and no more, because everybody who can read it already holds
+   * the keys it would be guarding — so its only remaining job is to not hand over a
+   * number the person uses somewhere that matters. `flow/pin.js` explains why a slow
+   * hash here would be a half-defence against an attacker who is already inside; this
+   * sentence is the defence that actually works.
+   */
+  warn: "Do not use a PIN you use anywhere else, and do not write it on anything kept beside this device.",
+
+  /**
+   * Why a proposed PIN was refused — one sentence each, no default (D-163's rule about a
+   * ternary over a set that later grows).
+   *
+   * ⚠️ THE TWO SHAPE RULES SAY WHAT TO DO, NOT WHAT WAS WRONG. "That is not allowed" is
+   * a verdict; "choose one that is not..." is an instruction, and the person is standing
+   * at a field with a cursor in it.
+   */
+  refused: {
+    not_digits: "A PIN is digits only.",
+    too_short: `A PIN is at least ${PIN_MIN} digits.`,
+    too_long: `A PIN is at most ${PIN_MAX} digits.`,
+    all_same: "Choose a PIN that is not the same digit over and over.",
+    run: "Choose a PIN that is not a straight run of digits.",
+    // ⚠️ IT SAID "The two do not match", AND "two" IS A SPELLED QUANTITY (D-153). The
+    // rule is about digits reaching the reader as digits, and the copy gate reads it as
+    // one rule rather than as a rule about interesting numbers — correctly, because the
+    // sentence does not need a count at all.
+    mismatch: "That does not match what you typed above. Type it again.",
+  },
+
+  changed: "Your PIN is saved.",
+
+  // The list screen's control. ⚠️ It sits with the lock rather than with the endings,
+  // because like the lock it deletes nothing — and that is the line §4.3 draws between
+  // the two groups of controls on that screen.
+  change: "Change my PIN",
+  changeNote: "Nothing is deleted. The new PIN takes over the next time the screen is covered.",
+
+  /**
+   * ⚠️ THE BOXES NEED NAMES, and one name on the group is not enough. A row of eight
+   * unlabelled inputs is eight controls a screen reader calls "blank"; the group name
+   * says what is being asked for and each box says which position it is.
+   *
+   * ⭐ THE POSITION IS SAID AS "of 8" RATHER THAN ALONE, because a person who cannot see
+   * the row cannot count it, and how many are left is the part that is hard to recover.
+   */
+  boxes: "Your PIN",
+  digit: (i, n) => `Digit ${i} of ${n}`,
+
+  // ---------------------------------------------------------------- at the cover
+  coverAsk: "Type your PIN.",
+  wrong: "That is not your PIN.",
+
+  /**
+   * ⚠️⚠️ THE COUNT IS SHOWN, AND SHOWING IT IS THE KINDER OF THE TWO OPTIONS RATHER
+   * THAN THE LEAKIER. What it tells somebody holding a stolen phone is that guessing has
+   * an end — which is true, is the point, and is worth knowing before the fifth guess
+   * drops the keys. What it tells the owner is that the next mistake costs the eight
+   * words and a wait, which is exactly when a person slows down and looks at the keypad.
+   */
+  // ⚠️ `plural` CANNOT WRITE THIS ONE AND THE ATTEMPT PRINTED "3 trys". The helper adds
+  // an "s", which is right for every noun this product had until now; "try" is the first
+  // irregular one to reach a sentence. Teaching the helper an exception list would put a
+  // grammar table where D-153 has just finished removing a number table — so the one
+  // irregular noun spells itself out, here, next to the reason.
+  wrongLeft: (n) => `That is not your PIN. ${n} more ${n === 1 ? "try" : "tries"} before haamu asks for your KEY.`,
+
+  // ⚠️ GHOST MODE NEVER GIVES UP AND SO NEVER COUNTS DOWN. There is nothing to give up
+  // to — no KEY, no roster, no server copy — so an escalation there would destroy a
+  // conversation on five guesses by whoever picked the phone up. It slows down instead.
+  slow: "Wait a moment, then try again.",
 };
 
 // ------------------------------------------------------------ §7.6 Ghost mode

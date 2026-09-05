@@ -1354,6 +1354,37 @@ code, .link {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* ⚠️⚠️ §4.3's PIN BOXES, AND THE SIZING IS THE WHOLE PROBLEM. Eight of them have to
+   fit across the narrowest phone this product supports with a thumb-sized target on
+   each — so they FLEX rather than take a fixed width, with a maximum that stops three
+   of them sprawling on a desktop. This is the same shape as the seku/privis unlock-key
+   field, whose own note records why: *"fluid flex-1 max-w-11 so 8 fit a phone."*
+
+   ⚠️ `min-width: 0` IS NOT DECORATION. A flex item's default minimum is its content
+   width, so without it eight boxes refuse to shrink below their padding and the row
+   overflows the panel on a 320px screen — silently, because nothing errors.
+
+   ⚠️ THE 44px FLOOR IS THE SAME ONE `.field` KEEPS. A digit box is still a control a
+   person taps.
+
+   ⚠️ `-moz-appearance`/`appearance: textfield` — a numeric input draws spinner arrows
+   in some browsers, and an arrow inside a 2.4rem box is most of the box. */
+.pinrow { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.5rem; }
+.pinbox {
+  flex: 1 1 0; min-width: 0; max-width: 3rem;
+  font: inherit; text-align: center; letter-spacing: 0;
+  padding: 0.7rem 0.2rem; min-height: 2.75rem;
+  border-radius: var(--r);
+  border: 1px solid var(--line-strong); background: var(--panel); color: var(--fg);
+  appearance: textfield; -moz-appearance: textfield;
+}
+.pinbox::-webkit-outer-spin-button, .pinbox::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.pinbox:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* ⚠️⚠️ THE GATE'S TWO BUTTONS USED `.rows`, AND THAT IS *WHY* ITEM 1 EXISTS.
  * `.rows` was the CONVERSATION LIST — a stack of quiet grey outlines, which is
  * right for a list and wrong for a fork. It was reused at the gate for its
