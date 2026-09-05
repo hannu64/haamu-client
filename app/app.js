@@ -2367,9 +2367,17 @@ function renderWarnings() {
 async function openHome() {
   await watch(null); // this tab is displaying nothing; the leader can stop for it
   text("home-title", copy.list.title);
-  // D-139: `#create` is the floating button now, so its name is an attribute. See
-  // the note beside the three bar controls above — a circle cannot hold a sentence.
+  // D-139: `#create` is the floating button, so its name is an attribute.
+  // ⚠️⚠️ D-191: AND NOW ALSO ITS TEXT. The note here used to end "a circle cannot hold a
+  // sentence", which was true and was the wrong thing to conclude — the circle was the
+  // part that could be changed. Both are written from ONE constant: the accessible name
+  // and the visible name of a control must be the same words, or a person reading the
+  // screen and a person hearing it are being told about two different buttons.
+  // ⚠️ The `aria-label` STAYS even though the text alone would now name it. It is what
+  // `probe-accessible-names` reads, and dropping it would make the name depend on
+  // whether `openHome()` has run yet — which on the boot path it has not.
   $("create").setAttribute("aria-label", copy.list.start);
+  text("create-label", copy.list.start);
   // ⚠️ ROUND 19'S SECOND DOOR, AND IT SAYS THE SAME SENTENCE ON PURPOSE. The ＋ and this
   // item are one act; two names for it would be two things to learn. See `index.html`.
   text("menu-create", copy.list.start);
@@ -2916,6 +2924,29 @@ async function storeIncoming(hash, entry, messages) {
      * is hostile. The red line is still drawn below; only the marker is left alone.
      */
     if (m.payload) closes = false;
+
+    /**
+     * ⚠️⚠️ D-191: THE ONE FIELD THAT SAYS *WHICH* CASE IT WAS, KEPT. `unreadable()` draws
+     * one sentence for three causes, and `noteProblem` never saw any of them — it records
+     * THROWN exceptions, and a refusal is an ordinary return value. So on 2026-09-05 the
+     * panel read `problem     none` on a screen that was reporting a problem, and the
+     * report could not be resolved to a branch afterwards by anybody, including me.
+     *
+     * ⭐ `protocol/payload.js` ALREADY COMPUTES IT. `detail` carries `version: 1` or
+     * `version: 3` or `kind: …`, it travels in the staged record, and it was being thrown
+     * away one line below this. The fix is not new evidence; it is not discarding the
+     * evidence that was already in hand.
+     *
+     * ⚠️ ONLY THIS ONE OF THE FOUR. The others name themselves on screen in sentences
+     * nobody could confuse, and `staleSession` is EXPECTED after a device migration —
+     * recording it would print a fault in the panel for the thing D-130 established is
+     * not damage. `tampered` is deliberately left out too: it has the one sentence in the
+     * product that accuses the server, so a person reporting it is already unambiguous.
+     */
+    if (m.failure === messageFlow.UNSUPPORTED) {
+      const which = String(m.detail ?? "").replace(/\s+/g, "");
+      noteProblem({ reason: "unsupported", which: which || null });
+    }
 
     await session.messages.append(hash, {
       dir: "in",

@@ -407,6 +407,20 @@ html[lang="fi"] .gloss {
 .iconbtn:hover { background: rgba(128, 128, 128, 0.16); }
 .iconbtn:active { background: rgba(128, 128, 128, 0.26); }
 
+/* ⚠️ D-191: the drawn arrow, sized and WEIGHTED here rather than by `font-size`.
+   `stroke-width` is the property the text glyph never had — see the note in
+   `index.html`. `currentColor` keeps it on `.iconbtn`'s own `var(--fg)`, so it
+   needs no palette entry and `test/theme.mjs` has nothing new to demand. */
+.iconbtn svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* ⚠️⚠️ ROUND 19: *"the 3 dots in the top right corner could be stronger, they were
    easy to miss."* Reported by the one person who KNEW the menu was there — so it is a
    contrast problem and not a familiarity one, and no amount of use would fix it.
@@ -419,10 +433,32 @@ html[lang="fi"] .gloss {
    either palette, which `test/theme.mjs` would then require in both. */
 #bar-menu {
   font-size: 1.7rem;
-  background: rgba(128, 128, 128, 0.14);
 }
-#bar-menu:hover { background: rgba(128, 128, 128, 0.28); }
-#bar-menu[aria-expanded="true"] { background: rgba(128, 128, 128, 0.32); }
+
+/* ⚠️⚠️ D-191: ROUND 19'S WELL WAS NOT ENOUGH, AND THE SECOND REPORT NAMED BOTH
+   CONTROLS. Round 19 gave the three dots a 14% well for exactly this complaint and
+   the testers raised it again — so the fix is not "the same idea, harder", it is
+   that a tint alone does not make a shape read as a control. The ring does: it
+   gives both buttons an EDGE, which is what separates a button from a glyph
+   painted on a bar, and it costs no palette entry for the same reason the well
+   does not.
+
+   ⚠️ THE BACK ARROW IS IN THIS RULE NOW AND WAS NOT BEFORE. Round 19 fixed the
+   control that had been reported and left its twin alone, eleven lines away in
+   this file, with the same problem — and the next round of testers reported the
+   pair. ➡️ WHEN A FIX IS ABOUT A CLASS, APPLY IT TO THE CLASS.
+
+   ⚠️ Still neutral, never accent. D-104's rule is unchanged: the one filled accent
+   on the home screen is `#create`, which is now a labelled button at the top of the
+   list and louder than it has ever been — an accent ring up here would compete. */
+#bar-menu,
+#bar-back {
+  background: rgba(128, 128, 128, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.34);
+}
+#bar-menu:hover,
+#bar-back:hover { background: rgba(128, 128, 128, 0.34); }
+#bar-menu[aria-expanded="true"] { background: rgba(128, 128, 128, 0.38); }
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * The scroller. Everything that is not the bar lives in here, and it is the ONLY
@@ -724,9 +760,19 @@ code, .link {
   places; this keeps it in one.
 
   ⚠️ NO GLYPHS. The marks are drawn with `border-radius` and `box-shadow`, not with
-  characters. The floating button's `＋` needed a device check before it could be
-  trusted (round 20) and it is one symbol on one screen; a checkmark here would be
-  three, and a font without it renders tofu in the middle of a progress list.
+  characters, because a font without the character renders tofu in the middle of a
+  progress list.
+
+  ⚠️ THIS PARAGRAPH USED TO EXEMPT THE FLOATING BUTTON'S `＋` — *"it needed a device check
+  before it could be trusted (round 20) and it is one symbol on one screen"*. The exemption
+  is gone and the plus is drawn like these marks, so this file no longer excuses anything;
+  but the round-20 device check it cited was RIGHT, which is the part worth keeping.
+  ⛔ On 2026-09-05 U+FF0B measured as a missing-glyph box in this dev container and I took
+  that for a user-visible fault. Hannu checked the real machines — Android Chrome and
+  Firefox, Ubuntu Chrome, Firefox and Opera — and every one draws it. ➡️ THE CONTAINER IS
+  NOT A DEVICE, and round 20's insistence on checking devices is exactly what would have
+  caught me. The plus stays drawn because it costs nothing and removes a font dependency,
+  not because anybody ever saw a box.
 */
 /*
   D-145. §7.2's wait, given something that moves.
@@ -835,7 +881,10 @@ code, .link {
    clear this site's data" — a destructive control, half-covered, on the screen
    somebody reaches when they want to be careful. WhatsApp's own list has nothing
    underneath it to collide with; this one does, so it has to make room. */
-.listrest { padding: 0.5rem 1rem 5.5rem; }
+/* ⚠️ D-192: THE 5.5rem WAS THE FLOATING BUTTON'S DIAMETER PLUS ITS MARGIN, and the
+   button no longer floats — see `#create` above. What is left is ordinary breathing room
+   at the end of a scroll, so the last control is not flush against the edge. */
+.listrest { padding: 0.5rem 1rem 1.5rem; }
 
 /* ⚠️ QUIET ON PURPOSE — see the comment on `#home-title` in `index.html`. WhatsApp
    has no heading here at all; this is small enough not to compete with the bar
@@ -906,32 +955,47 @@ code, .link {
   white-space: nowrap;
 }
 
-/* ⚠️ THE NEW-CONVERSATION CONTROL IS A FLOATING BUTTON AND THAT IS NOT DECORATION.
-   The list is now full-bleed and scrolls; a button under the last row is a button
-   that leaves the screen as soon as there are eight conversations. WhatsApp's FAB
-   is the answer to exactly that and it is where a phone user's thumb already goes.
-   ⚠️ It is `position: absolute` against `main`, NOT `fixed` against the window: on a
-   wide screen the app is a 46rem column and a fixed button would sit in the corner
-   of the monitor, unattached to anything. */
-.fab {
-  position: absolute;
-  right: 1rem;
-  bottom: 1rem;
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 999px;
-  border: none;
-  background: var(--accent-bright);
-  color: var(--on-accent);
-  font-size: 1.6rem;
-  line-height: 1;
+/* ⚠️⚠️ D-192: THE NEW-CONVERSATION CONTROL IS IN THE FLOW, AT THE TOP, AND IT USED TO
+   FLOAT IN THE BOTTOM-RIGHT CORNER. The note here argued for the float: a button under
+   the last row leaves the screen once there are eight conversations, WhatsApp's FAB is
+   the answer, and it is where a phone user's thumb already goes. Every clause is true and
+   the conclusion did not survive contact — because a FAB carries no words, and the whole
+   complaint from the friend round was that nobody could find the one act this screen is
+   for. ⭐ The thumb argument also assumed a phone, and every tester was on a desktop.
+
+   ⛔ AND THE FLOAT COLLIDED, TWICE. This file already recorded it once: the circle sat
+   "squarely on top of" the clear-everything control, answered with bottom padding on
+   `.listrest`. Padding clears only the LAST element at full scroll — everything above it
+   still passes under the button — and a labelled pill is wide enough to reach the CENTRE
+   of a full-width control, which is where a click lands. `probe-forget-key` and
+   `probe-elsewhere-return` both caught it at 480px. ➡️ THE FIX IS NOT A WIDER GAP, IT IS
+   NOT FLOATING OVER A SCREEN FULL OF CONTROLS.
+
+   It inherits the bare `button` rule, which is D-104's one filled accent per screen — and
+   this is that action. */
+.createrow { padding: 0.75rem 1rem 0.25rem; }
+#create {
+  width: 100%;
+  min-height: 3rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(11, 20, 26, 0.25);
-  z-index: 3;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 999px;
+}
+/* ⛔ DRAWN, NOT LETTERED — see `index.html`: `＋` (U+FF0B) is a CJK-range character and
+   measured as tofu here. `stroke: currentColor` keeps it on the button's own `--on-accent`,
+   so it needs no palette entry and inverts with the theme for free. */
+.createglyph {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

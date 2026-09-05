@@ -105,7 +105,25 @@
         do come from `copy.js`, set as `aria-label` at boot.
       -->
       <div class="appbar">
-        <button id="bar-back" class="iconbtn hidden">←</button>
+        <!--
+          ⚠️⚠️ D-191: THIS WAS THE TEXT GLYPH `←` AND THREE TESTERS COULD NOT SEE IT.
+          One of them described it exactly: *"it looks like a narrow line"*. That is
+          what U+2190 IS in a system UI font — a hairline stroke with a small head,
+          sized by `font-size` and thickened by nothing, because a symbol has no bold
+          face to switch to. So the fix could not come from the type scale, and every
+          adjustment available to a text glyph had already been spent.
+
+          ⚠️ IT IS DRAWN, NOT LETTERED, SO THE COPY GATE IS UNAFFECTED. `visibleText()`
+          in `test/copy.mjs` matches text nodes carrying `[A-Za-z]`; path data lives in
+          an attribute and this element still has no text of its own. Its accessible
+          name is still `copy.menu.back` set as `aria-label` at boot, exactly as before
+          — `aria-hidden` on the shape is what keeps the two from being read twice.
+        -->
+        <button id="bar-back" class="iconbtn hidden">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M20 12H5m0 0 7-7m-7 7 7 7" />
+          </svg>
+        </button>
         <div id="bar-chat" class="barchat hidden">
           <div class="who">
             <h2 id="chat-name" class="m0"></h2>
@@ -138,16 +156,21 @@
             the button would move the rule onto the arrow, silently, in a design pass.
           -->
           <!--
-            ⚠️⚠️ ROUND 19. The ＋ button is WhatsApp's own control and it is staying,
-            but Hannu — who has used every build of this app — *"searched for it a long
-            time"*. A floating button is discoverable to somebody who already expects
-            floating buttons; the person who has learned this product's own list of
-            links is not that person, and the round before had one there.
+            ⚠️⚠️ ROUND 19. Hannu — who has used every build of this app — *"searched
+            for it a long time"* for the ＋. A floating button is discoverable to
+            somebody who already expects floating buttons; the person who has learned
+            this product's own list of links is not that person.
 
             ⚠️ SO THIS IS A SECOND DOOR, NOT A REPLACEMENT. WhatsApp itself puts New
-            group and New broadcast in exactly this menu — the ＋ is the fast path and
-            the menu is the findable one, and the two naming the SAME act is the point
-            rather than a duplication to tidy up later.
+            group and New broadcast in exactly this menu, and the two naming the SAME
+            act is the point rather than a duplication to tidy up later.
+
+            ⚠️ D-192 ANSWERED ROUND 19'S COMPLAINT AT THE SOURCE and this door stays
+            anyway. The ＋ is no longer floating or wordless — it is a labelled button
+            at the top of the list — so the argument above is now about a control that
+            no longer exists in that form. The entry is kept because a person who has
+            learned to look in this menu must keep finding it here, which is the same
+            reason it was added.
           -->
           <div id="menu-home" class="menu-group hidden">
             <button id="menu-create" class="secondary edged"></button>
@@ -451,16 +474,68 @@
       -->
       <section id="home" aria-labelledby="home-title" class="listpane hidden">
         <h2 id="home-title" class="listlabel"></h2>
-        <div class="chats" id="channels"></div>
 
         <!--
-          ⚠️ THE FLOATING BUTTON IS `#create` AND ITS LABEL IS AN `aria-label`, NOT
-          ITS TEXT. `openHome()` used to write `copy.list.start` into it; a circular
-          button 3.5rem across cannot hold "Start a new conversation", and a glyph
-          with no accessible name is a button a screen reader calls "button". Both
-          halves are needed and they are different attributes.
+          ⚠️⚠️ D-192: `#create` IS THE FIRST THING UNDER THE HEADING AND IT IS NO LONGER A
+          FLOATING CIRCLE. It was a 3.5rem circle in the bottom-right corner whose only
+          word was an `aria-label`, and several testers could not find how to start a
+          conversation at all — the one act this screen exists for. The note that used to
+          sit here said *"a circular button 3.5rem across cannot hold 'Start a new
+          conversation'"*, which was true and settled the question the wrong way round: it
+          treated the circle as the fixed part and the words as the impossible one.
+
+          ⚠️ AND THE FLOAT ITSELF WAS A HAZARD, MEASURED. An extended FAB was tried first
+          and `probe-forget-key` and `probe-elsewhere-return` both went red on it: at their
+          480px viewport the pill spanned x=202..464 while `#end-here` centres at 240, so a
+          click aimed at *"Forget your KEY here"* landed on the pill instead. The circle had
+          been narrow enough to miss a full-width button's centre and a labelled pill is
+          not — ⛔ **the same collision `app.css` already recorded once**, when the circle
+          sat *"squarely on top of"* the clear-everything control and was answered with
+          bottom padding. Padding only clears the LAST element at full scroll; every other
+          control still passes underneath. ➡️ A FLOATING CONTROL OVER A SCREEN OF CONTROLS
+          IS A COLLISION WAITING FOR A WIDER LABEL, so this one stops floating.
+
+          ⭐ Which is also what was asked for: *"How to send an invitation link should be
+          the most prominent thing on the page… it should not be at the very bottom of the
+          page where it is not immediately seen."* And every tester was on a desktop, where
+          a bottom-right circle is not where anyone looks — the FAB was justified in
+          `app.css` as *"where a phone user's thumb already goes"*.
+
+          ⚠️ The plus is DRAWN rather than the character `＋` (U+FF0B). That removes a font
+          dependency for nothing, and `app.css`'s progress-list note already prefers drawn
+          marks for the same reason: *"a font without it renders tofu"*.
+
+          ⛔⛔⛔⛔ IT IS NOT DRAWN BECAUSE USERS SAW TOFU, AND I RECORDED THAT IT WAS BEFORE
+          HANNU CORRECTED ME. U+FF0B measured 14.41px here against U+FFFF's identical
+          14.41px — a real missing-glyph box — and I read that as an explanation for why
+          testers could not find the button. **He then checked the actual machines: Android
+          Chrome, Android Firefox, and Ubuntu Chrome, Firefox and Opera all draw it
+          normally.** Desktop distributions ship Noto CJK; this dev container does not.
+          ➡️ ⭐⭐⭐⭐ **THE CONTAINER IS NOT A DEVICE.** The measurement was correct and its
+          subject was the box I ran it in, so it was evidence about the instrument and I
+          reported it as evidence about the product — the same fault class as
+          `reference_codex_review`'s silent-failure finding, arriving from the other side.
+
+          ⭐ **His two sentences are the real diagnosis and neither is about the glyph:**
+          *"it was at the very bottom of the page and just that symbol and a thin one."*
+          Position and weight. Everything below answers those.
+
+          ⚠️ THE `aria-label` STAYS ALONGSIDE THE TEXT. A glyph with no accessible name is
+          a button a screen reader calls "button", and `probe-accessible-names` reads the
+          attribute. ⚠️ The span is empty in this FILE on purpose: `visibleText()` in
+          `test/copy.mjs` reads the file, so a sentence typed here would be a stray;
+          `openHome()` fills it from the same constant that sets the `aria-label`, which is
+          what stops one button from having two different names.
         -->
-        <button id="create" class="fab">＋</button>
+        <div class="createrow">
+          <button id="create">
+            <svg class="createglyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 5v14M5 12h14" />
+            </svg><span id="create-label"></span>
+          </button>
+        </div>
+
+        <div class="chats" id="channels"></div>
 
         <div class="listrest">
           <div class="row">

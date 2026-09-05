@@ -57,7 +57,7 @@ export const FI = {
   "chat.placeholder": "Viesti",
   "chat.send": "Lähetä",
   "chat.thisOne": "Tämä keskustelu",
-  "chat.unsupported": "Saapui viesti, joka on lähetetty tätä uudemmasta sovelluksen versiosta.",
+  "chat.unsupported": "Saapui viesti, jota tämä sovelluksen versio ei osaa näyttää. Päivitä sovellus lataamalla tämä sivu uudelleen ja pyydä ystävääsi tekemään samoin.",
   "chat.undecryptable": "Saapui viesti, jota tämä laite ei osaa lukea. Se lähetettiin ennen kuin tämä laite palautettiin.",
   "chat.tampered": "Saapui viesti, jonka osoitetiedot oli muutettu matkalla. Sisältö pysyi salattuna eikä kukaan muu päässyt lukemaan sitä — mutta tämä laite ei toimi sellaisen viestin perusteella, jota palvelin on muuttanut. Pyydä ystävääsi lähettämään se uudestaan.",
   "chat.staleSession": "Yksi viesti on kadonnut. Se saapui ennen kuin tämä keskustelu muodostettiin uudelleen — pyydä ystävääsi lähettämään se uudestaan.",

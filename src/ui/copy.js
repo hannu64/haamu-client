@@ -1582,7 +1582,37 @@ export const chat = {
   thisOne: "This conversation",
 
   // §5.4.2's distinct local states, in words rather than codes.
-  unsupported: "A message arrived from a newer version of this app than the one you are running.",
+  //
+  // ⚠️⚠️ THIS NAMED ONE OF THREE CAUSES UNTIL D-191, AND THE ONLY ONE IT COULD ACTUALLY
+  // HAVE BEEN WAS A DIFFERENT ONE. `protocol/payload.js` returns `UnsupportedPayload`
+  // from three places: a payload OLDER than `BINDING_FROM_V`, a payload NEWER than
+  // `PAYLOAD_V`, and a `kind` this build does not know. The sentence said "from a newer
+  // version" — and on the fleet that exists, the newer branches are unreachable, because
+  // no build emits a version above 2 or a kind other than text and closed. So every
+  // occurrence of this line in the field has been an OLD message announced as a new one.
+  //
+  // ⭐⭐ HANNU MET IT ON 2026-09-05 AND SAID SO IMMEDIATELY: *"But not the app version."*
+  // He had the direction right from the screen alone and went looking for a version that
+  // could be older — he reached for the conversation list, which is a fourth thing this
+  // sentence had taught him to think about. ➡️ A NOTICE THAT NAMES A DIRECTION IT CANNOT
+  // KNOW SENDS THE READER LOOKING FOR THE WRONG OBJECT — D-130's finding, one step out:
+  // there the notice named an event the reader had not caused, here it names a direction
+  // the code never established.
+  //
+  // ⚠️ SO THIS FOLLOWS D-130's FIX RATHER THAN SPLITTING IN TWO. The rule there was to
+  // say what is true OF THE MESSAGE ITSELF, in the same sentence for every case the
+  // refusal covers, and that rule reaches all three of these: the message arrived intact
+  // and this build cannot draw it. Two sentences would need the client to decide which
+  // side is stale, which is exactly what it cannot do — the payload says the versions
+  // differ and never says whose is older.
+  //
+  // ⭐ AND THE ACTION IS THE SAME IN ALL THREE CASES, WHICH IS WHY THERE CAN BE ONE.
+  // §6 deployment gives this app no service worker and `cache-control: no-store`, so a
+  // reload IS the update. Whichever end is behind, reloading both fixes it, and neither
+  // person has to work out which of them it was.
+  unsupported:
+    "A message arrived that this version of the app cannot show. Reload this page to update the " +
+    "app, and ask your friend to do the same.",
   undecryptable: "A message arrived that this device cannot read; it was sent before this device was restored.",
   // ⚠️⚠️ D-130. This read "on a conversation that has since been restarted", and the
   // person it was shown to had restarted nothing — he had opened the app in a

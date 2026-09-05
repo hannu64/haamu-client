@@ -5546,6 +5546,195 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-193. ⭐⭐ Hannu's ruling on the outside auth design: the OPRF is a seku/privis idea, not a haamu one
+
+**2026-09-05**, after reading the commentary on
+`reviews/H_grok-kimi_auth-pin-oprf-webauthn_2026-09-05.md`: *"So the OPRF is better applied
+later in seku/privis when we are at that. But does not suit so well to haamu."*
+
+**Accepted, and the reason is structural rather than a preference.** An OPRF genuinely
+removes the offline attack on a stolen server dump, which is the one thing §7.2's
+deterministic salt cannot do. But it needs an **identifier** to fetch the right envelope,
+and **haamu has no accounts**. Its lookup key is `roster_id = HKDF(K_master, …)`, derivable
+offline from the phrase — and §7.2 already records that *"one HKDF after each Argon2id
+confirms a candidate without the blob at all"*. ➡️ **THE EXISTENCE CHECK STAYS A COMPLETE
+OFFLINE ORACLE, AND CLOSING IT REQUIRES AN ACCOUNT.** So in haamu the phrase entropy still
+carries the whole load, which is why the same document's five-word recommendation fails here
+whatever the KDF does.
+
+⭐ **seku/privis is the opposite case and that is why the idea keeps its value.** Those
+products already have accounts and already have server-side state, so an envelope has
+something to be filed under and the OPRF's benefit is real there. **Filed, not discarded.**
+
+⚠️ **Two smaller items from the same document ARE for haamu and belong in §7.5 when it is
+built**: never wrap with a Safari hybrid/QR PRF value unless it is byte-equal to the
+on-device one, and a synced passkey is not proof of device possession. Neither is in §7.5
+today.
+
+⛔ **Nothing else from it is adopted.** The five-word phrase is 58.7 bits against today's
+76.8 after §7.4's selection cost, an 18.1-bit gap that would need 3.8 days of Argon2id per
+unlock to cover — and the build already runs the Argon2id the document recommends, so that
+advice describes the present rather than buying anything. Its own table also makes **six**
+long words the break-even, which is the arm **D-019 measured and rejected**: eight short
+words won on entropy, characters, accuracy (90 % vs 61 %) and time (24.4 s vs 34.4 s).
+
+### D-191. ⭐⭐⭐⭐ A notice named a direction the code never established — and the only direction it could have been was the other one
+
+**2026-09-05.** Hannu, opening a conversation he had not touched for days: *"I suddenly got this:
+'Saapui viesti joka on lähetetty tätä uudemmasta sovelluksen versiosta.' But not the app version."*
+He had the sentence in front of him and he could already tell it was wrong about the one thing it
+asserted. Everything worked afterwards; he has seen it once.
+
+**He was right, and it is stronger than "sometimes wrong".** `protocol/payload.js` returns
+`UnsupportedPayload` from **three** places — a payload OLDER than `BINDING_FROM_V`, a payload
+NEWER than `PAYLOAD_V`, and a `kind` this build does not know — and all three arrive at one
+failure code and one sentence: *"from a newer version of this app than the one you are running."*
+On the fleet that exists, **the two newer branches are unreachable**: no build emits a payload
+version above 2, and no build emits a kind other than `text` and `closed`. So the only branch
+that can fire is `v < 2`, a payload from a build older than 2026-08-24. **Every occurrence of
+this line in the field has been an old message announced as a new one.**
+
+⭐⭐⭐⭐ **A NOTICE THAT NAMES A DIRECTION IT CANNOT KNOW SENDS THE READER LOOKING FOR THE WRONG
+OBJECT.** This is D-130's finding one step further out. There, the notice named an **event** the
+reader had not caused, and he went looking for the event. Here it names a **direction** the code
+never established, and he went looking for a version that could be older — landing on the
+conversation list, which is a fourth thing the sentence had taught him to think about. The payload
+says the two versions differ. It has never said whose is older, and the client cannot find out.
+
+**So the fix is D-130's fix and not a split into two sentences.** The rule there was to say what
+is true OF THE MESSAGE ITSELF, in one sentence covering every case the refusal covers, and that
+rule reaches all three of these: it arrived intact and this build cannot draw it. Two sentences
+would need the client to decide which end is stale, which is exactly the fact it does not have.
+⭐ **And there can be one sentence because there is one action.** §6's deployment gives this app
+no service worker and `cache-control: no-store`, so a reload IS the update — whichever end is
+behind, reloading both fixes it and neither person has to work out which of them it was.
+
+⛔⛔ **THE INSTRUMENT COULD NOT HAVE CAUGHT THIS, AND THE REASON GENERALISES.** `noteProblem`
+records **thrown exceptions**; a refusal is an ordinary return value. So the diagnostics panel
+read `problem     none` on a screen that was at that moment reporting a problem — and D-185's
+whole point was that a panel a person can copy and send is how the next report gets resolved.
+➡️ **AN INSTRUMENT BUILT AROUND ONE FAILURE MECHANISM IS BLIND TO EVERY FAILURE THAT USES
+ANOTHER** — the same shape as `project_haamu_first_feedback`'s finding that a review instrument
+has a blind spot shaped like itself.
+
+⭐ **The evidence was already computed and was being thrown away one line from where it was
+needed.** `detail` carries `version: 1` or `version: 3` or `kind: …`, it travels in the staged
+record into `storeIncoming`, and nothing read it. The fix adds no new measurement; it stops
+discarding the one in hand. **Only this failure of the four is recorded**: the others name
+themselves on screen in sentences nobody could confuse, and `staleSession` is EXPECTED after a
+device migration, so recording it would print a fault in the panel for the thing D-130
+established is not damage.
+
+⚠️ **The protocol layer was right the whole time and so were its tests.** `test/session.mjs` has
+carried *"a v1 payload is unsupported"* since the binding landed. The defect lived entirely in the
+sentence — and in the code comment above `UNSUPPORTED` in `flow/message.js`, which said *"is from
+a newer version of the client than this one"* and is where the user-facing sentence came from.
+➡️ **A COMMENT THAT NAMES ONE BRANCH OF THREE IS A DEFECT WAITING TO BE COPIED INTO THE PRODUCT.**
+
+### D-192. ⭐⭐⭐ Three controls nobody could find, and the one that mattered had a name it never showed
+
+**2026-09-05.** The friend round came back and every complaint but one was about **being able to
+see a control**. The ＋ that starts a conversation, the ⋮ menu, and the ← back arrow — named by
+several testers each, in a round that reported **no technical fault at all**.
+
+⭐⭐⭐⭐ **THE TESTERS WERE ALL ON DESKTOP COMPUTERS, AND THEY CHOSE TO BE.** Three user agents came
+back with the timings: Chrome on Linux, Firefox on Windows, Safari on macOS. Not one phone.
+Hannu asked them why and the answer is the finding: *"they felt that handling the 8 word keyphrase
+on a mobile would be even more difficult. They actually waited to get to a computer until they
+tested."* ➡️ **THE PHRASE DID NOT ONLY COST TYPING TIME, IT CHOSE THE PLATFORM THE PRODUCT WAS
+TESTED ON** — and the ＋ is a phone idiom, justified in `app.css` as *"where a phone user's thumb
+already goes"*. So one unbuilt feature (§7.5) silently selected the population that would judge a
+control designed for the other platform. **A usability result is about the device the test ran on,
+and the secret decided the device.**
+
+**The ＋ was a circle with no word on it.** Its label was an `aria-label` and nothing else, and
+the note in `index.html` explaining that said *"a circular button 3.5rem across cannot hold
+'Start a new conversation'"* — a true sentence that settled the question the wrong way round. It
+treated the circle as fixed and the words as impossible. The circle was the part that could change.
+
+⭐⭐ **AND THIS IS THE THIRD TIME.** Round 19 heard it from Hannu, who has used every build of this
+app and still *"searched for it a long time"*; the answer then was a **second door** in the ⋮ menu
+rather than a word on the first. D-188 then stated the rule outright — **an unlabelled button is
+unclickable, not merely unreadable** — and it was recorded against a different button and never
+walked back to this one. ➡️ **A RULE LEARNED ON ONE CONTROL IS NOT APPLIED TO THE OTHERS BY
+KNOWING IT.** The ＋ now carries `copy.list.start` on the outside, and both names come from one
+constant, because the accessible name and the visible name of a control must be the same words.
+
+⛔⛔ **THE FIRST ATTEMPT WAS AN EXTENDED FAB AND THE PROBES KILLED IT — the same collision this
+stylesheet had already recorded once.** Keeping the corner and adding the label seemed free.
+`probe-forget-key` and `probe-elsewhere-return` both went red: at their 480 px viewport the pill
+spanned x = 202…464 while `#end-here` centres at 240, so a click aimed at *"Forget your KEY here"*
+landed on the pill. **`app.css` had this in writing already** — the circle once sat *"squarely on
+top of"* the clear-everything control, and the answer then was bottom padding on `.listrest`.
+➡️ **PADDING ONLY CLEARS THE LAST ELEMENT AT FULL SCROLL; EVERY OTHER CONTROL STILL PASSES
+UNDERNEATH.** The circle got away with it for one reason and it was never the padding: it was
+**too narrow to reach the centre of a full-width button**, and a label is what takes that away.
+➡️ **A FLOATING CONTROL OVER A SCREEN OF CONTROLS IS A COLLISION WAITING FOR A WIDER LABEL.**
+
+**So it stops floating.** `#create` is now an ordinary filled button in the flow, directly under
+the heading and above the list — which is also what was actually asked for: *"How to send an
+invitation link should be the most prominent thing on the page… it should not be at the very
+bottom of the page where it is not immediately seen."* The float's own justification in `app.css`
+was *"where a phone user's thumb already goes"*, and **nobody in this round was on a phone.**
+
+⛔⛔⛔⛔ **I REPORTED THAT THE ＋ WAS A TOFU BOX ON THE TESTERS' SCREENS. IT WAS NOT, AND
+HANNU CORRECTED ME THE SAME DAY.** The measurement was real. At `600 1.5rem system-ui` in
+this project's dev container, `＋` (U+FF0B) renders **14.41 px** and **U+FFFF, a character
+guaranteed not to exist, renders 14.41 px too**, while `+` and `←` both give 20.11 px —
+identical width to an impossible character is the definition of the missing-glyph box. I
+inferred that a Linux tester would therefore have seen an empty rectangle.
+
+**He checked the machines instead of the reasoning:** *"I have tested haamu on android
+chrome and firefox and there the plus button was a very similar (+) just like on my ubuntu
+desktop (chrome, firefox and opera)."* Five browsers across two platforms, all drawing it.
+Desktop distributions ship Noto CJK; **this container does not**.
+
+➡️ ⭐⭐⭐⭐ **THE CONTAINER IS NOT A DEVICE.** The number was correct and its subject was the
+box I ran it in, so it was evidence about the instrument reported as evidence about the
+product. ⛔ **And note which way the error ran: it did not invent a defect out of nothing, it
+attached a real measurement to the wrong population** — which is far harder to catch than a
+wrong number, because every step of it checks out. **Round 20's rule, which this same
+stylesheet cites, is the one that would have caught it: the `＋` "needed a device check
+before it could be trusted."** That check had been done, on real devices, and it passed. I
+overturned a device measurement with a container measurement and did not notice that is what
+I was doing.
+
+⭐⭐ **His actual diagnosis is two sentences and neither is about the glyph:** *"The main
+problem is that it was at the very bottom of the page and just that symbol and a thin one."*
+**Position and weight.** Both are fixed above, and they were already the fix — the tofu
+finding changed nothing about what was built, only about why. **The plus stays drawn**
+because it removes a font dependency for free, not because anyone ever saw a box.
+
+⭐ **Three faults in one screen and one cause between them.** No word, an unreadable mark,
+and a corner nobody looks at on a desktop — and each had been individually reasoned about
+and individually excused, in a comment, next to the code. ➡️ **A DEFECT THAT SURVIVES IS
+USUALLY ONE SOMEBODY ALREADY ARGUED FOR.**
+
+⭐ **The probes earned their keep in the way the run-all header predicted.** Both failures were
+`ok` in the two sweeps earlier the same day, both went red on a change that every unit test passed,
+and neither would have been visible in a screenshot — the button *looked* right. A geometry fault
+is only reachable by something that clicks.
+
+**The back arrow could not be fixed by the type scale, and that is why it stayed broken.** It was
+the text glyph `←`, and one tester described it exactly: *"it looks like a narrow line."* That is
+what U+2190 **is** in a system UI font — a hairline with a small head, sized by `font-size` and
+thickened by nothing, because a symbol has no bold face to switch to. Every adjustment available
+to a text glyph had already been spent. It is now a drawn shape with `stroke-width`, which is the
+property it never had. ⚠️ It keeps its `aria-label` and gains no text, so the copy gate is
+untouched: `visibleText()` matches text nodes carrying `[A-Za-z]` and path data is an attribute.
+
+⛔⛔ **AND ROUND 19'S FIX HAD BEEN APPLIED TO ONE MEMBER OF A PAIR.** The ⋮ got a 14 % well then,
+for this exact complaint, *"the 3 dots could be stronger, they were easy to miss"*. Its twin sat
+eleven lines away in the same stylesheet with the same problem and was left alone — and the next
+round of testers reported **both**. The well was also not enough on its own: a tint makes a glyph
+findable and still does not make it read as a control. Both now carry a ring, which is what gives
+a button an EDGE. ➡️ **WHEN A FIX IS ABOUT A CLASS, APPLY IT TO THE CLASS** — and when the same
+complaint returns after a fix, the fix was the wrong KIND, not the wrong amount.
+
+⚠️ Still neutral and never accent, unchanged from round 19: D-104's rule is that the one filled
+accent is the single action on the screen, and that is now a labelled pill and louder than it has
+ever been.
+
 ### D-190. ⭐⭐⭐ The lock the testers would have met is the one D-082 already fixed once — and raising the number it named would have changed nothing
 
 **2026-09-02.** Hannu, one friend into the test round: *"I noticed that currently the 8-words

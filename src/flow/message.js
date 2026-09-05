@@ -72,8 +72,14 @@ import * as mailboxFlow from "./mailbox.js";
  *   replayed        a pre-key message for a session already accepted at this
  *                   generation. Either the server replayed it or it is a duplicate
  *   malformed       not an envelope this version can parse
- *   unsupported     it decrypted perfectly and is from a newer version of the
- *                   client than this one (§6.7). NOT a failure — say so differently
+ *   unsupported     it decrypted perfectly and this build cannot draw it (§6.7):
+ *                   an OLDER payload, a NEWER one, or a `kind` from another
+ *                   version. NOT a failure — say so differently.
+ *                   ⚠️ D-191: THIS LINE SAID "from a newer version" AND SO DID THE
+ *                   SENTENCE THE USER READ. `protocol/payload.js` has three routes
+ *                   here and only one of them is newer; the reachable one today is
+ *                   the OLDEST. A code comment that names one branch of three is
+ *                   where the wrong user-facing sentence came from.
  *   tampered        it decrypted perfectly and §6.7.2's copy of the routing fields
  *                   disagrees with the envelope's. Only the server can do that
  */
