@@ -5546,6 +5546,62 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-196. ⭐⭐⭐⭐ An honest sentence is addressed to somebody, and the cover screen was addressing the wrong person
+
+**2026-09-07, from Hannu's thorough test of D-195.** Three changes came out of it, and the
+one worth a decision entry is where §4.3's honesty is written down.
+
+**The report.** *"When the screen is covered with the PIN there should be less
+explanations, specifically not hints that it can be circumvented. That warning only when
+setting the PIN."* He supplied the replacement text in both languages.
+
+⛔⛔⛔ **THE SENTENCE HE MOVED WAS THE ONE D-195 IS PROUDEST OF.** The cover carried *"Somebody
+who knows this browser well can still reach what is behind it"* because §4.3 requires a
+control that can be walked around to say so, and because the guard asserting it had just
+been rewritten as a rule after the previous version outlived its own correctness. Its
+placement was never examined. **A true sentence in the wrong place is not a smaller fault
+than a false one — it is a harder one to find, because every check it has is green.**
+
+⭐⭐⭐ **THE RULE: A WARNING IS READ BY WHOEVER IS LOOKING AT THAT SCREEN, AND ON THE COVER
+THAT MIGHT BE THE THIEF.** The cover is the one screen in this product whose reader may not
+be its owner — that is the entire premise of the tier. So it was the one screen explaining
+to a stranger holding the phone that the control in front of them is not the real one. The
+owner, meanwhile, learns it at a moment when they can do nothing with it. On `#pin-set` both
+halves invert: the reader is certainly the owner, and they are mid-decision.
+
+⭐⭐ **AND §4.3 HAD ALREADY WRITTEN THE RULE DOWN, ONE TIER UP.** Its Ghost paragraph says a
+person choosing between controls chooses *before any dialog opens* — which is a statement
+about WHEN a disclosure has to arrive, and it was obeyed for Ghost mode and not noticed as
+general. ➡️ **A placement rule stated about one case is a placement rule.** This is D-148's
+class arriving from the other side: that decision deleted a sentence whose condition
+excluded its own reader; this one moves a sentence whose reader was the wrong person.
+
+⚠️ **THE GUARD MOVED WITH IT AND WAS NOT DELETED** (D-107). `test/copy.mjs` now asserts the
+disclosure on `pin.what`, and separately asserts it is ABSENT from both cover paragraphs.
+Dropping the check because the string left `lock.coveredWhat` would have taken §4.3's
+honesty requirement out of the gate entirely, with every suite green.
+
+**Two smaller results of the same test.**
+
+⭐ **The cover on demand.** *"Should there be a button that makes the PIN cover active
+immediately so that the user does not have to wait."* Yes — and it is in the ⋮ menu rather
+than on the list screen, because the moment it is wanted is the moment somebody walks up to
+a person who is READING, and a control reached by first leaving the conversation shows the
+conversation on the way to hiding it. `watchIdleness` gained `cover()`, which sets the flag
+and **moves no clock**: a session covered by hand still meets the 24-hour lock on the
+schedule its last real use started, or the more carefully a person behaved the longer their
+keys would live.
+
+⛔⛔ **And a button that named something not on the screen.** `#uncover` said *"Show the
+conversation"* on both screens, so on the conversation LIST it promised one conversation
+where there is no one conversation — directly under an ask line that says *"show your
+conversations"*. ⭐ **Found by looking at the screenshot, for the third time in three
+sessions.** Every check was green: the label came from a constant, the constant was
+translated, and the sentence was grammatical. **A label is only correct relative to what is
+underneath it, and nothing in this repository knows what is underneath a screen.**
+
+---
+
 ### D-195. ⭐⭐⭐⭐ §4.3's second tier is built — and the sentence that sold it was one the cover could never keep
 
 **2026-09-05, agreed item #3.** The build is the two-tier lock `ARCHITECTURE.md` §4.3 has

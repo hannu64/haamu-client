@@ -2101,6 +2101,16 @@ export const lock = {
 
   coveredBlurred: `Covered because this was in the background for more than ${span(COVER_BLUR_MS / 1000)}.`,
 
+  // ⚠️ THE THIRD REASON, AND IT EXISTS BECAUSE A PERSON ASKED FOR IT RATHER THAN BECAUSE
+  // A CLOCK DID. Hannu, after testing: *"Should there be a button that makes the PIN
+  // cover active immediately so that the user does not have to wait."* The other two
+  // sentences report a threshold; this one reports an act, and saying "Covered after 30
+  // minutes without use" to somebody who just pressed a button would be the same class
+  // of false sentence `lock.manual` was separated out to avoid.
+  // ⭐ IT REUSES `lock.MANUAL` — the reason the LOCK already had for the same act — so
+  // the two tiers name a deliberate cover and a deliberate lock with one word.
+  coveredManual: "Covered because you asked.",
+
   // ⚠⚠ D-148 REMOVED THE LAST SENTENCE, AND THE REASON IS THE BEST KIND — IT IS ABOUT
   // WHO IS HOLDING THE DEVICE. It read *"If the device is not in your hands, end the
   // conversation."* Hannu: *"How can the user read that if the device is not in the
@@ -2132,9 +2142,24 @@ export const lock = {
   // two paragraphs rendered as one wall of grey, which is how it was found. `prose()`
   // takes an array and builds a `<p>` for each, which is the same shape `product.what`
   // has used since the gate was written.
+  // ⚠️⚠️⚠️ THE HONEST SENTENCE MOVED; IT DID NOT GO. It read *"Somebody who knows this
+  // browser well can still reach what is behind it"* and it stood here, on the cover,
+  // until Hannu tested the built screen: *"When the screen is covered with the PIN there
+  // should be less explanations, specifically not hints that it can be circumvented.
+  // That warning only when setting the PIN."*
+  //
+  // ⭐⭐ AND §4.3's OWN PLACEMENT RULE ALREADY SAID SO. The Ghost rule it is modelled on
+  // is explicit that *a person choosing between controls chooses before any dialog
+  // opens* — so the honest paragraph belongs on `pin.what`, where somebody is deciding
+  // what this control is worth, and not on a screen reached by whoever is holding the
+  // device. ⭐ Read the other way round: the cover is the one screen where the reader
+  // might be the thief, and it was the one screen telling them how to get in.
+  //
+  // ⚠️ THE RULE IS UNCHANGED AND ITS ADDRESS IS NOT. `test/copy.mjs` asserts the
+  // sentence on `pin.what` now. A rule that moves screen must move its guard with it —
+  // D-107 — and deleting the guard because the string left this constant would have
+  // dropped §4.3's honesty requirement without anything noticing.
   coveredWhat: [
-    "This only hides the screen. Nothing is deleted and nothing is closed. Somebody who knows " +
-      "this browser well can still reach what is behind it.",
     "Ghost mode has no KEY, so if you cannot remember your PIN, ending the conversation is the " +
       "only way on.",
   ],
@@ -2143,13 +2168,23 @@ export const lock = {
   // two modes is not how strong the cover is — it is identical — but what stands behind
   // it, and that is the half a person needs in order to choose what to do next.
   coveredWhatKept: [
-    "This only hides the screen. Nothing is deleted and nothing is closed, and your conversations " +
-      "come back the moment you type your PIN. Somebody who knows this browser well can still reach " +
-      "what is behind it.",
-    `Your KEY is the stronger one, and haamu asks for it after ${plural(hoursFromMs(IDLE_MS), "hour")} without use.`,
+    `Your KEY is the stronger protection, and haamu asks for it after ${plural(hoursFromMs(IDLE_MS), "hour")} without use.`,
   ],
 
+  /**
+   * ⚠️⚠️ TWO LABELS, BECAUSE THE COVER IS NOW RAISED FROM TWO SCREENS AND ONE OF THEM
+   * HAS NO CONVERSATION IN IT. This said "Show the conversation" everywhere, which was
+   * true while a cover only ever arrived on a timer over whatever was open — and read as
+   * a plain mistake the moment a person raised one from the conversation LIST, where
+   * there is no single conversation to show and the ask line right above it says
+   * *"show your conversations"*.
+   *
+   * ⭐ FOUND BY LOOKING AT THE SCREENSHOT, not by a suite — the same way the ⋮ menu
+   * bypass was found two days earlier. Every check was green: the button was painted from
+   * a constant, the constant was translated, and the sentence was grammatical.
+   */
   show: "Show the conversation",
+  showList: "Show my conversations",
 
   // ⚠️ THE WAY OUT OF A FORGOTTEN PIN, IN THE MODE THAT HAS ONE. It runs the same lock
   // the control on the list screen runs — the keys go, and the eight words bring them
@@ -2184,9 +2219,11 @@ export const pin = {
   // ⚠️ THE LEAD SAYS WHAT IT IS FOR BEFORE IT ASKS FOR ANYTHING. A field demanding a
   // second secret from somebody who came here to read a message is a wall; the same
   // field under a sentence naming the thing it prevents is a choice.
-  lead:
-    "haamu covers the screen when you put this device down. Your PIN shows your conversations again, " +
-    "without your KEY and without the wait.",
+  // ⚠️ THE TWO THRESHOLDS ARE IN IT, AS DIGITS, FROM THE CONSTANTS (D-153) — and the
+  // order is `away` then `idle` because that is the order Hannu wrote them in and the
+  // shorter one is the one that surprises people. §4.3 owns both numbers; this sentence
+  // owns neither, which is the whole point of building it rather than typing it.
+  lead: `haamu covers the screen in ${COVER_BLUR_MS / 60000}/${COVER_IDLE_MS / 60000} min. Your PIN shows your conversations again.`,
 
   // D-153: the range is two digits, from the two constants.
   ask: `${PIN_MIN} to ${PIN_MAX} digits.`,
@@ -2201,9 +2238,8 @@ export const pin = {
    * about where this device is left.
    */
   what:
-    "A PIN is not your KEY and does not replace it. It hides what is on the screen from somebody " +
-    "who picks up this device. It does not encrypt anything, and somebody who knows this browser " +
-    "well can still reach what is behind it.",
+    "A PIN does not replace your KEY. It hides what is on the screen from somebody who picks up " +
+    "this device. Somebody who knows this browser well can bypass the PIN but not your KEY.",
 
   /**
    * ⭐ THE ONE REAL HARM THAT ARITHMETIC COULD NOT FIX, ANSWERED IN WORDS. The stored
@@ -2245,6 +2281,22 @@ export const pin = {
   changeNote: "Nothing is deleted. The new PIN takes over the next time the screen is covered.",
 
   /**
+   * ⚠️⚠️ THE COVER ON DEMAND, AND IT IS IN THE MENU RATHER THAN ON THE LIST SCREEN.
+   * Hannu asked for it after testing: *"so that the user does not have to wait but the
+   * page immediately asks for the PIN to show content."*
+   *
+   * ⭐ WHERE IT SITS IS THE WHOLE VALUE OF IT. The moment this control is wanted is the
+   * moment somebody walks up while a conversation is open — so a button on the list
+   * screen would be reachable only by first leaving the thing being covered, in front of
+   * the person it is being covered from. The menu is on both screens, so the cover is
+   * one tap from wherever the reader actually is.
+   *
+   * ⛔ AND IT IS WITHHELD ON THE GATED SCREENS by the same rule as `#menu-create`, which
+   * is not caution — covering a cover would make the way back the way here.
+   */
+  coverNow: "Cover the screen now",
+
+  /**
    * ⚠️ THE BOXES NEED NAMES, and one name on the group is not enough. A row of eight
    * unlabelled inputs is eight controls a screen reader calls "blank"; the group name
    * says what is being asked for and each box says which position it is.
@@ -2256,7 +2308,7 @@ export const pin = {
   digit: (i, n) => `Digit ${i} of ${n}`,
 
   // ---------------------------------------------------------------- at the cover
-  coverAsk: "Type your PIN.",
+  coverAsk: "Give your PIN to show your conversations.",
   wrong: "That is not your PIN.",
 
   /**

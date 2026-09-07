@@ -198,16 +198,16 @@ export const FI = {
   // kantavat peiton vakiot — 30 minuuttia ja 5 minuuttia — eivät lukituksen 24:ää tuntia.
   "lock.coveredIdle": "Peitetty 30 minuutin käyttämättömyyden jälkeen.",
   "lock.coveredBlurred": "Peitetty, koska tämä oli taustalla yli 5 minuuttia.",
+  "lock.coveredManual": "Peitetty, koska pyysit sitä.",
   // ⚠️⚠️ EDELLINEN LAUSE OLI TOTTA SIIHEN ASTI, KUNNES PEITON ETEEN TULI PIN. Se kuului
   // *"Kuka tahansa tätä laitetta käyttävä voi näyttää sen uudelleen"* — ja siitä tuli
   // väärä väite tuotteesta sinä hetkenä, kun peiton nostamiseen tarvittiin numerot.
-  "lock.coveredWhat.0": "Tämä vain piilottaa näytön. Mitään ei poisteta eikä mitään suljeta. Se, joka tuntee tämän selaimen hyvin, pääsee silti käsiksi siihen mitä sen takana on.",
-  "lock.coveredWhat.1": "Haamu-tilassa ei ole AVAINTA, joten jos et muista PIN-numeroasi, keskustelun lopettaminen on ainoa tie eteenpäin.",
-  "lock.coveredWhatKept.0": "Tämä vain piilottaa näytön. Mitään ei poisteta eikä mitään suljeta, ja keskustelusi palaavat heti kun kirjoitat PIN-numerosi. Se, joka tuntee tämän selaimen hyvin, pääsee silti käsiksi siihen mitä sen takana on.",
-  "lock.coveredWhatKept.1": "AVAIMESI on näistä vahvempi, ja haamu kysyy sitä 24 tunnin käyttämättömyyden jälkeen.",
+  "lock.coveredWhat.0": "Haamu-tilassa ei ole AVAINTA, joten jos et muista PIN-numeroasi, keskustelun lopettaminen on ainoa tie eteenpäin.",
+  "lock.coveredWhatKept.0": "AVAIN on vahvempi suoja, ja haamu kysyy sitä 24 tunnin käyttämättömyyden jälkeen.",
   "lock.wrongPin": "Väärä PIN 5 kertaa. Kirjoita AVAIMESI jatkaaksesi.",
   "lock.useKey": "En muista PIN-numeroani — kysy AVAINTANI sen sijaan",
   "lock.show": "Näytä keskustelu",
+  "lock.showList": "Näytä keskusteluni",
 
   // ── pin — §4.3:n toinen porras
   // ⚠️⚠️ KÄYTTÄJÄLLE SE ON **PIN** MOLEMMILLA KIELILLÄ, JA SE ON HANNUN PÄÄTÖS.
@@ -216,11 +216,11 @@ export const FI = {
   // ⛔ EI "koodi", koska `pairing.failure.code_malformed` käyttää sitä §2.2:n
   // kutsukoodista — kaksi eri asiaa yhdellä sanalla samassa tuotteessa.
   "pin.title": "Valitse PIN",
-  "pin.lead": "haamu peittää näytön, kun lasket tämän laitteen kädestäsi. PIN-numerosi näyttää keskustelusi uudelleen, ilman AVAINTASI ja ilman odotusta.",
+  "pin.lead": "haamu peittää näytön 5/30 min kuluttua. PIN-numerosi näyttää keskustelusi uudelleen.",
   "pin.ask": "6–8 numeroa.",
   "pin.confirmAsk": "Kirjoita se uudelleen.",
   "pin.save": "Tallenna PIN",
-  "pin.what": "PIN ei ole AVAIMESI eikä korvaa sitä. Se piilottaa sen mitä näytöllä on siltä, joka ottaa tämän laitteen käteensä. Se ei salaa mitään, ja se joka tuntee tämän selaimen hyvin pääsee silti käsiksi siihen mitä sen takana on.",
+  "pin.what": "PIN ei korvaa AVAINTASI. Se piilottaa sen, mitä näytöllä on, siltä, joka ottaa tämän laitteen käteensä. Se, joka tuntee tämän selaimen, pystyy ohittamaan PIN-luvun mutta ei AVAINTASI.",
   "pin.warn": "Älä käytä PIN-numeroa, jota käytät jossain muualla, äläkä kirjoita sitä mihinkään, mitä säilytät tämän laitteen vieressä.",
   "pin.refused.not_digits": "PIN on pelkkiä numeroita.",
   "pin.refused.too_short": "PIN on vähintään 6 numeroa.",
@@ -231,8 +231,9 @@ export const FI = {
   "pin.changed": "PIN-numerosi on tallennettu.",
   "pin.change": "Vaihda PIN-numeroni",
   "pin.changeNote": "Mitään ei poisteta. Uusi PIN otetaan käyttöön seuraavan kerran, kun näyttö peitetään.",
+  "pin.coverNow": "Peitä näyttö nyt",
   "pin.boxes": "PIN-numerosi",
-  "pin.coverAsk": "Kirjoita PIN.",
+  "pin.coverAsk": "Anna PIN-lukusi ja näe keskustelusi.",
   "pin.wrong": "Väärä PIN.",
   "pin.slow": "Odota hetki ja yritä uudelleen.",
 

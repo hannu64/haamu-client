@@ -172,6 +172,28 @@
             learned to look in this menu must keep finding it here, which is the same
             reason it was added.
           -->
+          <!--
+            §4.3's cover, raised on demand. Hannu, after testing the built tier:
+            *"Should there be a button that makes the PIN cover active immediately so
+            that the user does not have to wait but the page immediately asks for the
+            PIN to show content."*
+
+            ⚠️⚠️ IT IS FIRST IN THE MENU AND THAT IS THE POINT OF IT. The moment this
+            control is wanted is the moment somebody walks up to a person who is reading
+            — so every row it sits below is a row that has to be scanned past while the
+            thing being hidden is on the screen. It is also the only entry here that
+            appears on BOTH the list and the conversation, because a cover reached by
+            first leaving the conversation is a cover that shows the conversation on the
+            way to itself.
+
+            ⚠️ ITS OWN GROUP RATHER THAN A ROW IN `#menu-home`. That group is withheld on
+            the gated screens and shown only off the conversation; this one is shown on
+            the conversation and needs a PIN to exist. Two rules, two groups — the same
+            reason `#menu-chat` is not a subset of `#menu-home`.
+          -->
+          <div id="menu-cover" class="menu-group hidden">
+            <button id="cover-now" class="secondary edged"></button>
+          </div>
           <div id="menu-home" class="menu-group hidden">
             <button id="menu-create" class="secondary edged"></button>
           </div>

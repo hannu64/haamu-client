@@ -301,6 +301,19 @@ const REPORT_NOTICES = ["closing"];
  */
 const GATED = new Set(["covered", "pin-set"]);
 
+/**
+ * ⭐ WHERE A COVER CAN BE RAISED BY HAND, AND IT IS A SET FOR THE SAME REASON `GATED`
+ * IS. Hannu asked for the cover on demand after testing the timed one — *"so that the
+ * user does not have to wait"* — and the honest answer to *where* is: the two screens
+ * that are showing something worth covering and that a cover can put back.
+ *
+ * ⛔ IT IS DISJOINT FROM `GATED` AND `test/app-document.mjs` ASSERTS THAT. Covering a
+ * cover would make the way back the way here — `coverNow` guards it a second time — and
+ * offering the control on `#pin-set` would let somebody skip the step the product now
+ * requires of everybody, which is exactly the hole the ⋮ menu already had once.
+ */
+const COVERABLE = new Set(["home", "chat"]);
+
 const barMode = (id) => {
   const chat = id === "chat";
   const gated = GATED.has(id);
@@ -322,6 +335,15 @@ const barMode = (id) => {
   // ⛔ AND IT IS WITHHELD ON THE GATED SCREENS, where it would not be meaningless but
   // effective — it navigates, and both of those screens exist to stop navigation.
   show("menu-home", !chat && !gated);
+  // ⚠️⚠️ THE COVER-ON-DEMAND IS OFFERED ONLY WHERE IT WOULD WORK, AND ALL THREE
+  // CONDITIONS ARE LOAD-BEARING. The screen has to be one a cover can restore; a PIN has
+  // to exist, or the cover would be a screen with no way off it; and the watcher has to
+  // be armed and running, because it is the thing that holds the covered flag. ⭐ The
+  // third is not defensive padding — §7.6's Ghost mode arms the watcher in
+  // `openConversation` and nowhere else, so on the Ghost list screen there is genuinely
+  // no cover to raise, and a button that quietly did nothing there would be worse than
+  // no button on the one screen where a person is most likely to try it.
+  show("menu-cover", COVERABLE.has(id) && Boolean(session?.pinRecord) && Boolean(lockWatch) && !lockWatch.stopped);
   // ⚠️ See the comment on `#diagfoot` in `index.html`: it is the last child of the
   // scroller, so on the conversation — the one screen that is a full-height pane —
   // it wedges sixty-one pixels between the composer and the floor of the window.
@@ -1931,7 +1953,10 @@ function coverNow(reason) {
   text("covered-ask", copy.pin.coverAsk);
   text("covered-note", "");
   prose("covered-what", ghost ? copy.lock.coveredWhat : copy.lock.coveredWhatKept);
-  text("uncover", copy.lock.show);
+  // ⚠️ THE LIFT BUTTON NAMES WHAT IS BEHIND THE COVER, AND THAT IS NOT ALWAYS ONE THING.
+  // `coveredFrom` was captured four lines up precisely because a cover is a screen with a
+  // screen underneath it; the label is the one place that fact reaches the reader.
+  text("uncover", coveredFrom === "chat" ? copy.lock.show : copy.lock.showList);
   text("covered-key", copy.lock.useKey);
   text("covered-end", copy.ghost.end);
   // ⚠️⚠️ EXACTLY ONE WAY OUT OF A FORGOTTEN PIN IS SHOWN, AND WHICH ONE IS THE WHOLE
@@ -1962,6 +1987,11 @@ function coverSaid(reason) {
     {
       [lockFlow.IDLE]: copy.lock.coveredIdle,
       [lockFlow.BLURRED]: copy.lock.coveredBlurred,
+      // ⚠️ THE THIRD ARRIVED EXACTLY AS D-163 SAID IT WOULD. This map replaced a ternary
+      // over two reasons because a ternary is exhaustive only until it is not; the cover
+      // on demand is the third value, and it cost one line here instead of a wrong
+      // sentence telling somebody who pressed a button that they had been idle.
+      [lockFlow.MANUAL]: copy.lock.coveredManual,
     }[reason] ?? ""
   );
 }
@@ -4371,6 +4401,30 @@ $("menu-create").addEventListener("click", () => {
   pairingRun = runInitiate();
 });
 
+/**
+ * §4.3's cover, raised because a person asked for it rather than because a clock did.
+ *
+ * ⚠️⚠️ IT REFUSES ON THE SAME FOUR CONDITIONS `barMode` HIDES IT ON, and the duplication
+ * is the rule this file learned the hard way: hiding a control is the interface and
+ * refusing it is the guard, because a hidden control is one `classList` change away from
+ * a live one. The screen must be one a cover can put back, a PIN must exist, and the
+ * watcher must be armed — a cover raised over a stopped watcher would never be lifted by
+ * the tier that owns the flag.
+ *
+ * ⭐ THE ORDER IS FLAG FIRST, SCREEN SECOND, and `cover()` returning false is what
+ * stops a double cover. Painting first and then failing to set the flag would leave a
+ * covered screen the watcher believes is uncovered — so it would raise a second cover
+ * over it moments later and `coveredFrom` would already have been spent on the first,
+ * which is the way back becoming the way here.
+ */
+$("cover-now").addEventListener("click", () => {
+  closeMenu();
+  if (!COVERABLE.has(shownScreen)) return;
+  if (!session?.pinRecord) return;
+  if (!lockWatch?.cover()) return;
+  coverNow(lockFlow.MANUAL);
+});
+
 // ------------------------------------------- §2.1, a link that arrives after boot
 
 /**
@@ -5598,6 +5652,11 @@ function paintCopy() {
   text("lock-note", copy.lock.controlNote);
   text("change-pin", copy.pin.change);
   text("pin-note", copy.pin.changeNote);
+  // ⚠️ PAINTED HERE AND NOT IN `barMode`, WHICH ONLY DECIDES WHETHER IT IS SHOWN. This
+  // entry appears on the conversation as well as the list, and the conversation's
+  // repaint on a language change does not run `openHome`; a label painted where it is
+  // shown would stay in the old language on exactly one of the two screens.
+  text("cover-now", copy.pin.coverNow);
   text("end-here", copy.ending.control);
   text("end-clear", copy.ending.thoroughControl);
 

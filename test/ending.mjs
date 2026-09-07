@@ -600,6 +600,106 @@ check("⚠️ and the cover actually fires first, or the second tier is decorati
   watcher.stop();
 }
 
+/* ══════════════ §4.3's cover raised by hand — `cover()` (Hannu, 2026-09-07)
+ *
+ * *"Should there be a button that makes the PIN cover active immediately so that the
+ * user does not have to wait but the page immediately asks for the PIN to show
+ * content."*
+ *
+ * ⛔⛔ THE PROPERTY THAT MATTERS IS NOT THAT IT COVERS. It is that covering on purpose
+ * must not become a way to hold the keys in memory: `cover()` sets the flag and moves no
+ * clock, so a person who covers the screen and walks away still meets §4.3's 24-hour lock
+ * on the schedule their LAST REAL USE started. An implementation that reset
+ * `lastActivity` here — which is what "the person just interacted with the app" argues
+ * for — would push the long tier away every single time the short one is used
+ * deliberately, and the more careful the person was the longer their keys would live.
+ */
+{
+  const covered = [];
+  const locked = [];
+  let clock = 21_000_000;
+  const watcher = lock.watchIdleness({
+    onCover: (reason) => covered.push(reason),
+    onLock: (reason) => locked.push(reason),
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc: { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} },
+    now: () => clock,
+    checkMs: 1e9,
+  });
+
+  // A real use, so the long clock has a start that is not the watcher's construction.
+  clock += 60_000;
+  watcher.touch();
+  const usedAt = clock;
+
+  check("⭐ a hand-raised cover reports that it took", watcher.cover());
+  check("and the flag is set", watcher.covered);
+  equal(
+    "⛔⛔ and it does NOT call `onCover` — the caller is the click handler that already knows",
+    String(covered.length),
+    "0"
+  );
+
+  check("⛔ a second press does nothing, so no cover is raised over a cover", !watcher.cover());
+
+  // ⚠️ THE WHOLE POINT, MEASURED. One millisecond before the long window, from the last
+  // REAL use rather than from the button press.
+  clock = usedAt + lock.IDLE_MS - 1;
+  watcher.evaluate();
+  equal("⚠️ covering by hand did not push the lock away", locked.join(","), "");
+
+  // ⭐ And tapping the covered screen is still not use — the guard `touch()` already had.
+  watcher.touch();
+  clock += 2;
+  watcher.evaluate();
+  equal("⭐⭐ so the 24-hour lock still arrives on the schedule the last real use started", locked.join(","), lock.IDLE);
+  check("and the watcher stopped with it", watcher.stopped);
+  check("⛔ a stopped watcher cannot be covered at all", !watcher.cover());
+}
+
+{
+  // The ordinary way back out of a cover a person raised themselves.
+  let clock = 22_000_000;
+  const covered = [];
+  const watcher = lock.watchIdleness({
+    onCover: (reason) => covered.push(reason),
+    onLock: () => {},
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc: { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} },
+    now: () => clock,
+    checkMs: 1e9,
+  });
+
+  check("covered on purpose", watcher.cover());
+  watcher.uncovered();
+  check("⭐ the right PIN lifts a hand-raised cover exactly like a timed one", !watcher.covered);
+
+  clock += lock.COVER_IDLE_MS - 1;
+  watcher.evaluate();
+  equal("and the short clock restarted from the PIN", String(covered.length), "0");
+  clock += 2;
+  watcher.evaluate();
+  equal("⭐ then the timed tier resumes on its own schedule", covered.join(","), lock.IDLE);
+  watcher.stop();
+}
+
+{
+  // §7.6's Ghost mode arms the cover tier alone, and the manual path must work there too.
+  let clock = 23_000_000;
+  const watcher = lock.watchIdleness({
+    onCover: () => {},
+    target: { addEventListener: () => {}, removeEventListener: () => {} },
+    doc: { visibilityState: "visible", addEventListener: () => {}, removeEventListener: () => {} },
+    now: () => clock,
+    checkMs: 1e9,
+  });
+  check("⭐ a cover-only watcher covers by hand", watcher.cover());
+  clock += lock.IDLE_MS * 3;
+  watcher.evaluate();
+  check("⛔⛔ and never stops — §7.6 has nothing to lock to, however long it is covered", !watcher.stopped);
+  watcher.stop();
+}
+
 {
   // ⭐ COMING BACK IS STILL THE EVENT THAT MATTERS, and now it has two answers.
   let visibility = "visible";

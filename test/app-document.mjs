@@ -366,6 +366,59 @@ section("§4.3 — the lock is reachable, and locking still deletes nothing (D-1
     "menu-create returns early on a gated screen"
   );
 
+  /* ============================== §4.3's cover, raised on demand (Hannu, 2026-09-07)
+   *
+   * *"Should there be a button that makes the PIN cover active immediately so that the
+   * user does not have to wait but the page immediately asks for the PIN to show
+   * content."*
+   *
+   * ⛔⛔ THE FIRST THING CHECKED IS THAT IT CANNOT REACH THE SCREENS `GATED` EXISTS TO
+   * PROTECT. A control that raises a cover is the one control whose whole job is to
+   * navigate INTO a gate — so the danger is not the gate, it is `#pin-set`, where one tap
+   * would skip the step the product requires of everybody, and the cover itself, where a
+   * second cover would spend `coveredFrom` on the first.
+   */
+  check(
+    "⭐ `COVERABLE` names the two screens a cover can put back",
+    /const COVERABLE = new Set\(\["home", "chat"\]\)/.test(appCode),
+    "COVERABLE names home and chat"
+  );
+  check(
+    "⛔⛔⛔ and it is disjoint from `GATED` — no cover may be raised over a cover",
+    !/const COVERABLE = new Set\(\[[^\]]*"(covered|pin-set)"/.test(appCode),
+    "COVERABLE ∩ GATED = ∅"
+  );
+  check(
+    "⚠️ the entry is offered only where a PIN exists and the watcher is armed",
+    /show\("menu-cover", COVERABLE\.has\(id\) && Boolean\(session\?\.pinRecord\) && Boolean\(lockWatch\) && !lockWatch\.stopped\)/.test(appCode),
+    "menu-cover has all three conditions"
+  );
+  check(
+    "⛔⛔ and the control itself refuses on the same conditions, not only the bar",
+    /\$\("cover-now"\)\.addEventListener\([^]*?if \(!COVERABLE\.has\(shownScreen\)\) return;[^]*?if \(!session\?\.pinRecord\) return;/.test(appCode),
+    "cover-now returns early off a coverable screen and with no PIN"
+  );
+  check(
+    "⭐⭐ the watcher's flag is set BEFORE the screen is painted, and false stops it",
+    /if \(!lockWatch\?\.cover\(\)\) return;\n\s*coverNow\(lockFlow\.MANUAL\);/.test(appCode),
+    "cover() gates coverNow(MANUAL)"
+  );
+  check(
+    "⚠️ and the cover screen says the person asked, rather than reporting a threshold",
+    /\[lockFlow\.MANUAL\]: copy\.lock\.coveredManual/.test(appCode),
+    "coverSaid maps MANUAL"
+  );
+  check(
+    "⚠️ its label is painted with the other static labels, so both screens follow the language",
+    /text\("cover-now", copy\.pin\.coverNow\)/.test(appCode),
+    "cover-now is painted from copy"
+  );
+  check(
+    "⛔⛔ and the lift button names what is behind THIS cover, not always a conversation",
+    /text\("uncover", coveredFrom === "chat" \? copy\.lock\.show : copy\.lock\.showList\)/.test(appCode),
+    "#uncover's label is chosen from coveredFrom"
+  );
+
   check(
     "⭐ it is wired to the lock, and it says the person asked",
     /\$\("lock-now"\)\.addEventListener\([^]*?lockNow\(lockFlow\.MANUAL\)/.test(appCode),

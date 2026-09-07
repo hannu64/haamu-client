@@ -295,6 +295,33 @@ export function watchIdleness({
     doc?.removeEventListener?.("visibilitychange", onVisibility);
   }
 
+  /**
+   * The person raised the cover themselves, from the menu.
+   *
+   * ⚠️⚠️ IT SETS THE FLAG AND NOTHING ELSE, AND EVERY OMISSION HERE IS DELIBERATE.
+   * `lastActivity` is NOT moved: somebody who covers the screen and walks away has
+   * stopped using this device at the moment they last used it, and restarting the long
+   * clock here would push §4.3's 24-hour lock away every time the shorter tier is used
+   * on purpose — turning the convenience control into a way to keep the keys in memory
+   * indefinitely. `hiddenSince` is untouched for the same reason.
+   *
+   * ⭐ WHAT THE FLAG BUYS is the rest of the tier's behaviour, already written: `touch()`
+   * returns early so tapping the covered screen is not use, `evaluate()` will not raise a
+   * second cover over the first, and the LONG tier keeps running underneath — a manually
+   * covered session still locks at 24 hours, which is the property that makes this a
+   * shortcut rather than a fourth state.
+   *
+   * ⚠️ IT DOES NOT CALL `onCover`. The caller is the click handler that already knows it
+   * is covering; calling back into it would paint the screen twice and, on the Kept path,
+   * re-enter `coverNow` with `coveredFrom` already spent.
+   */
+  function cover() {
+    if (stopped) return false;
+    if (covered) return false;
+    covered = true;
+    return true;
+  }
+
   /** The right PIN arrived: the person is here, and the clocks start again from now. */
   function uncovered() {
     if (stopped) return;
@@ -307,6 +334,7 @@ export function watchIdleness({
     stop,
     touch,
     evaluate,
+    cover,
     uncovered,
     get stopped() { return stopped; },
     get covered() { return covered; },

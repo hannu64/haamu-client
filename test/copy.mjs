@@ -1196,7 +1196,14 @@ check(
 
 section("§4.3 — Ghost mode's cover, which is not a lock");
 
-for (const [name, sentence] of [["idle", copy.lock.coveredIdle], ["blurred", copy.lock.coveredBlurred]]) {
+// ⚠️ THE THIRD REASON JOINS THE LOOP RATHER THAN GETTING ITS OWN CHECK. The property
+// is about the WORD the cover uses for itself, and it is true of every reason a cover
+// can be raised for — including the one a person raises deliberately.
+for (const [name, sentence] of [
+  ["idle", copy.lock.coveredIdle],
+  ["blurred", copy.lock.coveredBlurred],
+  ["manual", copy.lock.coveredManual],
+]) {
   check(
     `the ${name} cover does not call itself a lock`,
     !/lock/i.test(sentence) && /Covered/.test(sentence),
@@ -1223,22 +1230,80 @@ for (const [name, sentence] of [["idle", copy.lock.coveredIdle], ["blurred", cop
 // them, and a regex tested against an array coerces it silently — which passes here and
 // would go on passing if one of the paragraphs disappeared.
 const joined = (v) => [].concat(v).join(" ");
+
+/* ⛔⛔⛔⛔ THE HONESTY CHECK MOVED SCREENS, AND MOVING IT IS D-107 RATHER THAN A
+ * WEAKENING. It read `/still reach what is behind it/ && /only hides the screen/` over
+ * the two COVER paragraphs. Hannu, testing the built tier: *"When the screen is covered
+ * with the PIN there should be less explanations, specifically not hints that it can be
+ * circumvented. That warning only when setting the PIN."*
+ *
+ * ⭐⭐ THE PROPERTY §4.3 REQUIRES IS UNCHANGED — a person must be told this control can
+ * be walked around, in plain words, before they decide what it is worth. What changed is
+ * WHERE that person is standing when they need it. On the cover the reader might be
+ * whoever picked the device up; on `#pin-set` it is certainly the owner, mid-decision.
+ * §4.3's own Ghost rule already said so: *a person choosing between controls chooses
+ * before any dialog opens.*
+ *
+ * ⚠️ SO THE CHECK IS RE-POINTED, NOT DELETED. Deleting it because the string left
+ * `lock.coveredWhat` would have dropped §4.3's honesty requirement out of the gate
+ * entirely, with every suite still green — which is the exact shape of the failure the
+ * banner two comments up was written about.
+ */
+check(
+  "⭐⭐⭐⭐ §4.3's honesty is said where the CHOICE is made — the PIN can be bypassed",
+  /can bypass the PIN/.test(copy.pin.what) && /not your KEY/.test(copy.pin.what),
+  copy.pin.what
+);
+check(
+  "⭐⭐ and the same sentence says the KEY is what cannot be bypassed",
+  /does not replace your KEY/.test(copy.pin.what),
+  copy.pin.what
+);
+check(
+  "⛔ and the cover screen no longer carries it — that is the point of the move",
+  !/bypass|still reach what is behind it/i.test(joined(copy.lock.coveredWhat) + " " + joined(copy.lock.coveredWhatKept)),
+  joined(copy.lock.coveredWhatKept)
+);
+
 for (const [mode, sentence] of [["Ghost", joined(copy.lock.coveredWhat)], ["Kept", joined(copy.lock.coveredWhatKept)]]) {
+  check(`⚠️ and the ${mode} cover does not call itself a lock`, !/\block(ed|s)?\b/i.test(sentence), sentence);
+  // ⚠️ WRITTEN AS THE RULE, NOT AS THE SENTENCE. It asserted `/Nothing is deleted/` —
+  // a specific string, which is the guard shape that outlived its own correctness once
+  // already. What §4.3 actually forbids is a cover CLAIMING it removed something; Ghost's
+  // paragraph names the ending as a control the person may choose, which is not that.
   check(
-    `⭐⭐⭐ the ${mode} cover says out loud what it does NOT stop`,
-    /still reach what is behind it/.test(sentence) && /only hides the screen/.test(sentence),
+    `⚠️ nor does the ${mode} cover claim this act deleted or closed anything`,
+    !/\b(is|are|was|were) (deleted|closed|removed)\b|\b(deletes|closes|removes)\b/i.test(sentence),
     sentence
   );
-  check(`⚠️ and the ${mode} cover does not call itself a lock`, !/\block(ed|s)?\b/i.test(sentence), sentence);
-  check(`⚠️ nor claims anything is deleted by it`, /Nothing is deleted/.test(sentence), sentence);
 }
 
 // ⚠️⚠️ AND THE TWO MODES DIFFER ON THE ONE THING A PERSON HAS TO DECIDE: what stands
 // behind the cover. Ghost has no KEY, so a forgotten PIN there ends the conversation;
 // Kept falls back to the eight words. A shared sentence would be wrong in one of them.
+// ⚠️ THE COUNT IS GONE AND THE SHAPE IS KEPT. This asserted two paragraphs each, which
+// stopped being true the moment the honest one moved — but the reason the check exists
+// is that `text()` flattens a `\n\n` into one grey wall, and that reason is about them
+// being ARRAYS for `prose()`, not about how many entries an array has.
 check(
-  "⚠️ both are two paragraphs, which is what `prose()` renders and `text()` flattened",
-  [].concat(copy.lock.coveredWhat).length === 2 && [].concat(copy.lock.coveredWhatKept).length === 2
+  "⚠️ both are arrays, which is what `prose()` renders and `text()` flattened",
+  Array.isArray(copy.lock.coveredWhat) && Array.isArray(copy.lock.coveredWhatKept)
+);
+
+/* ⛔⛔ THE LIFT BUTTON HAS TO NAME WHAT IS ACTUALLY BEHIND THE COVER. One label said
+ * "Show the conversation" on both screens, and on the conversation LIST there is no one
+ * conversation — while the line directly above it asks for a PIN to *"show your
+ * conversations"*. A button and the sentence introducing it disagreed, in the product's
+ * own words, on the screen a person meets most often. */
+check(
+  "⭐⭐ the two lift labels are different sentences, one per screen",
+  copy.lock.show !== copy.lock.showList && /conversation\b/.test(copy.lock.show) && /conversations\b/.test(copy.lock.showList),
+  `${copy.lock.show} · ${copy.lock.showList}`
+);
+check(
+  "⚠️ and the list one agrees with the ask above it, which is plural",
+  /show your conversations/i.test(copy.pin.coverAsk) && /conversations/.test(copy.lock.showList),
+  `${copy.pin.coverAsk} · ${copy.lock.showList}`
 );
 
 check(
@@ -1247,8 +1312,8 @@ check(
   joined(copy.lock.coveredWhat)
 );
 check(
-  "⭐⭐ and Kept's says the KEY is the stronger one",
-  /Your KEY is the stronger one/.test(joined(copy.lock.coveredWhatKept)),
+  "⭐⭐ and Kept's says the KEY is the stronger of the two",
+  /Your KEY is the stronger/.test(joined(copy.lock.coveredWhatKept)),
   joined(copy.lock.coveredWhatKept)
 );
 
