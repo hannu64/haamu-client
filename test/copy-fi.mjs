@@ -237,6 +237,13 @@ section("the Finnish has the same shape as the English it replaces");
     "chat.live": ["live", "the stream indicator — WhatsApp's own word, used in Finnish too"],
     "menu.english": ["English", "D-159 — each language is named in itself, or the option you need is written in the language you cannot read"],
     "menu.finnish": ["Suomi", "D-159 — the same, from the other side"],
+    // ⚠️ §4.3's two thresholds, which are the label a person taps to find out which
+    // number is which. Two digits, a slash and `min` — an abbreviation Finnish spells
+    // the same way — so there is nothing here to translate. ⭐ THE EXEMPTED VALUE IS
+    // BUILT FROM THE CONSTANTS RATHER THAN TYPED, so that a threshold that moves
+    // cannot leave an exemption standing for a label that no longer exists: the
+    // check below compares by VALUE, and this one moves with `flow/lock.js`.
+    "terms.cover-when.label": [copy.terms["cover-when"].label, "§4.3's two thresholds — digits and `min`, which Finnish writes the same way"],
   };
   const same = [...EN]
     .filter(([key, en]) => en.trim() === (SUOMI.get(key) ?? "").trim())

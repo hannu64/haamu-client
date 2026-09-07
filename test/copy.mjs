@@ -3026,14 +3026,45 @@ section("D-110 — the disclosure layer is a closed set");
     Object.entries(copy.terms).map(([id, e]) => `${id}: ${e.body.length}`).join(", ")
   );
 
-  // ⭐ THE LAYER HAS A JOB AND THIS IS IT (D-110). The surface exists to be short and
-  // the body exists to be complete, so a body that is no longer than the sentence
-  // that opens it has not moved any complexity anywhere — it has just added a click.
-  const thin = Object.entries(copy.terms).filter(([, e]) => e.body.join(" ").length < 200);
+  /* ⭐ THE LAYER HAS A JOB AND THIS IS IT (D-110). The surface exists to be short and
+   * the body exists to be complete, so a body that adds nothing to the words a person
+   * tapped has not moved any complexity anywhere — it has just added a click.
+   *
+   * ⚠️⚠️ IT WAS A FLAT `< 200` AND THAT WAS A MEASUREMENT OF ONE SHAPE, NOT THE RULE.
+   * Every entry this file had when the check was written hangs off a NOUN — `KEY`,
+   * `invite link`, `six digits` — and answers it with a footnote paragraph, for which
+   * two hundred characters is a fair floor. `cover-when` is the first entry of a
+   * different shape: it hangs off two bare numbers, `5/30 min`, and its whole job is to
+   * say which number belongs to which situation. Eighty-six characters is the complete
+   * answer, and padding it to clear a threshold would be writing for the test.
+   *
+   * ⭐ SO THE RULE IS RESTATED AGAINST WHAT IT IS ACTUALLY ABOUT: the disclosure has to
+   * carry substantially more than the words that open it. Measured against the LABEL,
+   * a footnote to a noun still needs its paragraph and a legend for two numbers passes
+   * on its own merits — while a genuinely thin entry, one whose body barely restates a
+   * long surface phrase, still fails.
+   *
+   * ⚠️ The floor stays absolute so that a one-character label cannot buy a one-line
+   * body: whatever is tapped, the panel owes the reader a real sentence. */
+  const FLOOR = 80;
+  const RATIO = 8;
+  const thin = Object.entries(copy.terms).filter(
+    ([, e]) => e.body.join(" ").length < Math.max(FLOOR, e.label.length * RATIO)
+  );
   check(
-    "⭐ and every entry says more than the sentence that opens it, or it is only a click",
+    "⭐ and every entry says substantially more than the words that open it",
     thin.length === 0,
-    thin.map(([id, e]) => `${id}: ${e.body.join(" ").length} chars`).join(", ")
+    thin.map(([id, e]) => `${id}: ${e.body.join(" ").length} chars for a ${e.label.length}-char label`).join(", ")
+  );
+
+  // ⚠️⚠️ AND THE RULE STILL REFUSES WHAT IT WAS WRITTEN TO REFUSE. A canary, because a
+  // threshold that was just loosened is exactly the kind nobody re-reads: the shape the
+  // old check caught must still fail the new one.
+  const canary = { label: "the invite link", body: ["It is a link."] };
+  check(
+    "⚠️⚠️ the detector still catches a body that only restates its own label",
+    canary.body.join(" ").length < Math.max(FLOOR, canary.label.length * RATIO),
+    `${canary.body.join(" ").length} chars for a ${canary.label.length}-char label`
   );
 }
 

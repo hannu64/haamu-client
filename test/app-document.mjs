@@ -414,6 +414,19 @@ section("§4.3 — the lock is reachable, and locking still deletes nothing (D-1
     "cover-now is painted from copy"
   );
   check(
+    "⭐ the PIN lead is rendered by `prose`, so D-110's threshold disclosure is a control",
+    /prose\("pin-set-lead", copy\.pin\.lead\)/.test(appCode),
+    "#pin-set-lead goes through prose()"
+  );
+  // ⚠️ `prose()` APPENDS THE PANEL AS A SIBLING OF THE PARAGRAPH, so its host may not be
+  // a `<p>` — the parser closes one before a `<div>` can open inside it, and the panel
+  // would land outside the lead entirely. The same fault `#covered-what` had.
+  check(
+    "⛔ and its host can hold a block child, which a `<p>` cannot",
+    /<div id="pin-set-lead"/.test(html),
+    "#pin-set-lead is a div"
+  );
+  check(
     "⛔⛔ and the lift button names what is behind THIS cover, not always a conversation",
     /text\("uncover", coveredFrom === "chat" \? copy\.lock\.show : copy\.lock\.showList\)/.test(appCode),
     "#uncover's label is chosen from coveredFrom"

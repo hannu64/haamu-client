@@ -216,7 +216,7 @@ export const FI = {
   // ⛔ EI "koodi", koska `pairing.failure.code_malformed` käyttää sitä §2.2:n
   // kutsukoodista — kaksi eri asiaa yhdellä sanalla samassa tuotteessa.
   "pin.title": "Valitse PIN",
-  "pin.lead": "haamu peittää näytön 5/30 min kuluttua. PIN-numerosi näyttää keskustelusi uudelleen.",
+  "pin.lead": "haamu peittää näytön [5/30 min](cover-when) kuluttua. PIN-numerosi näyttää keskustelusi uudelleen.",
   "pin.ask": "6–8 numeroa.",
   "pin.confirmAsk": "Kirjoita se uudelleen.",
   "pin.save": "Tallenna PIN",
@@ -442,6 +442,10 @@ export const FI = {
   "tabs.dormantWhy": "Kummassakaan tapauksessa ei mene mitään hukkaan. Tämän selaimen jokainen välilehti lukee samaa tallennettua kopiota.",
 
   // ── terms
+  "terms.cover-when.label": "5/30 min",
+  "terms.cover-when.title": "Peittäminen",
+  "terms.cover-when.body.0": "5 min jos haamu-sivu EI ole päällimmäisenä.",
+  "terms.cover-when.body.1": "30 min jos haamu-sivu ON päällimmäisenä ja näkyvissä.",
   "terms.key.label": "AVAIN",
   "terms.key.title": "Sinun AVAIMESI",
   "terms.key.body.0": "Se on 8 lyhyttä sanaa, jotka arvotaan tällä laitteella sillä hetkellä kun otat sen käyttöön. Ne lukitsevat keskustelusi ja yhteystietosi.",

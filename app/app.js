@@ -2105,7 +2105,10 @@ function clearPinBoxes(id) {
 async function showPinSet(after = null) {
   pinAfter = after;
   text("pin-set-title", copy.pin.title);
-  text("pin-set-lead", copy.pin.lead);
+  // ⚠️ `prose` RATHER THAN `text`, because the lead now carries D-110's disclosure on
+  // the two thresholds — `text()` writes `textContent`, so the marker would reach the
+  // reader as literal square brackets.
+  prose("pin-set-lead", copy.pin.lead);
   text("pin-set-ask", copy.pin.ask);
   text("pin-set-confirm-ask", copy.pin.confirmAsk);
   text("pin-set-note", "");

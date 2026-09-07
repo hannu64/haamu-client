@@ -825,7 +825,11 @@
       -->
       <section id="pin-set" aria-labelledby="pin-set-title" class="panel hidden">
         <h2 id="pin-set-title"></h2>
-        <p id="pin-set-lead" class="lead"></p>
+        <!-- ⚠️ A `<div>` AND NOT A `<p>`. `prose()` appends the term's disclosure panel as
+             a SIBLING of the paragraph it came from, and a `<div>` inside a `<p>` is
+             closed by the parser before it is opened — the panel would land outside the
+             lead, after the fields. Same reason `#covered-what` became a div. -->
+        <div id="pin-set-lead" class="lead"></div>
         <!-- ⚠️⚠️ THE REUSE WARNING IS ABOVE THE FIELDS AND NOT UNDER THE BUTTON, because
              it is an instruction for CHOOSING rather than a fact about what was chosen.
              D-192's finding in one line: position and weight. A sentence a person meets

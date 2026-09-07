@@ -317,6 +317,35 @@ export const product = {
  * since this is precisely the reader who will meet the word elsewhere.
  */
 export const terms = {
+  /**
+   * §4.3's two cover thresholds, and which is which.
+   *
+   * ⚠️⚠️ IT EXISTS BECAUSE THE SURFACE SENTENCE COULD NOT CARRY IT. *"haamu covers the
+   * screen in 5/30 min"* is his, it is short, and on the screen the two numbers are
+   * unlabelled — a reader cannot tell which belongs to which situation. The alternative
+   * was a longer lead naming both conditions inline, on a screen whose whole problem is
+   * that it demands a second secret from somebody who came to read a message.
+   *
+   * ⭐ THE WORDING IS HIS AND IT IS THE RIGHT WORDING because it is written from what a
+   * person can SEE — *on top* / *not on top* — rather than from what the code measures,
+   * which is `document.visibilityState` and a last-interaction timestamp. Those are the
+   * same fact for anybody holding a phone: the page is hidden when another app is in
+   * front of it or the screen is off, and the idle clock is the one that matters while
+   * they are looking at it.
+   *
+   * ⚠️ THE NUMBERS COME FROM THE CONSTANTS (D-153) — the same two the lead interpolates,
+   * so a threshold that moves cannot leave a stale sentence behind in the panel that
+   * exists to explain it.
+   */
+  "cover-when": {
+    label: `${COVER_BLUR_MS / 60000}/${COVER_IDLE_MS / 60000} min`,
+    title: "Cover up in",
+    body: [
+      `${COVER_BLUR_MS / 60000} min if the haamu page is NOT on top.`,
+      `${COVER_IDLE_MS / 60000} min if the haamu page IS on top and visible.`,
+    ],
+  },
+
   key: {
     label: "KEY",
     title: "Your KEY",
@@ -2223,7 +2252,13 @@ export const pin = {
   // order is `away` then `idle` because that is the order Hannu wrote them in and the
   // shorter one is the one that surprises people. §4.3 owns both numbers; this sentence
   // owns neither, which is the whole point of building it rather than typing it.
-  lead: `haamu covers the screen in ${COVER_BLUR_MS / 60000}/${COVER_IDLE_MS / 60000} min. Your PIN shows your conversations again.`,
+  // ⚠️⚠️ AND THE TWO NUMBERS ARE A TERM, BECAUSE ON THE BUILT SCREEN THEY DID NOT SAY
+  // WHICH WAS WHICH. Hannu wrote the sentence and then supplied the missing half
+  // himself: *"I forgot to write it to the end because it was a bit difficult to
+  // explain."* ⭐ D-110's two-layer answer is exactly the shape that fits — the surface
+  // keeps his short sentence, and the reader who wants to know which number is which
+  // taps the numbers. `terms["cover-when"]` below.
+  lead: `haamu covers the screen in [${COVER_BLUR_MS / 60000}/${COVER_IDLE_MS / 60000} min](cover-when). Your PIN shows your conversations again.`,
 
   // D-153: the range is two digits, from the two constants.
   ask: `${PIN_MIN} to ${PIN_MAX} digits.`,
