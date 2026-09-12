@@ -47,12 +47,14 @@ import * as payloads from "/src/protocol/payload.js";
 import * as epochs from "/src/protocol/epoch.js";
 import * as store from "/src/storage/sessions.js";
 import { b64uDecode } from "/src/crypto/b64u.js";
+import { timingSafeEqual } from "/src/crypto/bytes.js";
 import * as dbs from "/src/storage/db.js";
 import * as vaults from "/src/storage/vault.js";
 import * as tabsFlow from "/src/flow/tabs.js";
 import * as endings from "/src/flow/ending.js";
 import * as lockFlow from "/src/flow/lock.js";
 import * as pinFlow from "/src/flow/pin.js";
+import * as passkeyFlow from "/src/flow/passkey.js";
 import { BUILD } from "/app/build.js";
 import * as copy from "/src/ui/copy.js";
 import * as themes from "/src/ui/theme.js";
@@ -221,6 +223,12 @@ const SCREENS = [
   "ghost", "duplicate", "covered", "paste",
   "dormant", // ARCHITECTURE §4.2.2 — this identity is already open in another tab
   "pin-set", // ARCHITECTURE §4.3 — the cover PIN, chosen once per KEY per browser
+  // PROTOCOL §7.5 — the offer to stop typing the KEY on this device, and the undo.
+  // ⚠️ TWO SCREENS AND NOT ONE WITH A FLAG. They ask opposite questions and D-163's
+  // rule reaches screens as well as sentences: one panel that read its own state would
+  // put the disclosure and the undo behind the same title.
+  "quick-offer",
+  "quick-off",
 ];
 /**
  * The screen on show, so that a re-render of the SAME one leaves the page alone.
@@ -564,6 +572,12 @@ const RERENDER = {
   // it would empty them. Same trade as `paste` above: losing what somebody has typed in
   // order to change the language of the label over it is the worse of the two.
   "pin-set": null,
+  // ⚠️ BOTH ARE OFFERED. Neither holds a typed field, neither is mid-ceremony, and both
+  // are disclosures — which are the sentences it matters most that a person can read in
+  // their own language before answering. `showQuickOffer` clears its own note, which is
+  // D-151's rule: the previous answer belonged to the previous press.
+  "quick-offer": () => showQuickOffer(),
+  "quick-off": () => showQuickOff(),
 };
 
 /**
@@ -819,6 +833,7 @@ $("go-setup").addEventListener("click", () => {
 $("go-enter").addEventListener("click", () => {
   text("enter-note", "");
   only("enter");
+  void paintQuickEntry();
   $("phrase-in").focus();
 });
 
@@ -927,6 +942,7 @@ $("confirmed").addEventListener("click", () => {
 
 async function finishSetup() {
   const phrase = chosenPhrase;
+  typedTheKey = false;
   await withIdentity(phrase, async (s) => {
     await s.roster.create();
   });
@@ -935,6 +951,7 @@ async function finishSetup() {
 $("unlock").addEventListener("click", async () => {
   const typed = $("phrase-in").value;
   if (!typed.trim()) return;
+  typedTheKey = true;
   await withIdentity(typed, async (s) => {
     // The cache first, the network only if there is nothing here (§7.3.3): a
     // launch that fetched would make `roster_id` a daily signal.
@@ -952,7 +969,7 @@ $("unlock").addEventListener("click", async () => {
  * never quietly creates anything. The other direction is handled by the server: a
  * create against an existing identifier is refused rather than overwriting it.
  */
-async function withIdentity(phrase, run) {
+async function withIdentity(secret, run) {
   only("working");
   text("working-note", copy.unlock.working);
   // §4.2.2: whether this document is a client is decided fresh for each session. A
@@ -963,7 +980,21 @@ async function withIdentity(phrase, run) {
 
   let opened = null;
   try {
-    const keys = await rosterFlow.identity(phrase);
+    // ⚠️⚠️ TWO WAYS IN AND ONE SESSION OUT. A string is the eight words and costs
+    // §7.2's Argon2id; a `Uint8Array` is `K_master` itself, unwrapped by §7.5 from
+    // behind this device's own check, and costs five HKDF calls. Everything after this
+    // line is identical on purpose — a quick unlock that reached a different session
+    // shape would be a second product with half the guards.
+    //
+    // ⚠️ `enrolMaster` IS FILLED ON BOTH PATHS AND EMPTIED BY `forgetEnrolMaster`. The
+    // offer to enrol is made after this function has returned, and §7.5 wraps
+    // `K_master` — so the one copy that exists is the one taken here, and every exit
+    // from the offer destroys it.
+    forgetEnrolMaster();
+    const keys =
+      typeof secret === "string"
+        ? await rosterFlow.identity(secret, (bytes) => (enrolMaster = bytes))
+        : await rosterFlow.identityFrom(secret, (bytes) => (enrolMaster = bytes));
     const db = await dbs.openDatabase({
       // ⚠️ BOTH OF THESE ARE MULTI-TAB, AND NEITHER MAY BE SWALLOWED. `blocked`
       // means another tab is holding an older version open and this one will never
@@ -1020,6 +1051,10 @@ async function withIdentity(phrase, run) {
     // rather than `get` so that another identity's record in this browser is not read as
     // "no PIN yet" and quietly overwritten.
     session.pinRecord = await readPinRecord();
+    // ⚠️ READ RATHER THAN REMEMBERED FROM THE WAY IN. A quick unlock proves a record
+    // exists; a KEY unlock says nothing either way, and both arrive here. One read
+    // answers for both, and it is the store that answers.
+    session.quickOn = (await session.vault.unlock.read(session.recordScope)) !== null;
     if (leaderDeferred) {
       leaderDeferred = false;
       await becameLeader();
@@ -1126,6 +1161,7 @@ async function withIdentity(phrase, run) {
     opened?.tabs?.close();
     opened?.db?.close();
     only("enter");
+    void paintQuickEntry();
     refused("enter-note", describeIdentity(err));
     if (err?.reason === "record_unreadable" && scope) offerToForgetLocalHistory(scope);
   }
@@ -1859,7 +1895,25 @@ async function clearFor(going, { thorough, prepared = null }) {
     // has used haamu* rather than a secret, and the thorough ending's own control
     // promises to take the whole origin.
     langs.forget();
-  } else await going.vault.endSession(prepared);
+  } else {
+    await going.vault.endSession(prepared);
+    /**
+     * §7.8: the ordinary ending clears device unlock state in Kept mode, and §7.5's
+     * record is exactly that.
+     *
+     * ⚠️⚠️ BY NAME, AND IT CANNOT BE ANY OTHER WAY. `endSession` decides which rows are
+     * this identity's by OPENING them, and nothing in the `UNLOCK` store opens under
+     * `local_key` — that is the whole reason it is a separate store. What makes the
+     * deletion safe is that the key of the row IS this identity's digest, so no other
+     * identity's row can be addressed by it.
+     *
+     * ⭐ AND IT MUST HAPPEN EVEN THOUGH THE PASSKEY OUTLIVES IT. The credential stays in
+     * the person's platform account — no API can remove it — but the ciphertext it opens
+     * is gone, which is the half this client controls. `copy.quick.offKeeps` is where
+     * that asymmetry is said out loud.
+     */
+    await going.vault.unlock.forget(going.recordScope);
+  }
   going.tabs.close(); // releases the census lock — this document is done
   going.db.close();
 }
@@ -1898,12 +1952,20 @@ async function lockNow(reason) {
   const locked = await stopEverything();
   if (!locked) return;
   coveredFrom = null; // §4.3's cover is gone with the session it was over
+  // ⚠️⚠️ §7.5's ENROLMENT COPY GOES WITH THE DERIVED SET. A lock that dropped the five
+  // derived values and left `K_master` standing would be a lock that changed nothing —
+  // D-070's finding, which is exactly why holding the copy at all was defensible.
+  forgetEnrolMaster();
   endings.overwriteKeys(locked.keys);
   locked.tabs.close(); // a locked tab must not hold the connections for the others
   locked.db.close();
   $("phrase-in").value = "";
   text("enter-note", lockSaid(reason));
   only("enter");
+  // ⚠️⚠️ §7.5 IS OFFERED AFTER A LOCK AND THAT IS THE WHOLE POINT OF THE FEATURE. §4.3's
+  // lock drops the derived keys and costs an Argon2id to lift; this is what that lift is
+  // allowed to be on a device the person has already set up.
+  void paintQuickEntry();
 }
 
 /**
@@ -2256,6 +2318,385 @@ async function haltWith(message) {
   text("failcode", "");
   text("fail-back", copy.nav.toStart);
 }
+
+// ------------------------------------------ §7.5 opening this device without the KEY
+
+/**
+ * The one copy of `K_master` that exists outside `rosterFlow.identity`, alive only
+ * while §7.5's offer is on screen.
+ *
+ * ⚠️⚠️ EVERY EXIT FROM THE OFFER DESTROYS IT, AND THE LIST OF EXITS IS THE WHOLE RISK.
+ * "Turn on", "Not now", the next unlock, the lock, and the ending all call
+ * `forgetEnrolMaster`. A route that forgot to would leave this alive for the life of
+ * the tab — which D-070 says adds no reach an attacker did not already have through the
+ * derived set, and which would still be a promise this file had stopped keeping.
+ */
+let enrolMaster = null;
+
+/**
+ * Whether the KEY was typed on the way into this session.
+ *
+ * ⚠️ IT IS WHAT KEEPS §7.5's OFFER OUT OF SETUP. `finishSetup` and the quick unlock
+ * both reach `openHome` with a session, and neither is the moment Hannu chose — one is
+ * a person who has just written down eight words, the other a person for whom the
+ * feature is already on.
+ */
+let typedTheKey = false;
+
+/**
+ * Whether §7.5's offer has already been answered — for THIS identity, not for this
+ * browser.
+ *
+ * ⚠️⚠️ IT WAS A SINGLE `localStorage` FLAG AND THAT WAS D-170's FAULT ARRIVING AGAIN.
+ * One browser can hold two KEYs; a mark named for the browser would mean the second
+ * person is never offered the feature because the first one declined it, and nothing
+ * on any screen would explain why. The name carries the identity digest, exactly as
+ * the PIN's record does.
+ *
+ * ⚠️ IT GOES IN `DURABLE`, BESIDE THE PIN AND FOR THE SAME REASON. §7.8's ordinary
+ * ending removes the conversations and leaves the person using this browser; a decline
+ * is a fact about the person. §7.5.2 requires that a decline is never re-asked
+ * automatically, and a mark the ordinary ending swept away would re-ask.
+ */
+const askedName = (scope) => `lpm.quick.asked.${scope}`;
+
+function forgetEnrolMaster() {
+  enrolMaster?.fill(0);
+  enrolMaster = null;
+}
+
+/**
+ * Which identities in this browser can open without the KEY.
+ *
+ * ⚠️⚠️ READ WITH NO KEY AT ALL, WHICH IS THE WHOLE POINT OF THE SEPARATE STORE. This
+ * runs on the gate, before anything is unlocked — `storage/db.js` explains why a
+ * plaintext row may not live beside the sealed ones.
+ */
+async function unlockRecordsHere() {
+  if (!passkeyFlow.available()) return [];
+  let db = null;
+  try {
+    /**
+     * ⚠️⚠️ `onBlocked` IS PASSED EVEN THOUGH NOTHING HERE DEPENDS ON THE ANSWER, and the
+     * reason is the schema bump §7.5 arrived with. `DB_VERSION` went to 2, so for exactly
+     * as long as one tab is still running the previous build, every open from the new one
+     * is BLOCKED — and an open with no handler never settles. The person would be looking
+     * at the KEY screen with no shortcut and no explanation, about to press Open and meet
+     * the same block a second time. ⭐ The notice is the one `withIdentity` would raise
+     * moments later; raising it here means it arrives before the wasted attempt.
+     */
+    db = await dbs.openDatabase({
+      onBlocked: () => notice("dbblocked", () => ({ body: copy.tabs.blocked, alarm: true })),
+    });
+    const rows = await vaults.unlockRecords(db);
+    return rows
+      .map(({ scope, record }) => ({ scope, ...(passkeyFlow.decodeRecord(record) ?? {}) }))
+      .filter((e) => e.credentialId);
+  } catch (err) {
+    // ⚠️ A LAUNCH PATH SWALLOWS THIS AND SAYS NOTHING. The consequence of failing to
+    // read here is that the KEY is asked for, which is the ordinary state of the
+    // product; a notice about a store that would not open would be a fault reported to
+    // somebody whose next action is unaffected by it.
+    noteProblem(err);
+    return [];
+  } finally {
+    db?.close();
+  }
+}
+
+/**
+ * Offer the quick way in on the screen that asks for the KEY, if there is one to offer.
+ *
+ * ⚠️ THE BUTTON IS PAINTED FROM WHAT IS IN THE STORE AND NEVER FROM A FLAG. A person
+ * who cleared their site data has no record and must not be shown a control that would
+ * then fail; the store is the only thing that knows.
+ */
+let quickEntries = [];
+
+async function paintQuickEntry() {
+  /**
+   * ⚠️⚠️ HIDDEN FIRST, SYNCHRONOUSLY, AND A BROWSER PROBE IS WHAT FOUND THIS. Reading the
+   * store is asynchronous, so a row left at its previous state stays on screen until the
+   * read lands — and the case where that matters is precisely the one where the previous
+   * state was **shown** and the record has just been deleted. The KEY screen then offered
+   * a shortcut to a record that no longer exists, and pressing it in that window is a
+   * refusal for something the person did nothing wrong to cause.
+   *
+   * ➡️ **A CONTROL PAINTED FROM AN AWAIT MUST BE HIDDEN BEFORE THE AWAIT, NOT AFTER IT.**
+   * The same rule `paintQuickSetting` follows by having no await at all.
+   */
+  show("quick-row", false);
+  quickEntries = await unlockRecordsHere();
+  show("quick-row", quickEntries.length > 0);
+}
+
+$("quick-go").addEventListener("click", async () => {
+  if (quickEntries.length === 0) return;
+  text("enter-note", "");
+  const got = await passkeyFlow.evaluate({ entries: quickEntries });
+  if (!got.ok) {
+    /**
+     * ⚠️⚠️ THIS IS §7.5's "THE FALL-THROUGH MUST NOT BE SILENT ONCE PRF HAS WORKED
+     * HERE", AND THE BOOLEAN IT ASKS FOR IS NOT STORED SEPARATELY. §7.5.1 writes the
+     * record **only after a successful evaluation**, so a record existing IS the fact
+     * that this once worked — and the person only ever reaches this button because one
+     * does. A separate flag would be a second copy of a fact already on disk, able to
+     * disagree with it.
+     */
+    refused("enter-note", quickRefusal(got.reason));
+    return;
+  }
+  const entry = quickEntries.find((e) => e.scope === got.scope);
+  let master = null;
+  try {
+    master = await passkeyFlow.openMaster(got.prfOut, entry.blob, entry.scope);
+  } catch (err) {
+    // ⚠️ THE GCM TAG REFUSED. The wrap key is right for some credential and not for
+    // this blob — a record written by a credential that has since been replaced in the
+    // platform account. Nothing is wrong with the person and the KEY still works.
+    noteProblem(err);
+    refused("enter-note", copy.quick.failedNow);
+    return;
+  } finally {
+    got.prfOut.fill(0);
+  }
+  // ⚠️ `withIdentity` TAKES OWNERSHIP OF THE BUFFER — see `rosterFlow.identityFrom`.
+  await withIdentity(master, async (s) => {
+    if (!(await s.roster.load())) await s.roster.load({ network: true, reason: rosterFlow.SETUP });
+  });
+});
+
+/** One sentence per refusal, no default (D-163). */
+function quickRefusal(reason) {
+  return (
+    {
+      [passkeyFlow.NO_API]: copy.quick.noApi,
+      [passkeyFlow.DECLINED]: copy.quick.failedNow,
+      [passkeyFlow.NO_PRF]: copy.quick.failedNow,
+      [passkeyFlow.NOT_PLATFORM]: copy.quick.notHere,
+      [passkeyFlow.NOT_VERIFIED]: copy.quick.notChecked,
+      [passkeyFlow.NO_RECORD]: copy.quick.noRecord,
+    }[reason] ?? copy.quick.failedNow
+  );
+}
+
+/**
+ * Is this the moment to offer it? Answered after the session exists, because every
+ * part of the answer is about this identity in this browser.
+ *
+ * ⚠️⚠️ GHOST MODE IS EXCLUDED AND NOT BY ACCIDENT. §7.6 has no `K_master` and no
+ * `roster_id`, so there is nothing to wrap and nothing to name a row after. A mode
+ * whose whole promise is that it leaves nothing behind may not be offered a feature
+ * that writes a permanent entry to the person's platform account.
+ *
+ * ⚠️ AND IT IS NOT OFFERED DURING SETUP. Hannu chose *"right after they type their
+ * KEY, in a later session"* on 2026-09-12: the offer answers a wait the person has just
+ * sat through, and setup is already the heaviest screen in the product.
+ */
+async function quickOfferDue() {
+  if (isGhost() || !session || !enrolMaster) return false;
+  if (!passkeyFlow.available()) return false;
+  if (await quickAsked()) return false;
+  return (await session.vault.unlock.read(session.recordScope)) === null;
+}
+
+/**
+ * ⚠️ `attempt` RATHER THAN `get`, AND THE THIRD ANSWER IS WHY (D-170). A record that
+ * will not open is another identity's or is damaged, and reading either as "not asked
+ * yet" would put this product's one permanent-privacy-cost offer in front of somebody
+ * who has already declined it.
+ */
+async function quickAsked() {
+  if (!session || isGhost()) return true;
+  const got = await session.vault.durable.attempt(askedName(session.recordScope));
+  return got.ours ? Boolean(got.value?.asked) : false;
+}
+
+async function rememberQuickAsked() {
+  if (session && !isGhost()) await session.vault.durable.set(askedName(session.recordScope), { asked: true });
+}
+
+/**
+ * §7.5.2's disclosure, on the screen where the choice is made (D-196).
+ *
+ * ⛔⛔ THE TWO COSTS ARE TWO PARAGRAPHS AND MUST STAY TWO. §7.5.2: the first is about
+ * being **observed** by the platform account provider, the second about who **controls**
+ * the unlock afterwards. A person may accept one and refuse the other, so folding them
+ * into one reassuring line takes the choice away rather than shortening it.
+ */
+function showQuickOffer() {
+  only("quick-offer");
+  /**
+   * ⚠️⚠️ THE FIELD APPEARS ONLY WHEN `K_master` IS GONE, AND IT IS NOT AN APOLOGY FOR
+   * ASKING TWICE. Straight after an unlock the copy is still in memory and nothing is
+   * asked; reached from the settings hours later it is not, because §7.7 zeroes it —
+   * and §7.5 wraps `K_master`, so there is nothing to wrap without it.
+   *
+   * ⭐ AND IT IS A REAL CHECK RATHER THAN A WORKAROUND. §4.3's threat is somebody who
+   * picked up an unlocked device; this is the one control in the product that would let
+   * that person arrange their own way back in tomorrow. Asking for the eight words is
+   * what stops them.
+   */
+  show("quick-key-row", !enrolMaster);
+  $("quick-key-in").value = "";
+  text("quick-key-ask", copy.unlock.ask);
+  $("quick-key-in").placeholder = copy.unlock.placeholder;
+  text("quick-offer-title", copy.quick.offerTitle);
+  text("quick-offer-lead", copy.quick.offerLead);
+  text("quick-offer-seen", copy.quick.offerSeen);
+  text("quick-offer-held", copy.quick.offerHeld);
+  text("quick-offer-keeps", copy.quick.offerKeeps);
+  text("quick-offer-here", copy.quick.offerHere);
+  text("quick-offer-on", copy.quick.offerOn);
+  text("quick-offer-not", copy.quick.offerNot);
+  text("quick-offer-note", "");
+}
+
+$("quick-offer-not").addEventListener("click", async () => {
+  // ⚠️ §7.5.2: "never re-ask automatically after a decline". The answer is remembered
+  // rather than the refusal, so that saying yes later is a thing the person does from
+  // the settings and never a thing the product asks for a second time.
+  await rememberQuickAsked();
+  forgetEnrolMaster();
+  await openHome();
+});
+
+$("quick-offer-on").addEventListener("click", () => void turnQuickOn("quick-offer-note", () => openHome()));
+
+/**
+ * The ceremony, and what is written if it succeeds.
+ *
+ * ⚠️⚠️ THE RECORD IS WRITTEN WHOLE AND ONLY AFTER A SUCCESSFUL EVALUATION (§7.5.1),
+ * which is what makes its presence mean "PRF has worked on this device". Nothing
+ * partial is stored on any failing path, so there is no state to clean up — and the
+ * passkey the platform may have created regardless is named in `copy.quick.noPrf`,
+ * because haamu cannot delete it and the person is the only one who can.
+ */
+async function turnQuickOn(noteId, after) {
+  if (!session) return;
+  const master = await masterToWrap(noteId);
+  if (!master) return;
+  text(noteId, copy.quick.asking);
+  const got = await passkeyFlow.enrol({ kMaster: master, scope: session.recordScope });
+  if (!got.ok) {
+    refused(noteId, quickEnrolRefusal(got.reason));
+    return;
+  }
+  /**
+   * ⚠️⚠️ EVERYTHING AFTER A SUCCESSFUL CEREMONY IS WRAPPED, AND THE REASON IS THE SCREEN
+   * RATHER THAN THE DATA. A throw here — ARCHITECTURE §4.2.3's blocked store is the real
+   * candidate — would leave this panel saying *"your device will ask you now"* over a
+   * device that has already answered, with no button that does anything. **A screen with
+   * no way forward is worse than any sentence.**
+   *
+   * ⭐ AND IT GETS ITS OWN SENTENCE BECAUSE THE STATE IS ASYMMETRIC: haamu saved nothing,
+   * and a passkey now exists in the person's account that no app can delete (§7.5.1). The
+   * decline sentence would be true about haamu and false about their settings.
+   */
+  try {
+    await session.vault.unlock.write(session.recordScope, got.record);
+    await rememberQuickAsked();
+  } catch (err) {
+    noteProblem(err);
+    refused(noteId, copy.quick.notSaved);
+    return;
+  }
+  session.quickOn = true;
+  forgetEnrolMaster();
+  await after();
+}
+
+/**
+ * `K_master`, either the copy taken on the way in or one derived from the KEY typed on
+ * this screen.
+ *
+ * ⚠️⚠️ THE DERIVED ONE IS CHECKED AGAINST THIS SESSION AND THE CHECK IS NOT OPTIONAL.
+ * A different KEY derives a perfectly valid `K_master` for a DIFFERENT identity — §7.2's
+ * derivation cannot fail — and wrapping it would write a record under this identity's
+ * name that opens somebody else's. It would not be detected at write time and at read
+ * time it would hand back the wrong `K_master`, which then derives the wrong `local_key`
+ * and refuses every row in the vault. ➡️ A typo would look like a corrupted browser.
+ */
+async function masterToWrap(noteId) {
+  if (enrolMaster) return enrolMaster;
+  const typed = $("quick-key-in").value;
+  if (!typed.trim()) {
+    refused(noteId, copy.unlock.ask);
+    return null;
+  }
+  text(noteId, copy.quick.checking);
+  // Let the panel paint before Argon2id takes the main thread (§7.2, D-145).
+  await new Promise((r) => setTimeout(r, 20));
+  let got = null;
+  const keys = await rosterFlow.identity(typed, (bytes) => (got = bytes));
+  if (!timingSafeEqual(keys.rosterId, session.keys.rosterId)) {
+    got?.fill(0);
+    refused(noteId, copy.quick.notThisKey);
+    return null;
+  }
+  enrolMaster = got;
+  return enrolMaster;
+}
+
+/** One sentence per refusal, no default (D-163). */
+function quickEnrolRefusal(reason) {
+  return (
+    {
+      [passkeyFlow.NO_API]: copy.quick.noApi,
+      [passkeyFlow.DECLINED]: copy.quick.declined,
+      [passkeyFlow.NO_PRF]: copy.quick.noPrf,
+      [passkeyFlow.NOT_PLATFORM]: copy.quick.notHere,
+      [passkeyFlow.NOT_VERIFIED]: copy.quick.notChecked,
+    }[reason] ?? copy.quick.declined
+  );
+}
+
+/**
+ * The setting, at the foot of the list beside the PIN — both answer *"how does this
+ * browser let me in"*, and that is the question this group already exists for.
+ *
+ * ⚠️ IT IS HIDDEN WHERE IT COULD NOT WORK rather than shown refusing. §7.5 is absent in
+ * Ghost mode by design and absent in a browser with no WebAuthn by measurement, and
+ * D-154's finding is that a control absent where it could not work reads as absent,
+ * while one that refuses reads as broken.
+ */
+function paintQuickSetting() {
+  const possible = !isGhost() && passkeyFlow.available();
+  show("quick-set", possible);
+  show("quick-note", possible);
+  if (!possible) return;
+  const on = Boolean(session?.quickOn);
+  text("quick-set", on ? copy.quick.settingOff : copy.quick.settingOn);
+  text("quick-note", on ? copy.quick.settingNoteOn : copy.quick.settingNote);
+}
+
+function showQuickOff() {
+  only("quick-off");
+  text("quick-off-title", copy.quick.offTitle);
+  text("quick-off-body", copy.quick.offBody);
+  text("quick-off-keeps", copy.quick.offKeeps);
+  text("quick-off-go", copy.quick.offGo);
+  text("quick-off-keep", copy.quick.offKeep);
+  text("quick-off-note", "");
+}
+
+$("quick-set").addEventListener("click", async () => {
+  if (session?.quickOn) {
+    showQuickOff();
+    return;
+  }
+  showQuickOffer();
+});
+
+$("quick-off-keep").addEventListener("click", () => void openHome());
+
+$("quick-off-go").addEventListener("click", async () => {
+  if (!session) return;
+  await session.vault.unlock.forget(session.recordScope);
+  session.quickOn = false;
+  await openHome();
+  text("quick-note", copy.quick.stopped);
+});
 
 // -------------------------------------------------- §7.3.1a the panic action
 
@@ -2761,8 +3202,32 @@ async function openHome() {
     await showPinSet(openHome);
     return;
   }
+  /**
+   * §7.5's offer — Hannu's choice on 2026-09-12: *"right after they type their KEY, in
+   * a later session"*.
+   *
+   * ⚠️⚠️ IT IS BELOW THE PIN GATE AND ABOVE THE LIST, AND BOTH EDGES MATTER. Above the
+   * list, because an offer that arrived after the conversations were on screen would be
+   * an interruption rather than an answer to the wait just paid for. Below the PIN,
+   * because §4.3's second tier is mandatory and this one is not — asking a person to
+   * choose between two secrets in one sitting is how neither gets read.
+   *
+   * ⚠️ AND NOT ON THE FIRST SESSION. `typedTheKey` is false on the way out of setup, so
+   * somebody who has just written down eight words is not also asked about passkeys.
+   */
+  if (typedTheKey && (await quickOfferDue())) {
+    typedTheKey = false;
+    showQuickOffer();
+    return;
+  }
+  forgetEnrolMaster();
   await watch(null); // this tab is displaying nothing; the leader can stop for it
   text("home-title", copy.list.title);
+  // ⚠️ HERE AS WELL AS IN `paintCopy`, AND BOTH ARE NEEDED. `paintCopy` runs on a
+  // language change; this runs when the state behind the label changes — turning the
+  // feature off comes straight back to this function, and the label it left behind
+  // would otherwise still offer to stop something that has stopped.
+  paintQuickSetting();
   // D-139: `#create` is the floating button, so its name is an attribute.
   // ⚠️⚠️ D-191: AND NOW ALSO ITS TEXT. The note here used to end "a circle cannot hold a
   // sentence", which was true and was the wrong thing to conclude — the circle was the
@@ -5662,6 +6127,10 @@ function paintCopy() {
   text("write-title", copy.phrase.writeTitle);
   text("confirm-title", copy.phrase.confirmTitle);
   text("enter-title", copy.unlock.title);
+  // ⚠️ §7.5's shortcut, painted whether or not it is shown. `paintQuickEntry` decides
+  // visibility from what is in the store; a label painted only when visible would be
+  // stale in the other language the first time the store said yes.
+  text("quick-go", copy.quick.use);
   text("progress-title", copy.pairing.title);
   text("verify-title", copy.verification.title);
 
@@ -5674,6 +6143,11 @@ function paintCopy() {
   text("lock-note", copy.lock.controlNote);
   text("change-pin", copy.pin.change);
   text("pin-note", copy.pin.changeNote);
+  // ⚠️ §7.5's control is painted by `paintQuickSetting` rather than here, because its
+  // label is one of two sentences and which one depends on the session. What this file
+  // must not do is paint a default here and correct it there — a control that says the
+  // wrong thing for one frame is a control somebody can press in that frame.
+  paintQuickSetting();
   // ⚠️ PAINTED HERE AND NOT IN `barMode`, WHICH ONLY DECIDES WHETHER IT IS SHOWN. This
   // entry appears on the conversation as well as the list, and the conversation's
   // repaint on a language change does not run `openHome`; a label painted where it is

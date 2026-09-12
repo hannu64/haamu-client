@@ -1614,14 +1614,21 @@ section("D-187 — every screen has a name, and the steps say themselves out lou
    * because the failure this guards against is a screen somebody adds LATER. That is
    * `RERENDER`'s standing lesson in this codebase: a table of ids is a table with a
    * row missing.
+   *
+   * ⚠️⚠️ AND THE SWEEP HAD THE SAME HOLE IT WAS WRITTEN TO CLOSE — `[a-z]+` MATCHES NO
+   * ID WITH A HYPHEN IN IT. `#pin-set` shipped in September and this rule never saw it;
+   * §7.5's two screens would have been the second and third. The count in the detail
+   * below is what makes the omission visible rather than silent: a sweep that reports
+   * "all named" over a set it cannot see is a green check about nothing.
+   * ➡️ **A SWEEP IS ONLY WIDER THAN A LIST IF ITS PATTERN MATCHES EVERY MEMBER.**
    */
-  const sections = [...html.matchAll(/<section id="([a-z]+)"([^>]*)>/g)].map((m) => ({
+  const sections = [...html.matchAll(/<section id="([a-z-]+)"([^>]*)>/g)].map((m) => ({
     id: m[1],
     attrs: m[2],
   }));
   const headingIds = new Set([...html.matchAll(/<h2 id="([a-z-]+)"/g)].map((m) => m[1]));
   const bodies = new Map(
-    [...html.matchAll(/<section id="([a-z]+)"[^>]*>([\s\S]*?)<\/section>/g)].map((m) => [m[1], m[2]])
+    [...html.matchAll(/<section id="([a-z-]+)"[^>]*>([\s\S]*?)<\/section>/g)].map((m) => [m[1], m[2]])
   );
   const withHeading = sections.filter((x) => /<h2 id="/.test(bodies.get(x.id) || ""));
   const unnamed = withHeading.filter((x) => !/aria-labelledby="/.test(x.attrs));
@@ -1638,6 +1645,19 @@ section("D-187 — every screen has a name, and the steps say themselves out lou
     "⚠️ and every name points at a heading that exists — a label naming nothing is worse than none",
     dangling.length === 0,
     dangling.join(" ") || "all resolve"
+  );
+
+  // ⚠️ THE SWEEP MUST REACH THE SCREENS `app.js` ACTUALLY HAS. `SCREENS` is the list
+  // `only()` switches between, and a screen missing from the sweep above is a screen
+  // whose heading rule is unenforced — which is how `#pin-set` went a release without
+  // one. This compares the two sets rather than trusting the pattern.
+  const declared = (app.match(/const SCREENS = \[([\s\S]*?)\];/) || [])[1] || "";
+  const named = [...declared.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]);
+  const missed = named.filter((id) => !sections.some((x) => x.id === id));
+  check(
+    "⭐⭐ and the sweep reaches every screen `only()` can show",
+    missed.length === 0,
+    missed.join(" ") || `${named.length} screens, all swept`
   );
 
   // ── the headings are copy, in both languages, not markup ───────────────────
@@ -1713,6 +1733,128 @@ section("D-187 — every screen has a name, and the steps say themselves out lou
       /<p id="step-say"[^>]*class="[^"]*\bhidden\b/.test('<p id="step-say" class="offscreen hidden">') &&
       !/\.offscreen \{[\s\S]*?clip-path: inset\(50%\);/.test(".offscreen { display: none; }"),
     "a bare status line, a silenced one, and a `display: none` one are all caught"
+  );
+}
+
+// ═════════════════════════════════ §7.5 — opening this device without the KEY
+
+section("§7.5 — the rules that live in the app rather than in the wrapper");
+
+{
+  const app = code("../app/app.js");
+  const html = read("../app/index.html");
+  const passkey = read("../src/flow/passkey.js");
+  const db = code("../src/storage/db.js");
+
+  /**
+   * ⛔⛔ §7.8: THE ORDINARY ENDING CLEARS DEVICE UNLOCK STATE, AND IT CANNOT DO IT THE
+   * WAY IT CLEARS EVERYTHING ELSE. `endSession` decides which rows are this identity's by
+   * OPENING them, and nothing in the `UNLOCK` store opens under `local_key` — that is why
+   * it is a separate store. So the deletion is by name, and a change that dropped this
+   * line would leave a wrapped `K_master` behind an ending that promised to remove it.
+   */
+  check(
+    "⛔ the ordinary ending deletes §7.5's record by name",
+    /vault\.unlock\.forget\(going\.recordScope\)/.test(app),
+    "endSession cannot reach it — nothing in UNLOCK opens under local_key"
+  );
+  check(
+    "⚠️ and `UNLOCK` is absent from the list the ending WALKS, for that reason",
+    /ENDING_CLEARS = Object\.freeze\(\[CONVERSATION, MESSAGES\]\)/.test(db),
+    "a store in that list is a store every row of which must open under local_key"
+  );
+  check(
+    "⭐ while the thorough ending's reach is every store there is",
+    /STORES = Object\.freeze\(\[CONVERSATION, MESSAGES, DURABLE, UNLOCK\]\)/.test(db)
+  );
+
+  /**
+   * ⚠️⚠️ THE ONE COPY OF `K_master` OUTSIDE THE DERIVATION, AND EVERY EXIT MUST DESTROY
+   * IT. §7.5 wraps `K_master`, the offer is made after the unlock has finished, and
+   * `flow/roster.js` zeroes the original — so a copy is taken and its whole safety is
+   * that the list of routes away from the offer is complete.
+   */
+  const forgets = (app.match(/forgetEnrolMaster\(\)/g) || []).length;
+  check(
+    "⛔ §4.3's lock destroys the enrolment copy of K_master with the derived set",
+    /forgetEnrolMaster\(\);\s*\n\s*endings\.overwriteKeys\(locked\.keys\)/.test(app),
+    "a lock that dropped five keys and left this one would be a lock that changed nothing"
+  );
+  check(
+    "⚠️ and it is forgotten on every other way out of the offer as well",
+    forgets >= 5,
+    `${forgets} call sites — unlock, decline, accept, the list, the lock`
+  );
+
+  /**
+   * ⛔⛔ §7.5.2: THE TWO COSTS ARE TWO SENTENCES AND THE DISCLOSURE IS FIVE PARAGRAPHS.
+   * A person may accept being observed by their platform account provider and refuse
+   * handing that account control of the unlock; folding them together takes the choice
+   * away rather than shortening it. This pins the screen to the copy, both directions.
+   */
+  for (const [id, path] of [
+    ["quick-offer-lead", "copy.quick.offerLead"],
+    ["quick-offer-seen", "copy.quick.offerSeen"],
+    ["quick-offer-held", "copy.quick.offerHeld"],
+    ["quick-offer-keeps", "copy.quick.offerKeeps"],
+    ["quick-offer-here", "copy.quick.offerHere"],
+  ]) {
+    check(
+      `#${id} is written from ${path}`,
+      new RegExp(`text\\("${id}", ${path.replace(/\./g, "\\.")}\\)`).test(app) &&
+        new RegExp(`id="${id}"`).test(html),
+      "§7.5.2's disclosure may not lose a paragraph to a tidying pass"
+    );
+  }
+  check(
+    "⛔ and the permanence is said again where somebody tries to undo it",
+    /text\("quick-off-keeps", copy\.quick\.offKeeps\)/.test(app),
+    "turning it off deletes haamu's record and not the passkey — §7.5.1 has no delete call"
+  );
+
+  /**
+   * ⭐⭐ D-163 — EVERY REFUSAL `flow/passkey.js` CAN RETURN HAS ITS OWN SENTENCE. A
+   * reason added to the wrapper and not to the screen would fall through to a default and
+   * tell somebody the wrong thing about their own device.
+   */
+  const reasons = [...passkey.matchAll(/^export const ([A-Z_]+) = "(?:no_api|declined|no_prf|not_platform|not_verified|no_record|failed)";/gm)].map(
+    (m) => m[1]
+  );
+  const unsaid = reasons.filter((r) => r !== "FAILED" && !app.includes(`passkeyFlow.${r}`));
+  equal("⭐⭐ every refusal the wrapper can return has a sentence on a screen", unsaid.join(", "), "");
+  check("⚠️ and there were refusals to check", reasons.length >= 6, `${reasons.length} reasons`);
+
+  /**
+   * ⚠️⚠️ A CONTROL PAINTED FROM AN AWAIT MUST BE HIDDEN BEFORE THE AWAIT. Found by a
+   * browser probe on 2026-09-12: after the record was deleted, the KEY screen went on
+   * offering the shortcut until the store read landed, and pressing it in that window is
+   * a refusal the person did nothing to cause.
+   */
+  check(
+    "⛔ the shortcut is hidden before the store is read, not after",
+    /async function paintQuickEntry\(\)[\s\S]{0,900}?show\("quick-row", false\);[\s\S]{0,200}?await unlockRecordsHere\(\)/.test(app),
+    "the state it would otherwise keep is the state where the record has just gone"
+  );
+
+  // ⚠️ §7.6 has no `K_master` and no `roster_id`, so there is nothing to wrap and no row
+  // to name. A mode whose promise is that it leaves nothing behind may not be offered a
+  // feature that writes a permanent entry to somebody's platform account.
+  check(
+    "⛔ Ghost mode is never offered §7.5",
+    /async function quickOfferDue\(\) \{\s*if \(isGhost\(\)/.test(app) &&
+      /const possible = !isGhost\(\) && passkeyFlow\.available\(\)/.test(app),
+    "§7.6 leaves nothing behind; a listed passkey is something left behind"
+  );
+
+  // ⚠️⚠️ THE CANARY. Every check above is a pattern over source text, and a pattern that
+  // stops matching passes silently forever.
+  check(
+    "⚠️⚠️ and the patterns still refuse the shapes they exist to refuse",
+    !/vault\.unlock\.forget\(going\.recordScope\)/.test("await going.vault.endSession(prepared);") &&
+      !/show\("quick-row", false\);[\s\S]{0,200}?await unlockRecordsHere\(\)/.test(
+        'async function paintQuickEntry() { quickEntries = await unlockRecordsHere(); show("quick-row", true); }'
+      ),
+    "an ending that only calls endSession, and a paint that hides after the await"
   );
 }
 

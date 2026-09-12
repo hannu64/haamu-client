@@ -131,9 +131,42 @@ export const MAX_CAS_ATTEMPTS = 4;
  * it runs on EVERY unlock, not once per device (§7.5). Callers should say so on
  * screen before starting it rather than appear to have frozen.
  */
-export async function identity(phrase) {
+export async function identity(phrase, keep = null) {
   const kMaster = await passphrase.deriveMaster(phrase);
+  const keys = await identityFrom(kMaster, keep);
+  return keys;
+}
+
+/**
+ * The same derivation from `K_master` itself — §7.5's quick unlock, which arrives
+ * holding the thing the passphrase exists to produce.
+ *
+ * ⚠️⚠️ THE EXPENSIVE HALF IS THE HALF THAT IS SKIPPED, AND THAT IS THE WHOLE
+ * FEATURE. `deriveMaster` is Argon2id at 128 MiB — 1.17 s on a decade-old Android
+ * (D-034) — and `deriveRosterKeys` is five HKDF calls. A caller that has unwrapped
+ * `K_master` has already paid for the first half once, on the day it was set up.
+ *
+ * ⚠️ THE CALLER'S BUFFER IS ZEROED HERE AND THE CALLER MUST NOT REUSE IT. This
+ * function takes ownership precisely so that no call site has to remember to.
+ */
+export async function identityFrom(kMaster, keep = null) {
   const keys = await passphrase.deriveRosterKeys(kMaster);
+  /**
+   * ⚠️⚠️ `keep` HANDS OUT A COPY AND THE COPY IS THE CALLER'S TO DESTROY. §7.5's
+   * enrolment needs `K_master` — it is the thing being wrapped — and the offer to
+   * enrol is made AFTER the unlock has finished, by which time this buffer is
+   * zeroed. Rather than move the zeroing, which is §7.7's rule and should not bend
+   * for a feature, the one caller that needs it says so and owns what it gets.
+   *
+   * ⭐ WHAT THAT COSTS IS NOTHING AN ATTACKER DID NOT ALREADY HAVE, AND D-070 IS THE
+   * ARGUMENT. The five derived values stay in memory for the whole session and they
+   * open the roster, every channel root, every session pickle and the whole local
+   * history; `K_master` reaches the same set through one HKDF. So a copy alive
+   * beside them adds no reach. What it must not do is outlive them — `flow/ending.js`
+   * wipes it with the rest, because a lock that dropped the derived set and left this
+   * standing would be a lock that changed nothing.
+   */
+  if (keep) keep(kMaster.slice());
   // `K_master` has done its work. §7.7 is honest about what this is worth in
   // JavaScript — the garbage-collected copies persist — but the buffer we hold is
   // a `Uint8Array`, and overwriting it is a real write.

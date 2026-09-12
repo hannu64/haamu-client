@@ -38,7 +38,7 @@
 
 /** Bumping this runs `upgrade()` below; every store must be created there. */
 export const DB_NAME = "lpm";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 /** Cleared by the ordinary ending (§7.8 step 2). Session pickles, roster cache. */
 export const CONVERSATION = "conversation";
@@ -58,9 +58,38 @@ export const MESSAGES = "messages";
  */
 export const DURABLE = "durable";
 
-export const STORES = Object.freeze([CONVERSATION, MESSAGES, DURABLE]);
+/**
+ * §7.5's unlock record, and it is a FOURTH store because it is the one row in this
+ * database that is **not sealed under `local_key`** — version 2, 2026-09-12.
+ *
+ * ⚠️⚠️ THE SPLIT HERE IS BY WHO CAN READ A ROW, NOT BY WHEN IT DIES. `local_key`
+ * derives from `K_master`, which is the thing this record contains; a record that
+ * could only be read after unlocking is a record that cannot be used to unlock. So it
+ * is stored in the clear, wrapped instead under §7.5's PRF-derived key.
+ *
+ * ⚠️⚠️ AND THAT IS EXACTLY WHY IT MAY NOT SIT IN `CONVERSATION`. `vault.js`'s
+ * `planEnding` decides which rows are this identity's **by opening them**, and counts
+ * the rest as belonging to somebody else. A plaintext row in there would be counted
+ * against another identity forever: the ordinary ending would leave it standing and
+ * report a stranger's record in this browser that does not exist. A store boundary
+ * makes that impossible rather than remembered — the same reasoning the three stores
+ * above were split on.
+ *
+ * ⚠️ ITS LIFETIME MATCHES `CONVERSATION` EVEN THOUGH ITS READER DOES NOT. §7.8's
+ * ordinary ending clears device unlock state in Kept mode, so the ending deletes this
+ * identity's row **by name** — which it can, because the key IS the identity digest.
+ * It is absent from `ENDING_CLEARS` because that list means "walk it and open every
+ * row", which is the one thing nothing can do here.
+ */
+export const UNLOCK = "unlock";
 
-/** Stores the ordinary ending clears. `DURABLE` is absent on purpose. */
+export const STORES = Object.freeze([CONVERSATION, MESSAGES, DURABLE, UNLOCK]);
+
+/**
+ * Stores the ordinary ending clears by opening every row. `DURABLE` is absent on
+ * purpose, and so is `UNLOCK` — see its note above. `clearEverything` takes `STORES`,
+ * so §7.8's thorough ending still reaches both.
+ */
 export const ENDING_CLEARS = Object.freeze([CONVERSATION, MESSAGES]);
 
 export function idbAvailable() {
@@ -157,6 +186,10 @@ function upgrade(db) {
   if (!db.objectStoreNames.contains(CONVERSATION)) db.createObjectStore(CONVERSATION);
   if (!db.objectStoreNames.contains(MESSAGES)) db.createObjectStore(MESSAGES);
   if (!db.objectStoreNames.contains(DURABLE)) db.createObjectStore(DURABLE);
+  // ⚠️ Version 2. Every store is created unconditionally on every upgrade path, so a
+  // browser arriving from version 1 and a browser arriving from nothing take the same
+  // route — there is no per-version migration here to get out of order.
+  if (!db.objectStoreNames.contains(UNLOCK)) db.createObjectStore(UNLOCK);
 }
 
 /**

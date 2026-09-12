@@ -34,7 +34,7 @@ import * as aead from "../crypto/aead.js";
 import { b64uEncode } from "../crypto/b64u.js";
 import { utf8Bytes, utf8String } from "../crypto/bytes.js";
 import { sha256 } from "../crypto/hash.js";
-import { CONVERSATION, DURABLE, ENDING_CLEARS, MESSAGES, STORES, WriteConflict, prefixRange } from "./db.js";
+import { CONVERSATION, DURABLE, ENDING_CLEARS, MESSAGES, STORES, UNLOCK, WriteConflict, prefixRange } from "./db.js";
 
 /** §6.6: a client deletes a message 24 hours after it FIRST RECEIVED it. */
 export const MESSAGE_TTL_S = 24 * 60 * 60;
@@ -337,6 +337,24 @@ function messageLog(db, localKey) {
  * `flow/roster.js` takes two storages rather than one and refuses to invent a
  * default for the second.
  */
+/**
+ * Every §7.5 unlock record in this browser, read with no key at all.
+ *
+ * ⚠️⚠️ THIS IS THE ONE READ THAT HAPPENS BEFORE AN IDENTITY EXISTS, and it is a
+ * module function rather than a vault method for exactly that reason: a launch that
+ * had to open a vault first would have to know a `local_key`, which is the thing the
+ * record is there to produce. The key of each row is the identity digest, so the
+ * launch learns **which** identity a record belongs to without being able to read
+ * anything that identity owns.
+ *
+ * ⚠️ It discloses nothing new to somebody holding the device. The digest is a prefix
+ * of a hash of `roster_id`, which §7.3.3 already makes public to the server, and the
+ * wrapped payload is useless without the authenticator.
+ */
+export async function unlockRecords(db) {
+  return (await db.list(UNLOCK, undefined)).map(([scope, record]) => ({ scope, record }));
+}
+
 export function openVault({ db, localKey }) {
   if (!(localKey instanceof Uint8Array) || localKey.length !== 32) {
     throw new RangeError("vault: local_key must be 32 bytes — see PROTOCOL.md §7.2");
@@ -366,6 +384,32 @@ export function openVault({ db, localKey }) {
     conversation: records(db, CONVERSATION, localKey),
     durable: records(db, DURABLE, localKey),
     messages: messageLog(db, localKey),
+
+    /**
+     * §7.5's unlock record — the one store this file does not encrypt.
+     *
+     * ⚠️ IT TAKES THE SCOPE RATHER THAN CLOSING OVER IT, BECAUSE THIS VAULT DOES NOT
+     * KNOW ONE. `openVault` is handed `local_key` and nothing else; the identity digest
+     * is computed by the caller from `roster_id`. Passing it at every call is what keeps
+     * the key of the row and the identity it belongs to the same fact (D-170).
+     *
+     * ⚠️⚠️ NOTHING HERE VALIDATES THE RECORD. It is read on the launch path, before
+     * there is any key to check it against and before there is a screen to catch a
+     * throw; `flow/passkey.js`'s `decodeRecord` answers `null` for everything this
+     * cannot, and that is where the judgement belongs.
+     */
+    unlock: {
+      async read(scope) {
+        return (await db.get(UNLOCK, scope)) ?? null;
+      },
+      async write(scope, record) {
+        await db.put(UNLOCK, scope, record);
+      },
+      /** §7.8's ordinary ending reaches this BY NAME — see `db.js`'s note on `UNLOCK`. */
+      async forget(scope) {
+        await db.delete(UNLOCK, scope);
+      },
+    },
 
     /**
      * §7.8 step 2, and it does NOT reach `DURABLE`.

@@ -129,6 +129,16 @@ echo "=== pin.mjs — §4.3's second tier, the cover PIN ==="
 node test/pin.mjs
 
 echo
+echo "=== passkey.mjs — §7.5's PRF wrapper, and the refusals the device panel met ==="
+# ⚠️⚠️ NOTHING HERE IS EVIDENCE THAT PRF WORKS ON A DEVICE. There is no WebAuthn in
+# Node, so every authenticator in that file is a fake; the device evidence is six
+# devices and two platforms in `DEVICE_RESULTS.md`. What this guards is the half that
+# is ours — that a hybrid assertion may not wrap anything (D-193 rule 1), that presence
+# without verification unwraps nothing, that zero PRF bytes are a refusal rather than a
+# key, and that the wrap is bound to the row it lives in.
+node test/passkey.mjs
+
+echo
 echo "=== visibility.mjs — §3.4.1b rule 11, which has now been missed twice ==="
 # ⚠️ D-140 taught rule 11 to the poll and not to the retry ladder; D-141 taught it to
 # the parking and not to the budget wrapped around it. Both were bugs in how two

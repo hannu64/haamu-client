@@ -237,6 +237,61 @@ export const FI = {
   "pin.wrong": "Väärä PIN.",
   "pin.slow": "Odota hetki ja yritä uudelleen.",
 
+  // ── quick — §7.5: avaaminen ilman kirjoittamista
+  // ⚠️⚠️ HANNU: TÄMÄ ON VASTA LUONNOS. Erityisesti tarkista, mitä sanaa iPhonesi ja
+  // Galaxysi OIKEASTI käyttävät suomeksi — *pääsyavain* on tässä arvaus, ja jos se on
+  // väärä sana, ihminen ei löydä sitä asetuksistaan.
+  // ⚠️⚠️ JA SE SISÄLTÄÄ SANAN *avain*, mikä on tasan D-109:n törmäys suomeksi: AVAIN
+  // isoilla on ihmisen kahdeksan sanaa eikä mikään muu. Näissä lauseissa ne eivät saa
+  // koskaan esiintyä ilman että kumpi on kumpi käy ilmi.
+  "quick.use": "Avaa ilman kirjoittamista",
+  "quick.offerTitle": "Nopeampi avaaminen tällä laitteella",
+  "quick.offerLead":
+    "Tämä selain voi pitää AVAIMESI sormenjäljen, kasvojen tai sen tunnistuksen takana, jota laite " +
+    "käyttää lukituksen avaamiseen — silloin sinun ei tarvitse kirjoittaa sitä joka kerta.",
+  "quick.offerSeen":
+    "Käyttöönotto luo pääsyavaimen. Se näkyy tallennetuissa salasanoissasi ja synkronoituu Apple- tai " +
+    "Google-tilillesi, joten Apple tai Google näkee, että käytät haamua.",
+  "quick.offerHeld":
+    "Se, mikä avaa tämän selaimen jatkossa, on myös tuolla tilillä. Tämä siis nojaa siihen, että tili " +
+    "pysyy sinun hallinnassasi.",
+  "quick.offerKeeps":
+    "Sovellus ei voi poistaa pääsyavainta, joten haamu ei saa sitä myöhemmin pois. Voit poistaa sen " +
+    "itse Applen tai Googlen asetuksista.",
+  "quick.offerHere":
+    "Tämä toimii tässä selaimessa tällä laitteella. Uusi puhelin, uusi tietokone tai eri selain kysyy " +
+    "AVAIMESI — aina.",
+  "quick.notThisKey": "Tämä on eri AVAIN kuin se, jolla tämä selain on auki. Kirjoita se, jota nyt käytät.",
+  "quick.checking": "Tarkistetaan — tämä kestää hetken.",
+  "quick.asking": "Laitteesi kysyy sinulta nyt.",
+  "quick.offerOn": "Ota käyttöön",
+  "quick.offerNot": "Ei nyt",
+  "quick.settingOn": "Ota käyttöön avaaminen ilman kirjoittamista",
+  "quick.settingOff": "Lopeta avaaminen ilman kirjoittamista",
+  "quick.settingNote": "haamu kysyy AVAIMESI tässä selaimessa joka kerta.",
+  "quick.settingNoteOn": "Tämä selain avautuu ilman AVAINTASI. AVAIMESI avaa edelleen kaiken, kaikkialla.",
+  "quick.offTitle": "Lopeta avaaminen ilman kirjoittamista",
+  "quick.offBody": "Tämä selain kysyy AVAIMESI taas joka kerta.",
+  "quick.offKeeps":
+    "Pääsyavain jää Apple- tai Google-tilillesi. Mikään sovellus ei voi poistaa sitä. Voit poistaa sen " +
+    "itse Applen tai Googlen asetuksista.",
+  "quick.offGo": "Lopeta",
+  "quick.offKeep": "Pidä käytössä",
+  "quick.done": "Valmis. Tämä selain avautuu tästä lähtien ilman AVAINTASI.",
+  "quick.stopped": "Tämä selain kysyy taas AVAIMESI.",
+  "quick.failedNow": "Avaaminen ilman kirjoittamista ei onnistunut tällä kertaa. Kirjoita AVAIMESI.",
+  "quick.noApi": "Tämä selain ei osaa tätä. AVAIMESI avaa edelleen kaiken.",
+  "quick.declined": "Mitään ei otettu käyttöön.",
+  "quick.noPrf":
+    "Tämä selain loi pääsyavaimen eikä sitten osannut käyttää sitä. haamu ei tallentanut mitään. " +
+    "Pääsyavain on Applen tai Googlen asetuksissa, jos haluat poistaa sen.",
+  "quick.notSaved":
+    "Laitteesi vastasi, eikä tämä selain saanut tallennettua mitään. haamu on ennallaan. Sen " +
+    "luoma pääsyavain on Applen tai Googlen asetuksissa, jos haluat poistaa sen.",
+  "quick.notHere": "Vastaus tuli toiselta laitteelta. haamu käyttää vain tähän laitteeseen sisäänrakennettua.",
+  "quick.notChecked": "Laite ei varmistanut, että se olit sinä. Mitään ei tallennettu.",
+  "quick.noRecord": "Tässä selaimessa ei ole mitään tallennettuna avaamista varten. Kirjoita AVAIMESI.",
+
   // ── menu
   "menu.back": "Keskustelut",
   "menu.more": "Lisää",

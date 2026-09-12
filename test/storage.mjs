@@ -219,8 +219,75 @@ section("§7.8 — what an ending clears");
 {
   // The list is in one place and both endings read it, so "clear conversation
   // state" cannot drift from what §7.8 enumerates.
-  check("the ordinary ending names two of the three stores", db.ENDING_CLEARS.length === db.STORES.length - 1);
-  check("and DURABLE is the one it leaves", !db.ENDING_CLEARS.includes(db.DURABLE));
+  // ⚠️⚠️ THE OLD SHAPE OF THIS CHECK WAS `STORES.length - 1` AND IT BROKE THE DAY A
+  // FOURTH STORE LANDED — correctly, and for the wrong reason. It was counting, so the
+  // only thing it could say when §7.5's `UNLOCK` arrived was that the number had moved;
+  // it could not say whether the new store belonged in the list. ➡️ **A CHECK THAT
+  // COUNTS A SET CANNOT SAY WHICH MEMBERS ARE MISSING.** Both exclusions are now named,
+  // each with the reason it is excluded, so the next store forces the same question.
+  check(
+    "every store the ordinary ending walks is a store it can open",
+    db.ENDING_CLEARS.every((s) => db.STORES.includes(s))
+  );
+  check("and DURABLE is left, because §7.3.2's high-water mark must survive it", !db.ENDING_CLEARS.includes(db.DURABLE));
+  // ⚠️ `UNLOCK` is left for a different reason entirely: the ordinary ending DOES clear
+  // device unlock state, but it cannot do it by walking — nothing in that store opens
+  // under `local_key`. It is deleted by name, and `app-document.mjs` guards that.
+  check("and UNLOCK is left, because nothing there opens under local_key", !db.ENDING_CLEARS.includes(db.UNLOCK));
+  check("⭐ while the thorough ending's reach is every store there is", db.STORES.includes(db.UNLOCK));
+}
+
+// ======================================= §7.5's unlock record, the one row in the clear
+
+section("§7.5 — the store nothing opens under local_key");
+
+{
+  const one = db.memoryDatabase();
+  const mine = vault.openVault({ db: one, localKey });
+  const theirs = vault.openVault({ db: one, localKey: other });
+
+  equal("nothing is there to begin with", await mine.unlock.read("ScopeOne"), null);
+
+  await mine.unlock.write("ScopeOne", { v: 1, id: "AQ", rk: "required", blob: "Ag" });
+  await theirs.unlock.write("ScopeTwo", { v: 1, id: "Aw", rk: "required", blob: "BA" });
+
+  /**
+   * ⚠️⚠️ IT COMES BACK WITHOUT ANY KEY AT ALL, AND THAT IS THE WHOLE REASON FOR THE
+   * FOURTH STORE. `local_key` derives from `K_master`, which is what this record
+   * CONTAINS — a row that could only be read after unlocking could never be used to
+   * unlock. What protects the payload is §7.5's wrap key, and `flow/passkey.js` is
+   * where that lives.
+   */
+  const rows = await vault.unlockRecords(one);
+  equal("both identities' rows are listed with no key in hand", rows.length, 2);
+  check(
+    "⚠️ and each row is keyed by the identity it belongs to",
+    rows.map((r) => r.scope).sort().join(" ") === "ScopeOne ScopeTwo",
+    rows.map((r) => r.scope).join(" ")
+  );
+
+  // ⚠️ THE STORE IS SHARED AND THE ROWS ARE NOT. Two `openVault`s over one database
+  // address the same store; what keeps them apart is the name, exactly as D-170 requires
+  // of every other per-identity record.
+  equal("one identity's write did not land on the other's row", (await mine.unlock.read("ScopeTwo")).id, "Aw");
+
+  await mine.unlock.forget("ScopeOne");
+  equal("⭐ and the ending removes one BY NAME", await mine.unlock.read("ScopeOne"), null);
+  equal("⚠️ leaving the other identity's record exactly where it was", (await mine.unlock.read("ScopeTwo")).id, "Aw");
+
+  /**
+   * ⛔⛔ THE ORDINARY ENDING WALKS `ENDING_CLEARS` AND OPENS EVERY ROW IT FINDS. If this
+   * record lived in `CONVERSATION` it would open under nothing, so it would be counted
+   * as a stranger's — the ending would leave it standing AND report a second identity in
+   * this browser that does not exist. The store boundary is what makes that impossible.
+   */
+  const { plan, left } = await mine.planEnding();
+  equal("⛔ the ordinary ending's plan does not reach this store", plan.map(([s]) => s).join(" "), "conversation messages");
+  equal("⚠️ and a plaintext row is not counted as another identity's", left, 0);
+
+  // §7.8 step 5's thorough ending takes the whole origin, and `STORES` now includes it.
+  await mine.clearEverything();
+  equal("⭐ while the thorough ending takes it with everything else", (await vault.unlockRecords(one)).length, 0);
 }
 
 // ============================================================== §6.6's message TTL

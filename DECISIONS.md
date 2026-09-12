@@ -5546,6 +5546,134 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-198. ⭐⭐⭐⭐ §7.5 is built — and every one of its four design questions was settled by a measurement that already existed
+
+**2026-09-12.** Hannu, after a session of strategy: *"Yes that was my decision to do the
+'passkey work' for haamu. I am sure that will increase the usability and user experience
+of haamu by a multiple."* Built the same day: `flow/passkey.js`, a fourth object store,
+the offer, the shortcut, the undo, 54 unit checks and a browser probe with a virtual
+authenticator. **The quick unlock measures 64 ms against §7.2's 1.17 s of Argon2id on a
+decade-old Android (D-034).**
+
+⭐⭐⭐⭐ **THE FINDING OF THE DAY IS NOT ANY ONE OF THE FOUR DECISIONS. It is that all
+four were already answered by readings taken in August for other questions, and three of
+them came out OPPOSITE to the obvious implementation.** The device panel was run to find
+out whether PRF works; what it actually bought was the design.
+
+**1. The escalation ladder is struck — one ceremony, `residentKey: "required"`.**
+§7.5.1 had kept the `discouraged`-then-`required` ladder after the platform split was
+struck, reasoning that the cheap rung is how a client discovers whether PRF works at
+all. But the same section's table measures that `discouraged` returns **nothing** on
+Android, and item 4d measures that iOS produces a discoverable, listed, synced
+credential whichever value is asked for. So the cheap rung works nowhere Android is,
+buys no privacy where iOS is, and — §7.5.1's own sentence — leaves a **permanently
+listed passkey no API can delete** behind before the working rung is tried.
+➡️ **A LADDER WHOSE FIRST RUNG CANNOT SUCCEED AND CANNOT BE CLEANED UP IS A WAY OF
+CHARGING THE USER TWICE FOR ONE FEATURE.**
+
+**2. The user handle is RANDOM per enrolment, and the tidy answer is the trap.** A
+*constant* handle makes each enrolment REPLACE the credential rather than add one, which
+is exactly what finding 1's accumulation problem seems to want. ⛔ It is wrong, and item
+4e-i is why: passkeys sync, so replacement is **account-wide**, while the ciphertext does
+**not** travel — which means enrolling a second device is the ordinary thing a two-device
+person does, and a constant handle would silently break the first device every time they
+did it. ➡️ **THE TIDY OPTION COSTS THE FEATURE ON THE DEVICE STILL IN USE; ACCUMULATION
+COSTS A LIST ENTRY THAT IS ALREADY DISCLOSED.**
+
+**3. A fourth object store, and it splits on a different axis from the other three.**
+D-063 split `conversation` / `messages` / `durable` by **when a row dies**. §7.5's record
+splits by **who can read it**: `local_key` derives from `K_master`, which is the thing
+the record contains, so a row readable only after unlocking could never be used to
+unlock. It is stored in the clear.
+⛔⛔ **And that is exactly why it may not sit beside the sealed rows.** `planEnding`
+decides which rows are this identity's **by opening them** — so a plaintext row among
+them would be counted as a stranger's forever: left standing by the ending that promised
+to remove it, and reported as a second KEY in this browser that does not exist. The
+ending deletes it **by name**, which it can, because the name is `identityDigest`.
+
+**4. One copy of `K_master` outlives the derivation, for as long as the offer is on
+screen — and D-070 is what makes that defensible rather than a hole.** §7.7 zeroes
+`K_master` the instant the five derived values exist, and the offer comes after the
+unlock, so there is nothing left to wrap. The copy costs nothing an attacker did not
+already have: D-070 established that the derived set opens the roster, every channel
+root, every session pickle and the whole local history, and `K_master` reaches the same
+set through one HKDF. ⚠️ What it must not do is **outlive** them — so §4.3's lock
+destroys it with the rest, and an `app-document` guard pins that line. ⭐ Reached later
+than the offer, from the settings, the client asks for the eight words again **and
+checks that they derive THIS identity** — because a different KEY derives a perfectly
+valid `K_master` for a different one, and wrapping it would write a record that opens
+somebody else's. Nothing detects that at write time; at read time it refuses every row
+in the vault. **A typo would present as a corrupted browser.**
+
+⭐⭐⭐ **WRITING D-193's TWO RULES INTO THE SPECIFICATION FIRST PAID FOR ITSELF INSIDE AN
+HOUR.** Stating the hybrid rule forced the observation that **only the wrapping direction
+can fail silently** — AES-GCM makes every later unwrap self-checking, so a wrong wrap key
+throws and the client falls through to the KEY, noisily and correctly. Nothing is
+watching at wrap time. ➡️ **THE CHECK BELONGS AT THE ONE MOMENT NOTHING IS WATCHING**,
+which is not where an implementer would naturally put it, and the code and the guard both
+say so now.
+
+⚠️⚠️ **TWO DEFECTS WERE FOUND BY THE BROWSER AND BY NOTHING ELSE, AND BOTH ARE THE SAME
+SHAPE: A SCREEN THAT IS RIGHT EVENTUALLY.**
+
+- **The shortcut on the KEY screen kept its previous state until an `await` landed.** The
+  case that matters is the one where the previous state was *shown* and the record has
+  just been deleted — so the screen went on offering a shortcut to nothing, and pressing
+  it in that window is a refusal the person did nothing to cause. ➡️ **A CONTROL PAINTED
+  FROM AN AWAIT MUST BE HIDDEN BEFORE THE AWAIT, NOT AFTER IT.**
+- **The note said the same sentence before and during the ceremony**, because the
+  "working" line had been set to the lead by a copy-paste. Nothing on the screen moved
+  when the button was pressed, which is the shape `unlock.working` was written for:
+  a screen that looks frozen is a screen people press again.
+
+⚠️⚠️ **AND THE PROBE ITSELF TAUGHT ONE THING NO PRODUCT CODE COULD.** Chrome answers
+WebAuthn on a bare IP address with `SecurityError: This is an invalid domain` — a
+relying-party id must be a DOMAIN — so the whole feature is untestable at
+`127.0.0.1:8098`, which is what `run-all.sh` hands every probe. The symptom was a screen
+that simply never advanced, because the client reads WebAuthn's refusal as a decline,
+correctly, since WebAuthn deliberately does not distinguish a dismissal from a platform
+that cannot help. The probe rewrites the host to `localhost`.
+
+⭐⭐ **A LAST ONE, FOUND WHILE ADDING THE GUARDS, AND IT IS THIS CODEBASE'S OWN LESSON
+COMING BACK.** `app-document.mjs` had a sweep over `<section id="([a-z]+)">` written
+explicitly to escape a hard-coded list — *"a table of ids is a table with a row
+missing"*. Its pattern matches no id containing a hyphen, so it had never seen
+`#pin-set`, which shipped a release earlier; §7.5's two screens would have been the
+second and third. ➡️ **A SWEEP IS ONLY WIDER THAN A LIST IF ITS PATTERN MATCHES EVERY
+MEMBER.** The sweep now compares itself against `SCREENS` and reports the count, so
+"all named" can no longer be a green statement about a set it cannot see.
+
+⛔⛔⛔ **AND THE LARGEST FINDING OF THE DAY CAME FROM THE INSTRUMENTS, NOT FROM THE
+SUITES. EIGHTEEN PROBES HUNG IN ONE SWEEP WHILE EVERY SUITE WAS GREEN.** `test.sh` (26
+sections), `e2e.sh` (37) and the new `passkey.mjs` (54) all passed over the exact bytes
+that made `run-all.sh` report *21 ok, 18 failed*. The cause is one sentence: §7.5's offer
+is shown **between the unlock and the conversation list**, and every probe that types a
+KEY was waiting for a list that is now one screen further away.
+
+➡️ **A SCREEN INSERTED INTO A PATH IS A CHANGE TO EVERY WALK OF THAT PATH.** No unit
+suite can see that, because none of them walks the app; the only instruments that can are
+the ones that drive a browser end to end.
+
+⭐⭐ **AND IT HAD HAPPENED BEFORE, WHICH IS WHY THE FIX WAS ONE EDIT INSTEAD OF EIGHTEEN.**
+`helper-pin.mjs` exists because D-195's mandatory PIN screen did exactly this to
+twenty-five probes, and its own header says so. The offer now goes through the same
+helper — which declines it, deliberately, so that every probe written before today keeps
+measuring what it was written to measure. ➡️ **THE VALUE OF A SHARED HELPER IS NOT THE
+LINES IT SAVES; IT IS THAT THE NEXT CHANGE TO THAT SCREEN IS ONE EDIT WITH NOTHING TO
+DISAGREE WITH ITSELF.**
+
+⚠️ **The regression was BISECTED before it was believed** (`feedback_verify_before_claiming`'s
+standing rule). The change was stashed, `probe-clean-round` ran green against the unchanged
+tree, and the restore was proved byte-identical with `sha256sum` over all 96 files before
+any diagnosis began.
+
+⏭️ **What is NOT done and is owed to Hannu.** The Finnish is a draft and needs his pass —
+in particular the word a real iPhone and a real Galaxy use for *passkey* in Finnish, which
+is a guess here and must be the word a person can actually find in their own settings.
+⚠️⚠️ Whatever it is, it contains *avain*, which is D-109's collision in Finnish: **AVAIN
+in capitals is the person's eight words and nothing else.** Neither may appear in a clause
+with the other without saying which is which.
+
 ### D-197. ⭐⭐⭐ A refusal describes the contents of an input, so it may not outlive them — but the cover's refusal is not one of those
 
 **2026-09-12, from Hannu's test of D-196's screens.** *"The PIN and the wordings also in
@@ -5863,6 +5991,13 @@ something to be filed under and the OPRF's benefit is real there. **Filed, not d
 built**: never wrap with a Safari hybrid/QR PRF value unless it is byte-equal to the
 on-device one, and a synced passkey is not proof of device possession. Neither is in §7.5
 today.
+
+✅ **Both are now written in — 2026-09-12, before any §7.5 code was typed** (PROTOCOL
+§7.5, *"Two rules carried in from the outside review"*). ⭐ Writing them first paid for
+itself immediately: stating the hybrid rule forced the observation that **only the
+wrapping direction can fail silently**, because AES-GCM makes every later unwrap
+self-checking — so the check belongs at the one moment nothing is watching, which is
+not where an implementer would naturally put it.
 
 ⛔ **Nothing else from it is adopted.** The five-word phrase is 58.7 bits against today's
 76.8 after §7.4's selection cost, an 18.1-bit gap that would need 3.8 days of Argon2id per

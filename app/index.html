@@ -463,6 +463,19 @@
           <button id="unlock"></button>
           <button id="back-gate" class="secondary"></button>
         </div>
+        <!--
+          PROTOCOL §7.5. Hidden unless this browser holds an unlock record, which is
+          read from the store and never from a flag — a person who cleared their site
+          data must not be shown a control that would then fail.
+
+          ⚠️⚠️ IT IS BELOW THE KEY FIELD AND NOT ABOVE IT. The KEY is the thing that
+          always works, on every device and in every browser; this is the shortcut on
+          the one device that has been set up. A shortcut above the reliable route
+          would teach the wrong thing to anybody whose record has gone.
+        -->
+        <p class="note mt-s hidden" id="quick-row">
+          <button id="quick-go" class="linkish"></button>
+        </p>
       </section>
 
       <!--
@@ -650,6 +663,18 @@
           <button id="change-pin" class="secondary"></button>
         </div>
         <p class="note mt-s" id="pin-note"></p>
+
+        <!--
+          PROTOCOL §7.5, and it sits here because this group answers one question —
+          *how does this browser let me in* — and both controls are answers to it.
+
+          ⚠️ ITS OWN ROW AND ITS OWN NOTE, for the reason written above the PIN's row:
+          a note is only a note about something if it is next to it.
+        -->
+        <div class="row mt">
+          <button id="quick-set" class="secondary"></button>
+        </div>
+        <p class="note mt-s" id="quick-note"></p>
 
         <!--
           §7.8's ending, and §7.8 step 5's separate control beside it.
@@ -851,6 +876,67 @@
         -->
         <div class="sep">
           <p class="note" id="pin-set-what"></p>
+        </div>
+      </section>
+
+      <!--
+        PROTOCOL §7.5.2 — the disclosure, on the screen where the choice is made
+        (D-196). It is five separate paragraphs and the split is normative rather than
+        typographic: §7.5.2 requires the observation cost and the control cost to be
+        two sentences, because a person may accept one and refuse the other, and
+        §7.5.1's permanence is a third thing again — nothing any app can undo.
+
+        ⚠️⚠️ THERE IS NO "READ MORE" HERE AND THERE MUST NOT BE. A disclosure folded
+        behind a control is a disclosure most people do not meet, and §7.5.2 says
+        plainly that it may never be presented as a warning to be clicked through.
+      -->
+      <section id="quick-offer" aria-labelledby="quick-offer-title" class="panel hidden">
+        <h2 id="quick-offer-title"></h2>
+        <p id="quick-offer-lead" class="lead"></p>
+        <p class="note" id="quick-offer-seen"></p>
+        <p class="note" id="quick-offer-held"></p>
+        <p class="note" id="quick-offer-keeps"></p>
+        <p class="note" id="quick-offer-here"></p>
+        <!--
+          ⚠️⚠️ SHOWN ONLY WHEN `K_master` IS GONE — that is, when this screen was reached
+          from the settings rather than from the unlock. §7.5 wraps `K_master`, §7.7
+          zeroes it the moment the five derived values exist, and no copy of it survives
+          into a later screen. So the choice is between holding the one secret this
+          product never stores, and asking for it on the one screen that needs it.
+
+          ⭐ Asking is also the stronger answer. §4.3's threat is somebody who picked up
+          an unlocked device, and this control is the only one that would let them
+          arrange their own way back in tomorrow.
+
+          ⚠️ `autocomplete`, `autocapitalize` and `spellcheck` off, exactly as
+          `#phrase-in` has them — the three things a password manager looks for before
+          offering to remember what was typed.
+        -->
+        <div id="quick-key-row" class="hidden">
+          <p class="note mt" id="quick-key-ask"></p>
+          <input id="quick-key-in" class="field" type="text" autocomplete="off" autocapitalize="off"
+                 spellcheck="false" />
+        </div>
+        <p class="note" id="quick-offer-note"></p>
+        <div class="row mt">
+          <button id="quick-offer-on"></button>
+          <button id="quick-offer-not" class="secondary"></button>
+        </div>
+      </section>
+
+      <!--
+        The undo, and it carries §7.5.1's permanence again on purpose: somebody turning
+        this off in order to take back what they disclosed has not taken it back, and a
+        screen that let them believe otherwise would be the more harmful silence.
+      -->
+      <section id="quick-off" aria-labelledby="quick-off-title" class="panel hidden">
+        <h2 id="quick-off-title"></h2>
+        <p id="quick-off-body" class="lead"></p>
+        <p class="note" id="quick-off-keeps"></p>
+        <p class="note" id="quick-off-note"></p>
+        <div class="row mt">
+          <button id="quick-off-go"></button>
+          <button id="quick-off-keep" class="secondary"></button>
         </div>
       </section>
 

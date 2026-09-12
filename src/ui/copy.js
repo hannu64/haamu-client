@@ -2366,6 +2366,173 @@ export const pin = {
   slow: "Wait a moment, then try again.",
 };
 
+// ------------------------------------------------- §7.5 opening without typing
+
+/**
+ * §7.5's PRF wrapper, in the words a person meets it in.
+ *
+ * ⚠️⚠️ THE FEATURE IS NAMED FOR WHAT IT SAVES, NOT FOR WHAT IT USES. Every gesture
+ * word is wrong somewhere: an iPhone asks for a face, an Android for a finger, a
+ * Windows desktop may ask for a device code and call none of it biometric. A button
+ * the person meets on **every** unlock has to be true on every device, so the recurring
+ * one says *opening without typing* — and the one-time offer, which is allowed to be
+ * longer, names all three cases.
+ *
+ * ⭐ That split is the same shape as D-197's: the sentence that stands for a long time
+ * must be true of more situations than the sentence shown once.
+ *
+ * ⚠️ THIS NAMESPACE MAY NOT SAY *"passkey"* IN THE RECURRING COPY AND SAYS IT PLAINLY
+ * IN THE DISCLOSURE. The word is the platform's, not this product's, and the person
+ * will meet it in their saved-passwords list whether or not haamu uses it — so a
+ * disclosure that avoided the word would describe a thing they could not then find.
+ * ⚠️⚠️ It is also one letter from D-109's collision: KEY in capitals is the person's
+ * eight words and nothing else, and *passkey* is a different object entirely. Nothing
+ * here may put the two in one sentence without saying which is which.
+ */
+export const quick = {
+  /** The recurring control, on the screen that asks for the KEY. */
+  use: "Open without typing",
+
+  // ── the offer, shown once, after a KEY unlock (D-196: where the choice is made)
+
+  offerTitle: "Faster unlock on this device",
+
+  // ⚠️ IT NAMES ALL THREE GESTURES BECAUSE IT CANNOT KNOW WHICH ONE THIS DEVICE WILL
+  // ASK FOR, and a person told to expect a fingerprint by a phone that wants a face has
+  // been told something false about the next screen.
+  offerLead:
+    "Instead of typing your KEY every time, this browser can keep it behind your fingerprint, your " +
+    "face, or whatever this device asks for when you unlock it.",
+
+  /**
+   * ⚠️⚠️ THE TWO COSTS ARE SEPARATE SENTENCES AND §7.5.2 REQUIRES THAT THEY STAY
+   * SEPARATE. The first is about being **observed** by the platform account provider;
+   * the second is about who **controls** the unlock. A person may accept one and refuse
+   * the other, so folding them into one reassuring line takes the choice away.
+   */
+  offerSeen:
+    "Turning this on creates a passkey. It appears in your saved passwords and syncs to your Apple " +
+    "or Google account, so Apple or Google can see that you use haamu.",
+
+  // ⚠️ D-109: the second cost is §7.5.2's *"it also puts the key that unlocks this app
+  // into that account"* — and the lowercase word may not reach a screen, so the sentence
+  // says what the thing DOES instead of naming it.
+  offerHeld:
+    "What opens this browser afterwards lives in that account too. So this rests on that account " +
+    "staying yours.",
+
+  /**
+   * ⚠️⚠️ THE PERMANENCE IS DISCLOSED WHERE IT IS ACCEPTED, AND AGAIN WHERE SOMEBODY
+   * TRIES TO UNDO IT. §7.5.1: there is no WebAuthn call to delete a credential, and the
+   * 4d measurement found five of this application's passkeys accumulated on one iPhone,
+   * left by repeated setup and removable by nobody but their owner.
+   */
+  offerKeeps:
+    "A passkey cannot be deleted by an app, so haamu cannot remove it later. You can remove it " +
+    "yourself in your Apple or Google settings.",
+
+  // ⚠️⚠️ MEASURED, NOT CAUTIOUS (open item 4e-i): browser storage does not cross devices,
+  // so a second device derives the same wrapping value and has nothing to open with it.
+  // ⛔ No sentence in this product may say or imply that this carries an unlock anywhere.
+  offerHere:
+    "It works in this browser on this device. A new phone, a new computer or a different browser " +
+    "asks for your KEY — always.",
+
+  /**
+   * ⚠️⚠️ ITS OWN SENTENCE RATHER THAN `unlock.notFound`, AND THE DIFFERENCE IS WHICH
+   * SCREEN IT IS TRUE OF. `notFound` describes a server that answered 404 for a KEY
+   * nobody has opened; here a session is already open and the KEY typed simply belongs
+   * to a different one. Reusing that sentence would tell somebody their KEY does not
+   * exist while their own conversations are on the other side of the screen.
+   */
+  notThisKey: "That is a different KEY from the one this browser is open with. Type the one you are using now.",
+
+  // ⚠️ Not `unlock.working`: nothing is being opened here, and §7.2's wait is the same
+  // second either way. A person who is told "opening" and then lands back on the same
+  // screen has been told something that did not happen.
+  checking: "Checking — this takes a moment.",
+
+  /**
+   * ⚠️⚠️ THE SENTENCE THAT STANDS WHILE THE PLATFORM'S OWN SHEET IS OPENING, and it
+   * had the lead in it by mistake until a browser probe read the screen mid-ceremony.
+   * ⭐ The fault was not the wrong words, it was that the screen said the SAME thing
+   * before and during — so nothing on it moved when the button was pressed, which is the
+   * shape of a screen people press twice (`unlock.working` was written for that).
+   */
+  asking: "Your device will ask you now.",
+
+  offerOn: "Turn on",
+  offerNot: "Not now",
+
+  // ── the setting, which is where it lives after the offer has been answered once
+
+  // ⚠️ TWO SENTENCES RATHER THAN ONE WITH A STATE IN IT (D-163). "Turn it on/off" reads
+  // as one control with a flag; these are two different acts with two different notes.
+  settingOn: "Set up opening without typing",
+  settingOff: "Stop opening without typing",
+  settingNote: "haamu asks for your KEY on this browser every time.",
+  settingNoteOn: "This browser opens without your KEY. Your KEY still opens everything, everywhere.",
+
+  // ── turning it off
+
+  offTitle: "Stop opening without typing",
+  offBody: "This browser will ask for your KEY again, every time.",
+  // ⚠️ THE SAME PERMANENCE, SAID AGAIN — because somebody turning this off to undo the
+  // disclosure would otherwise believe they had undone it, and they have not.
+  offKeeps:
+    "The passkey stays in your Apple or Google account. No app can delete one. You can remove it " +
+    "yourself in your Apple or Google settings.",
+  offGo: "Stop",
+  offKeep: "Keep it",
+
+  // ── what happened, one sentence per outcome and no default (D-163)
+
+  done: "Done. This browser opens without your KEY from now on.",
+  stopped: "This browser asks for your KEY again.",
+
+  /**
+   * ⚠️⚠️ THE FALL-THROUGH MAY NOT BE SILENT ONCE THIS HAS EVER WORKED HERE (§7.5). A
+   * free, invisible downgrade to the KEY is an event an attacker can induce at no cost,
+   * and §11 names malicious client code as the weakest link — for whom the KEY is the
+   * whole prize. ⭐ The boolean §7.5 asks for is not stored separately: the record is
+   * written **only after a successful evaluation**, so the record existing IS the fact
+   * that this once worked. Before there is a record, silence is correct.
+   */
+  failedNow: "Opening without typing did not work this time. Type your KEY.",
+
+  // ── the refusals, each its own sentence
+
+  noApi: "This browser cannot do that. Your KEY still opens everything.",
+  declined: "Nothing was set up.",
+
+  /**
+   * ⚠️⚠️ THIS ONE HAS TO NAME THE LEFTOVER, AND IT IS THE HARDEST SENTENCE HERE. On a
+   * Galaxy S25 running Samsung Browser the credential is created and the evaluation
+   * returns **zero bytes** — so the feature fails and a permanently listed passkey has
+   * already been left behind. A sentence that said only "nothing was saved" would be
+   * true about haamu and false about the person's account.
+   */
+  noPrf:
+    "This browser made a passkey and then could not use it. haamu saved nothing. The passkey is in " +
+    "your Apple or Google settings if you want to remove it.",
+
+  /**
+   * ⚠️⚠️ THE CEREMONY SUCCEEDED AND THE STORE DID NOT, WHICH IS ITS OWN OUTCOME AND NOT
+   * A VARIANT OF `declined`. ARCHITECTURE §4.2.3 exists because a blocked IndexedDB is a
+   * measured hazard in this product, and the state it leaves here is asymmetric: haamu
+   * saved nothing, and a passkey exists in the person's account that no app can delete.
+   * ⭐ `declined` would say *"nothing was set up"*, which is true about haamu and false
+   * about the thing they will find in their settings tomorrow.
+   */
+  notSaved:
+    "Your device answered, and this browser could not save anything. haamu is unchanged. The " +
+    "passkey it created is in your Apple or Google settings if you want to remove it.",
+
+  notHere: "That answer came from another device. haamu uses only the one built into this one.",
+  notChecked: "This device did not check that it was you. Nothing was saved.",
+  noRecord: "This browser has nothing saved to open with. Type your KEY.",
+};
+
 // ------------------------------------------------------------ §7.6 Ghost mode
 
 export const ghost = {
