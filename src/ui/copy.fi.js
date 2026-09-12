@@ -252,9 +252,13 @@ export const FI = {
   "quick.offerSeen":
     "Käyttöönotto luo pääsyavaimen. Se näkyy tallennetuissa salasanoissasi ja synkronoituu Apple- tai " +
     "Google-tilillesi, joten Apple tai Google näkee, että käytät haamua.",
+  // ⚠️⚠️ D-199. Hannu luki edellisen version eikä ymmärtänyt sitä: *"The KEY does not live
+  // on that account - I hope?"* Nyt molemmat esineet ja molemmat paikat on nimetty.
+  // ⛔ PIN ei kuulu tähän lauseeseen eikä saa tulla siihen.
   "quick.offerHeld":
-    "Se, mikä avaa tämän selaimen jatkossa, on myös tuolla tilillä. Tämä siis nojaa siihen, että tili " +
-    "pysyy sinun hallinnassasi.",
+    "AVAIMESI pysyy tässä selaimessa salattuna, eikä haamu lähetä sitä minnekään. Salauksen purkaa " +
+    "pääsyavain, ja pääsyavain on Apple- tai Google-tililläsi. Kun suojaat tuon tilin, suojaat " +
+    "tästä lähtien myös AVAIMESI tällä laitteella.",
   "quick.offerKeeps":
     "Sovellus ei voi poistaa pääsyavainta, joten haamu ei saa sitä myöhemmin pois. Voit poistaa sen " +
     "itse Applen tai Googlen asetuksista.",
@@ -281,7 +285,12 @@ export const FI = {
   "quick.stopped": "Tämä selain kysyy taas AVAIMESI.",
   "quick.failedNow": "Avaaminen ilman kirjoittamista ei onnistunut tällä kertaa. Kirjoita AVAIMESI.",
   "quick.noApi": "Tämä selain ei osaa tätä. AVAIMESI avaa edelleen kaiken.",
-  "quick.declined": "Mitään ei otettu käyttöön.",
+  // ⚠️ D-199. Tämän hän kohtasi Ubuntun Firefoxissa. Kaksi syytä, joita ei voi erottaa
+  // toisistaan, ja kolmas lause kertoo missä tämä toimii.
+  "quick.declined":
+    "Mitään ei otettu käyttöön. Joko keskeytit kysymyksen, tai tämä selain ei pysty varmistamaan, " +
+    "että se olet sinä. Varmistus tulee puhelimelta tai tietokoneelta itseltään, tai selaimelta, " +
+    "joka on yhteydessä Apple- tai Google-tiliisi.",
   "quick.noPrf":
     "Tämä selain loi pääsyavaimen eikä sitten osannut käyttää sitä. haamu ei tallentanut mitään. " +
     "Pääsyavain on Applen tai Googlen asetuksissa, jos haluat poistaa sen.",

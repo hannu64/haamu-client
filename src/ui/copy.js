@@ -2414,12 +2414,39 @@ export const quick = {
     "Turning this on creates a passkey. It appears in your saved passwords and syncs to your Apple " +
     "or Google account, so Apple or Google can see that you use haamu.",
 
-  // ⚠️ D-109: the second cost is §7.5.2's *"it also puts the key that unlocks this app
-  // into that account"* — and the lowercase word may not reach a screen, so the sentence
-  // says what the thing DOES instead of naming it.
+  /**
+   * ⛔⛔⛔ D-199 — THIS SENTENCE WAS ABSTRACT AND PASSIVE, AND THE PERSON IT WAS WRITTEN
+   * FOR COULD NOT ANSWER THE ONLY QUESTION HE HAD OF IT.
+   *
+   * It read: *"What opens this browser afterwards lives in that account too. So this rests
+   * on that account staying yours."* Hannu, testing on 2026-09-12: *"this sentence I do not
+   * understand... The KEY does not live on that account - I hope? But is it the PIN that
+   * lives on the device? It should be spelled out shortly, that is too abstract and
+   * passive."*
+   *
+   * ➡️ **HE WAS ASKING WHERE HIS KEY WAS, AND THE SENTENCE HAD PUT THAT FACT INTO THE
+   * GRAMMAR.** "What opens this browser" is a noun phrase standing in for the passkey;
+   * "lives in that account too" left *too* to be resolved against a thing that was never
+   * named. A reader with something at stake fills a gap like that with the worst
+   * candidate, which here is the eight words themselves.
+   *
+   * ⭐ So it now names both objects and both places, in four short clauses: the KEY is
+   * here and scrambled, the passkey is there, and the second undoes the first. §7.5.2's
+   * requirement is unchanged — the CONTROL cost must be its own sentence, separate from
+   * the OBSERVATION cost above — and this states it more strongly than the abstraction
+   * did, because a cost nobody can picture is not disclosed.
+   *
+   * ⚠️ "scrambled" IS THIS PRODUCT'S WORD for ciphertext (`terms.server.body`,
+   * `server.cannotRead`), in both languages, and D-109 is why: the accurate word is a
+   * lowercase "key" that may not reach a surface.
+   * ⚠️ THE PIN IS NOT IN THIS SENTENCE AND MUST NOT ENTER IT. §4.3's cover PIN wraps
+   * nothing at all (`flow/pin.js`), and his question shows what happens when a screen
+   * leaves a reader guessing which secret it means.
+   */
   offerHeld:
-    "What opens this browser afterwards lives in that account too. So this rests on that account " +
-    "staying yours.",
+    "Your KEY stays in this browser, scrambled, and haamu never sends it anywhere. What " +
+    "unscrambles it is the passkey, and the passkey lives in your Apple or Google account. So " +
+    "from now on, protecting that account is also protecting your KEY on this device.",
 
   /**
    * ⚠️⚠️ THE PERMANENCE IS DISCLOSED WHERE IT IS ACCEPTED, AND AGAIN WHERE SOMEBODY
@@ -2503,7 +2530,28 @@ export const quick = {
   // ── the refusals, each its own sentence
 
   noApi: "This browser cannot do that. Your KEY still opens everything.",
-  declined: "Nothing was set up.",
+
+  /**
+   * ⛔⛔ D-199 — IT SAID WHAT HAD HAPPENED AND NOT WHY, ON THE ONE SCREEN WHERE WHY IS THE
+   * ONLY USEFUL THING. Hannu met it on Ubuntu Firefox, a browser with no platform
+   * authenticator and no Apple or Google account behind it: *"That should explain it
+   * somehow so the user understands... or some explanation where it works."*
+   *
+   * ⚠️⚠️ AND THE TWO CAUSES CANNOT BE TOLD APART, SO THE SENTENCE SAYS SO. WebAuthn
+   * deliberately answers a dismissal and a platform with nothing to offer with the same
+   * `NotAllowedError`, precisely so that a page cannot probe for what is installed. ⭐ Same
+   * shape as §7.2's 404, where a mistyped KEY and a genuinely new one are one answer and
+   * the copy names both rather than guessing.
+   *
+   * ⚠️ THE THIRD SENTENCE IS WHERE IT WORKS, AND IT NAMES THE DEVICE'S OWN CHECK FIRST.
+   * His suggestion was *"works only on browser where you have your Google / Apple account
+   * active"*, which is right about the desktop he met and wrong about a Mac or a Windows
+   * machine with its own check and no such account. Both cases are named.
+   */
+  declined:
+    "Nothing was set up. Either you closed the request, or this browser has no way to check that " +
+    "it is you. That check comes from the phone or computer itself, or from a browser that is " +
+    "connected to your Apple or Google account.",
 
   /**
    * ⚠️⚠️ THIS ONE HAS TO NAME THE LEFTOVER, AND IT IS THE HARDEST SENTENCE HERE. On a

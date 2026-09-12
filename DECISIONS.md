@@ -5546,6 +5546,67 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-199. ⭐⭐⭐⭐ A disclosure that names no actor puts the one fact the reader needs into the grammar
+
+**2026-09-12, hours after §7.5 shipped.** Hannu tested it and sent two things back. Both are
+about the same screen and neither is a bug in any code.
+
+**1. The control cost was abstract and passive, and he could not answer the only question he
+had of it.** It read:
+
+> *"What opens this browser afterwards lives in that account too. So this rests on that
+> account staying yours."*
+
+His reply: *"this sentence I do not understand... The KEY does not live on that account - I
+hope? But is it the PIN that lives on the device? It should be spelled out shortly, that is
+too abstract and passive."*
+
+⭐⭐⭐⭐ **HE WAS ASKING WHERE HIS EIGHT WORDS WERE, AND THE SENTENCE HAD PUT THAT FACT INTO
+THE GRAMMAR.** *"What opens this browser"* is a noun phrase standing in for the passkey, and
+it is never resolved; *"lives in that account **too**"* asks the reader to supply the other
+thing that lives there. ➡️ **A READER WITH SOMETHING AT STAKE FILLS A GAP LIKE THAT WITH THE
+WORST CANDIDATE**, and here the worst candidate is the KEY itself. The sentence was
+*accurate* and it taught the opposite of what it meant.
+
+⚠️⚠️ **AND HIS SECOND GUESS IS THE MORE INTERESTING ONE: *"is it the PIN?"*** §4.3's cover
+PIN wraps nothing at all, and `flow/pin.js` opens with a long note on why it and §7.5's
+REJECTED wrap-PIN must never share a word. That note was written for implementers. The
+screen left a reader to do the same disambiguation with no note at all. ➡️ **WHERE A
+DOCUMENT NEEDS A PARAGRAPH TO KEEP TWO SECRETS APART, A SCREEN THAT NAMES NEITHER HAS ASKED
+THE READER TO DO THAT WORK UNAIDED.**
+
+⭐ **The repair is four clauses that name both objects and both places**: the KEY is here and
+scrambled, haamu sends it nowhere, the passkey is there, and the second undoes the first —
+ending on what the person can DO, which is protect that account. ⚠️ It is a **strengthening**
+of §7.5.2 and not a relaxation: the requirement is that the control cost be disclosed
+separately from the observation cost, and **a cost nobody can picture has not been
+disclosed.**
+
+**2. The refusal said what had happened and not why, on the one screen where why is the only
+useful thing.** On Ubuntu he found Chrome and Firefox on Android both worked, and desktop
+Firefox — with no platform authenticator and no Apple or Google account behind it — answered
+*"Mitään ei otettu käyttöön"*, which is the whole of the old `declined`. He asked for
+*"some explanation where it works."*
+
+⚠️⚠️ **THE TWO CAUSES CANNOT BE TOLD APART, SO THE SENTENCE NOW SAYS SO.** WebAuthn answers a
+dismissal and a platform with nothing to offer with the same `NotAllowedError`, deliberately,
+so that a page cannot probe for what is installed. ⭐ Exactly §7.2's 404, where a mistyped KEY
+and a genuinely new one are one answer and the copy names both rather than guessing — the
+same move, reached twice independently, in the two places this product is least able to know
+what happened.
+
+⚠️ **His own proposed wording was right about the machine in front of him and wrong about
+others.** *"Works only on browser where you have your Google / Apple account active"* misses a
+Mac or a Windows machine with its own built-in check and no such account, so the shipped
+sentence names the device's own check FIRST and the account-backed browser second.
+
+📌 **One thing NOT done, and it is his call.** `isUserVerifyingPlatformAuthenticatorAvailable()`
+would let the client withhold the automatic OFFER on a browser that has no platform
+authenticator at all, so that machine is never interrupted by a feature it cannot run — D-154's
+rule that a control absent where it could not work reads as absent rather than broken. It is
+not done here because it changes **who is offered the feature**, and §7.5's own measured lesson
+is that capability reports mislead. Asked rather than assumed.
+
 ### D-198. ⭐⭐⭐⭐ §7.5 is built — and every one of its four design questions was settled by a measurement that already existed
 
 **2026-09-12.** Hannu, after a session of strategy: *"Yes that was my decision to do the
