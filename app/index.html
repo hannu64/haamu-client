@@ -267,6 +267,26 @@
       -->
       <section id="gate" aria-labelledby="gate-title" class="panel hidden">
         <p id="gate-arrived" class="hidden"></p>
+        <!--
+          PROTOCOL §7.5.3 / D-200 — ⚠️⚠️ ABOVE THE TITLE, WHICH LOOKS WRONG UNTIL YOU ASK
+          WHO SEES IT. Everything below this row answers *"what is haamu"*, for somebody
+          who has never used it. This row is painted ONLY when this browser holds an
+          unlock record, so the one person who ever sees it has used haamu here, set this
+          up deliberately, and is looking at five paragraphs of introduction and a button
+          reading "I already have a KEY" between them and their conversations.
+
+          ⚠️ A reload boots to this screen and not to the KEY screen — `showGate()` is the
+          last line of `app.js` — which is the half of D-200 that has nothing to do with
+          the cover.
+
+          ⚠️ `.choices` AND NOT A BARE `<p>`, and that is not tidiness: `.choices button`
+          is where the dark label colour comes from (`app.css`). The same markup outside
+          it renders the accent button's white text on the soft accent fill, which is
+          legible in a diff and nearly invisible on a screen. Found by looking at it.
+        -->
+        <div class="choices hidden" id="gate-quick-row">
+          <button id="gate-quick-go" class="choice"></button>
+        </div>
         <h2 id="gate-title"></h2>
         <!--
           D-083, feedback 1. What a person can repeat to a friend, before anything
@@ -665,6 +685,17 @@
         <p class="note mt-s" id="pin-note"></p>
 
         <!--
+          D-200, and it is SHOWN ONLY WHERE §7.5's RECORD EXISTS. PROTOCOL §7.5.3 rule 1:
+          a cover must have a way to be lifted, so the control that removes one secret may
+          only appear while the other one is there. Its own row and its own note, for the
+          reason written above `#change-pin`.
+        -->
+        <div class="row mt">
+          <button id="remove-pin" class="secondary"></button>
+        </div>
+        <p class="note mt-s" id="remove-pin-note"></p>
+
+        <!--
           PROTOCOL §7.5, and it sits here because this group answers one question —
           *how does this browser let me in* — and both controls are answers to it.
 
@@ -818,6 +849,21 @@
         <div class="row mt">
           <button id="uncover"></button>
         </div>
+        <!--
+          PROTOCOL §7.5.3 / D-200 — the cover's second answer.
+
+          ⚠️⚠️ THE PIN ROW ABOVE AND THIS ROW ARE BOTH CONDITIONAL NOW, AND EXACTLY ONE OF
+          THEM IS ALWAYS PRESENT. §4.3 may not raise a cover it has no way to lift, so a
+          browser with neither secret is LOCKED instead of covered — which is what
+          `coverDue` already did for a session with no PIN.
+
+          ⚠️ IT SAYS THE SAME WORDS AS THE KEY SCREEN'S SHORTCUT, FROM THE SAME CONSTANT.
+          D-191: one act, one name. A second wording for the same button would be a second
+          thing to learn on the screen a person meets most often.
+        -->
+        <p class="mt hidden" id="covered-quick-row">
+          <button id="covered-quick"></button>
+        </p>
         <!-- ⚠️ A `<div>` rather than a `<p>`, because `prose()` builds one `<p>` per
              paragraph and a `<p>` may not contain another. Same reason as the four
              server disclosures on the list screen. -->
@@ -850,6 +896,15 @@
       -->
       <section id="pin-set" aria-labelledby="pin-set-title" class="panel hidden">
         <h2 id="pin-set-title"></h2>
+        <!--
+          D-200. ⚠️ NOT `#pin-set-note`, WHICH IS THE REFUSAL SLOT. This screen can now be
+          reached by an act rather than only by arriving — turning §7.5 off in a browser
+          with no PIN leaves neither secret, so the PIN is asked for again immediately. A
+          person who has just pressed "Stop" and lands on "Choose a PIN" is owed the
+          sentence joining the two, and putting it where refusals go would make an
+          explanation look like an error.
+        -->
+        <p class="note hidden" id="pin-set-why"></p>
         <!-- ⚠️ A `<div>` AND NOT A `<p>`. `prose()` appends the term's disclosure panel as
              a SIBLING of the paragraph it came from, and a `<div>` inside a `<p>` is
              closed by the parser before it is opened — the panel would land outside the
@@ -929,6 +984,24 @@
         this off in order to take back what they disclosed has not taken it back, and a
         screen that let them believe otherwise would be the more harmful silence.
       -->
+      <!--
+        D-200. ⚠️⚠️ ITS OWN SCREEN AND NOT A CONFIRM DIALOGUE, FOR THE REASON `#quick-off`
+        HAS ONE: this removes a security control, and the sentence saying what takes over
+        has to be readable before the press rather than after it. D-163's rule reaches
+        screens as well as sentences — one panel that read its own state would put "choose
+        one" and "remove the one you have" behind the same title.
+      -->
+      <section id="pin-off" aria-labelledby="pin-off-title" class="panel hidden">
+        <h2 id="pin-off-title"></h2>
+        <p id="pin-off-body"></p>
+        <p class="note" id="pin-off-keeps"></p>
+        <p class="note" id="pin-off-note"></p>
+        <div class="row mt">
+          <button id="pin-off-go"></button>
+          <button id="pin-off-keep" class="secondary"></button>
+        </div>
+      </section>
+
       <section id="quick-off" aria-labelledby="quick-off-title" class="panel hidden">
         <h2 id="quick-off-title"></h2>
         <p id="quick-off-body" class="lead"></p>

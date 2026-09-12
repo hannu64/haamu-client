@@ -229,6 +229,8 @@ const SCREENS = [
   // put the disclosure and the undo behind the same title.
   "quick-offer",
   "quick-off",
+  // D-200 — removing §4.3's PIN, which §7.5's record is now an answer to.
+  "pin-off",
 ];
 /**
  * The screen on show, so that a re-render of the SAME one leaves the page alone.
@@ -343,15 +345,25 @@ const barMode = (id) => {
   // ⛔ AND IT IS WITHHELD ON THE GATED SCREENS, where it would not be meaningless but
   // effective — it navigates, and both of those screens exist to stop navigation.
   show("menu-home", !chat && !gated);
-  // ⚠️⚠️ THE COVER-ON-DEMAND IS OFFERED ONLY WHERE IT WOULD WORK, AND ALL THREE
-  // CONDITIONS ARE LOAD-BEARING. The screen has to be one a cover can restore; a PIN has
-  // to exist, or the cover would be a screen with no way off it; and the watcher has to
-  // be armed and running, because it is the thing that holds the covered flag. ⭐ The
-  // third is not defensive padding — §7.6's Ghost mode arms the watcher in
-  // `openConversation` and nowhere else, so on the Ghost list screen there is genuinely
-  // no cover to raise, and a button that quietly did nothing there would be worse than
-  // no button on the one screen where a person is most likely to try it.
-  show("menu-cover", COVERABLE.has(id) && Boolean(session?.pinRecord) && Boolean(lockWatch) && !lockWatch.stopped);
+  /**
+   * ⚠️⚠️ THE COVER-ON-DEMAND IS OFFERED ONLY WHERE IT WOULD WORK, AND ALL THREE
+   * CONDITIONS ARE LOAD-BEARING. The screen has to be one a cover can restore; **a
+   * secret that lifts it has to exist**, or the cover would be a screen with no way off
+   * it; and the watcher has to be armed and running, because it is the thing that holds
+   * the covered flag. ⭐ The third is not defensive padding — §7.6's Ghost mode arms the
+   * watcher in `openConversation` and nowhere else, so on the Ghost list screen there is
+   * genuinely no cover to raise, and a button that quietly did nothing there would be
+   * worse than no button on the one screen where a person is most likely to try it.
+   *
+   * ⛔⛔ THE SECOND CONDITION SAID `pinRecord` AND A BROWSER PROBE CAUGHT IT ON THE FIRST
+   * WALK OF D-200's OWN PATH. Removing the PIN removed the button that raises a cover —
+   * so the feature that was built to replace the PIN took the manual cover with it. ➡️
+   * **THE CONDITION WAS NEVER "IS THERE A PIN"; IT WAS "IS THERE A WAY BACK", AND THOSE
+   * WERE THE SAME SENTENCE FOR AS LONG AS THERE WAS ONE ANSWER.** It is the same
+   * question `coverDue` asks, and the two must agree or one of them offers a cover the
+   * other will not raise.
+   */
+  show("menu-cover", COVERABLE.has(id) && coverCanBeLifted() && Boolean(lockWatch) && !lockWatch.stopped);
   // ⚠️ See the comment on `#diagfoot` in `index.html`: it is the last child of the
   // scroller, so on the conversation — the one screen that is a full-height pane —
   // it wedges sixty-one pixels between the composer and the floor of the window.
@@ -578,6 +590,10 @@ const RERENDER = {
   // D-151's rule: the previous answer belonged to the previous press.
   "quick-offer": () => showQuickOffer(),
   "quick-off": () => showQuickOff(),
+  // ⚠️ OFFERED FOR THE SAME REASON AS `quick-off` DIRECTLY ABOVE: no typed field, no
+  // ceremony in flight, and it is a disclosure — the kind of sentence it matters most
+  // that a person can read in their own language before answering.
+  "pin-off": () => showPinOff(),
 };
 
 /**
@@ -705,6 +721,7 @@ let openEntry = null; // the conversation on screen
 // the cover is a screen, and everything it counts dies with the page that raised it.
 let coveredFrom = null; // the screen to go back to when the right PIN arrives
 let pinWrong = 0; // wrong entries since the cover went up
+let coverEntry = null; // §7.5's decoded record for the covered session (D-200), or null
 let pinSlowUntil = 0; // Ghost mode only — the instant another try is allowed
 let pinAfter = null; // what to run once a PIN has been chosen
 let channel = null; // its message flow — this tab's, for SENDING
@@ -863,6 +880,17 @@ function showGate() {
   text("go-setup", arrived ? copy.nav.arrived.setUp : copy.nav.setUp);
   text("go-enter", arrived ? copy.nav.arrived.haveOne : copy.nav.haveOne);
   text("go-ghost", arrived ? copy.nav.arrived.ghost : copy.ghost.offer);
+  /**
+   * ⭐⭐⭐⭐ D-200 — THE RELOAD LANDS HERE AND NOT ON THE KEY SCREEN, which is the half of
+   * §7.5's placement fault that had nothing to do with the cover. `showGate()` is the last
+   * line of this module, so a returning person met the *"What haamu is"* pitch and a button
+   * reading *"I already have a KEY"* before anything offered to skip the typing.
+   *
+   * ⚠️ IT IS THE SAME FUNCTION THE KEY SCREEN USES, so the two rows cannot disagree, and
+   * it reads the store rather than any flag — there is no session here to hold one.
+   */
+  text("gate-quick-go", copy.quick.use);
+  void paintQuickEntry();
   only("gate");
 }
 
@@ -2012,14 +2040,28 @@ function coverNow(reason) {
   if (shownScreen !== "covered") coveredFrom = shownScreen;
   const ghost = isGhost();
   text("covered-why", coverSaid(reason));
-  text("covered-ask", copy.pin.coverAsk);
+  /**
+   * ⭐⭐ PROTOCOL §7.5.3 — THE COVER STANDS IN THREE STATES AND EACH GETS ITS OWN
+   * SENTENCE (D-163, third time in this file). A PIN, §7.5's check, or both; a ternary
+   * over two of them is an exhaustive match right up to the moment it silently stops
+   * being one, which is what D-163 was written about.
+   *
+   * ⚠️ THE PIN IS READ FROM THE SESSION AND THE CHECK FROM THE FLAG, WHICH ARE THE TWO
+   * THINGS THAT EXIST SYNCHRONOUSLY. The control itself is painted from the STORE below,
+   * so a sentence that promised a control the store then withholds is possible for as
+   * long as one read takes — and it is the weaker half of that pair that the KEY route
+   * underneath answers.
+   */
+  const hasPin = Boolean(session?.pinRecord);
+  const hasQuick = Boolean(session?.quickOn) && !ghost;
+  text("covered-ask", hasPin && hasQuick ? copy.pin.coverAskBoth : hasPin ? copy.pin.coverAsk : copy.pin.coverAskQuick);
   text("covered-note", "");
   prose("covered-what", ghost ? copy.lock.coveredWhat : copy.lock.coveredWhatKept);
   // ⚠️ THE LIFT BUTTON NAMES WHAT IS BEHIND THE COVER, AND THAT IS NOT ALWAYS ONE THING.
   // `coveredFrom` was captured four lines up precisely because a cover is a screen with a
   // screen underneath it; the label is the one place that fact reaches the reader.
   text("uncover", coveredFrom === "chat" ? copy.lock.show : copy.lock.showList);
-  text("covered-key", copy.lock.useKey);
+  text("covered-key", hasPin ? copy.lock.useKey : copy.lock.useKeyNoPin);
   text("covered-end", copy.ghost.end);
   // ⚠️⚠️ EXACTLY ONE WAY OUT OF A FORGOTTEN PIN IS SHOWN, AND WHICH ONE IS THE WHOLE
   // DIFFERENCE BETWEEN THE MODES. Kept mode falls back to the KEY, which costs a
@@ -2028,8 +2070,75 @@ function coverNow(reason) {
   // that cannot work.
   show("covered-key", !ghost);
   show("covered-end", ghost);
-  paintPinBoxes("covered-boxes", session?.pinRecord?.len ?? pinFlow.PIN_MIN);
+  /**
+   * ⚠️⚠️ THE PIN ROW IS CONDITIONAL NOW. Before D-200 a cover was never raised without a
+   * PIN, so the boxes were unconditional; §7.5's record is a second answer, and a row of
+   * eight digit boxes over a browser that has no PIN is a demand nobody can satisfy.
+   */
+  show("covered-boxes", hasPin);
+  show("uncover", hasPin);
+  /**
+   * ⚠️⚠️ TWO PRIMARY BUTTONS ARE NOT TWO CHOICES, THEY ARE A SCREEN WITH NO ANSWER ON IT,
+   * and a picture is what showed it: "Show my conversations" and "Open without typing"
+   * stacked in the same green, one above the other.
+   *
+   * ⭐ Which one gives way is decided by D-200's own complaint. The person in front of a
+   * cover with both secrets has SET UP the device check; making them read past a green
+   * PIN button to find it would be the same fault one screen along — *"it seems PIN
+   * overrides the PassKey"*. So the PIN keeps its boxes, its place at the top and its
+   * button, and gives up the accent.
+   */
+  /**
+   * ⛔⛔ `classList.toggle` AND NOT `className =`, AND THE SWEEP CAUGHT THE FIRST VERSION.
+   * `show()` works by adding and removing the `hidden` CLASS, so assigning `className`
+   * two lines after `show("uncover", hasPin)` threw that away — and the cover with no PIN
+   * behind it went back to offering a button that would submit one.
+   * ➡️ **ASSIGNING `className` DESTROYS EVERY CLASS ON THE ELEMENT, INCLUDING THE ONE THE
+   * VISIBILITY SYSTEM IS USING.** Nothing in this file may set `className` on an element
+   * that `show()` also touches.
+   */
+  $("uncover").classList.toggle("secondary", hasQuick);
+  if (hasPin) paintPinBoxes("covered-boxes", session.pinRecord.len ?? pinFlow.PIN_MIN);
+  text("covered-quick", copy.quick.use);
+  void paintCoverQuick();
   only("covered");
+}
+
+/**
+ * §7.5's control on the cover, painted from the store like every other one (§7.5's rule).
+ *
+ * ⚠️⚠️ HIDDEN BEFORE THE AWAIT, NOT AFTER IT. The same rule `paintQuickEntry` carries,
+ * and the case that matters is the same: a record deleted in another tab would otherwise
+ * leave a control on screen offering something that has gone.
+ */
+async function paintCoverQuick() {
+  show("covered-quick-row", false);
+  if (isGhost() || !session) return;
+  coverEntry = await quickEntryHere();
+  show("covered-quick-row", Boolean(coverEntry));
+}
+
+/**
+ * The decoded §7.5 entry for the session that is covered, or null.
+ *
+ * ⛔⛔ SCOPED TO THIS SESSION AND NOT TO THIS BROWSER, WHICH IS PROTOCOL §7.5.3 RULE 2.
+ * `unlockRecordsHere` answers with every record in the database on purpose — the KEY
+ * screen does not yet know who is asking. Here a session is already open, and a
+ * credential enrolled for a DIFFERENT identity in this browser must not lift this
+ * identity's cover.
+ */
+async function quickEntryHere() {
+  if (!session || isGhost() || !passkeyFlow.available()) return null;
+  try {
+    const record = await session.vault.unlock.read(session.recordScope);
+    const entry = record ? passkeyFlow.decodeRecord(record) : null;
+    return entry?.credentialId ? { scope: session.recordScope, ...entry } : null;
+  } catch (err) {
+    // ⚠️ SILENT, FOR `unlockRecordsHere`'s REASON. Failing to read here means the cover
+    // asks for the PIN or the KEY, which is the ordinary state of the product.
+    noteProblem(err);
+    return null;
+  }
 }
 
 /**
@@ -2074,6 +2183,84 @@ function coverSaid(reason) {
  * and a PIN is a fact about the person rather than about the conversations. The THOROUGH
  * ending takes the whole origin, and takes this with it.
  */
+/**
+ * The cover comes down, by whichever of §4.3's two answers was given (D-200).
+ *
+ * ⭐ BACK TO THE SCREEN THAT WAS COVERED, NOT TO THE START. Nothing was torn down, so a
+ * conversation that was open is still built, still connected and still correct — and
+ * landing somebody on the list after they proved who they are would make the cover feel
+ * like a lock, which is the one impression this tier may not give.
+ */
+async function coverLifted() {
+  clearPinBoxes("covered-boxes");
+  text("covered-note", "");
+  pinWrong = 0;
+  lockWatch?.uncovered();
+  if (coveredFrom === "chat" && openEntry) only("chat");
+  else await backToStart();
+  coveredFrom = null;
+}
+
+/**
+ * §4.3's second answer — PROTOCOL §7.5.3.
+ *
+ * ⛔⛔ NOTHING IS UNWRAPPED HERE, AND THAT IS THE SECTION'S RULE 4 RATHER THAN AN
+ * OPTIMISATION. The cover drops no keys, so what is needed is proof of the PERSON and not
+ * a key: the derived set that opens everything is still in memory two lines above this.
+ * ⭐ It is D-070 read backwards — D-070 licensed `enrolMaster` because a copy of
+ * `K_master` added no reach the derived set did not already have, and that argument buys
+ * exactly nothing on a screen with no use for the value. So `prfOut` is zeroed the moment
+ * it arrives and `openMaster` is never called.
+ *
+ * ⚠️⚠️ A REFUSAL HERE DOES NOT COUNT TOWARD THE PIN'S FIVE (rule 6). They are two secrets
+ * and two counters, and a platform that declines a prompt has not made a guess. Counting
+ * it would let a browser with a flaky authenticator drop the derived keys on its own.
+ */
+async function liftCoverWithQuick() {
+  if (!coverEntry || !session) return;
+  // ⚠️ The screen has to change when the button is pressed — the fault a browser probe
+  // found on the offer screen, where the note repeated the lead and nothing moved.
+  text("covered-note", copy.quick.asking);
+  const got = await passkeyFlow.evaluate({ entries: [coverEntry] });
+  if (!got.ok) {
+    refused("covered-note", coverRefusal(got.reason));
+    return;
+  }
+  got.prfOut.fill(0);
+  /**
+   * ⛔ RULE 2, CHECKED HERE AS WELL AS INSIDE `evaluate`. `evaluate` already refuses a
+   * credential that is not in the list it was given, and the list here holds one entry —
+   * so this is unreachable today. It is written because the thing it protects is the
+   * whole of rule 2: a credential enrolled for a DIFFERENT identity in this browser must
+   * never lift this identity's cover, and the day the list is built somewhere else is the
+   * day that stops being guaranteed by construction.
+   */
+  if (got.scope !== session.recordScope) {
+    refused("covered-note", copy.quick.noRecord);
+    return;
+  }
+  await coverLifted();
+}
+
+/**
+ * One sentence per refusal at the cover.
+ *
+ * ⚠️ IT IS NOT `quickRefusal`, AND THE DIFFERENCE IS ONE SENTENCE THAT WOULD BE AN
+ * INSTRUCTION THIS SCREEN CANNOT OBEY. That map ends on `failedNow` — *"Type your KEY"* —
+ * which is true on the screen with the field and false on this one, where the KEY is a
+ * button that locks the session first.
+ */
+function coverRefusal(reason) {
+  return (
+    {
+      [passkeyFlow.NO_API]: copy.quick.noApi,
+      [passkeyFlow.NO_RECORD]: copy.quick.noRecord,
+      [passkeyFlow.NOT_PLATFORM]: copy.quick.notHere,
+      [passkeyFlow.NOT_VERIFIED]: copy.quick.notChecked,
+    }[reason] ?? copy.quick.failedCover
+  );
+}
+
 const pinRecordName = (scope) => `lpm.pin.${scope}`;
 
 async function readPinRecord() {
@@ -2179,9 +2366,19 @@ function clearPinBoxes(id) {
  * defence exists. ⚠️ The cancel control therefore appears only when there is already a
  * PIN to fall back to, which is what makes it a CHANGE rather than an escape.
  */
-async function showPinSet(after = null) {
+async function showPinSet(after = null, why = "") {
   pinAfter = after;
   text("pin-set-title", copy.pin.title);
+  /**
+   * D-200 — why this screen is here, when an act rather than an arrival brought somebody
+   * to it.
+   *
+   * ⚠️ NOT `#pin-set-note`, WHICH IS WHERE REFUSALS GO. An explanation painted into the
+   * refusal slot would be cleared by the first keystroke (`forgetRefusal` below) and
+   * would read as an error until then.
+   */
+  text("pin-set-why", why);
+  show("pin-set-why", Boolean(why));
   // ⚠️ `prose` RATHER THAN `text`, because the lead now carries D-110's disclosure on
   // the two thresholds — `text()` writes `textContent`, so the marker would reach the
   // reader as literal square brackets.
@@ -2253,17 +2450,7 @@ async function liftCover() {
   }
   const typed = readPinBoxes("covered-boxes");
   if (await pinFlow.matches(session?.pinRecord ?? null, typed)) {
-    clearPinBoxes("covered-boxes");
-    text("covered-note", "");
-    pinWrong = 0;
-    lockWatch?.uncovered();
-    // ⭐ BACK TO THE SCREEN THAT WAS COVERED, NOT TO THE START. Nothing was torn down, so
-    // a conversation that was open is still built, still connected and still correct —
-    // and landing somebody on the list after they typed their PIN would make the cover
-    // feel like a lock, which is the one impression this tier may not give.
-    if (coveredFrom === "chat" && openEntry) only("chat");
-    else await backToStart();
-    coveredFrom = null;
+    await coverLifted();
     return;
   }
 
@@ -2298,8 +2485,35 @@ async function liftCover() {
  * watcher is armed — and it is written down because "should be unreachable" is not a
  * property this file can prove about a screen.
  */
+/**
+ * Is there anything that would lift a cover raised right now? PROTOCOL §7.5.3 rule 1.
+ *
+ * ⛔⛔ THREE PLACES ASK THIS AND THEY MUST NOT BE ABLE TO DISAGREE — the watcher that
+ * raises a cover on a timer, the menu entry that offers to raise one, and the control
+ * that does it. They were three copies of `session?.pinRecord`, which was the same
+ * sentence as this one for exactly as long as §4.3 had one answer. ➡️ **A condition
+ * repeated in three places is one rule until the day it is two**, and the day was
+ * D-200: removing the PIN removed the button that raises a cover, so the feature built
+ * to replace the PIN took the manual cover away with it.
+ */
+function coverCanBeLifted() {
+  return Boolean(session?.pinRecord) || Boolean(session?.quickOn);
+}
+
 function coverDue(reason) {
-  if (session?.pinRecord) {
+  /**
+   * ⭐⭐ PROTOCOL §7.5.3 RULE 1 — AND THE SENTENCE ABOVE WAS ALREADY THIS RULE. It said a
+   * cover with no PIN behind it would be a lockout with no way out; §7.5's record is now
+   * a second way out, so the test is "is there at least one", not "is there a PIN".
+   *
+   * ⚠️ IT READS THE FLAG RATHER THAN THE STORE, AND THAT IS SAFE HERE IN A WAY IT IS NOT
+   * ON THE KEY SCREEN. This runs from a timer with a live session, so `quickOn` — read
+   * from the store when that session opened — exists at all. A flag that had gone stale
+   * (another tab deleted the record) raises a cover whose passkey control then refuses,
+   * beside a KEY route that always works. ➡️ Staleness degrades to a longer way in, never
+   * to a way that is missing.
+   */
+  if (coverCanBeLifted()) {
     coverNow(reason);
     return;
   }
@@ -2386,6 +2600,14 @@ async function unlockRecordsHere() {
      * moments later; raising it here means it arrives before the wasted attempt.
      */
     db = await dbs.openDatabase({
+      /**
+       * ⭐⭐ D-200 — ASK, DO NOT CREATE. This read now runs at the GATE, on every visit,
+       * because that is where a reload lands; `indexedDB.open` would otherwise create an
+       * empty database for somebody who has never used haamu and is about to choose
+       * Ghost mode. Nothing here ever needs to create one: a record can only exist in a
+       * database that already does.
+       */
+      existingOnly: true,
       onBlocked: () => notice("dbblocked", () => ({ body: copy.tabs.blocked, alarm: true })),
     });
     const rows = await vaults.unlockRecords(db);
@@ -2397,7 +2619,11 @@ async function unlockRecordsHere() {
     // read here is that the KEY is asked for, which is the ordinary state of the
     // product; a notice about a store that would not open would be a fault reported to
     // somebody whose next action is unaffected by it.
-    noteProblem(err);
+    //
+    // ⚠️ AND "THERE IS NO DATABASE" IS NOT A PROBLEM AT ALL (D-200). It is what every
+    // first visit looks like now that this runs at the gate, so recording it would fill
+    // the diagnostics panel with the ordinary case and bury the ones worth reading.
+    if (err?.reason !== dbs.NO_DATABASE) noteProblem(err);
     return [];
   } finally {
     db?.close();
@@ -2414,6 +2640,9 @@ async function unlockRecordsHere() {
 let quickEntries = [];
 
 async function paintQuickEntry() {
+  // ⚠️ BOTH ROWS FROM ONE READ (D-200). The gate offers the same act as the KEY screen and
+  // must not be able to disagree with it about whether there is anything to offer.
+  show("gate-quick-row", false);
   /**
    * ⚠️⚠️ HIDDEN FIRST, SYNCHRONOUSLY, AND A BROWSER PROBE IS WHAT FOUND THIS. Reading the
    * store is asynchronous, so a row left at its previous state stays on screen until the
@@ -2428,10 +2657,24 @@ async function paintQuickEntry() {
   show("quick-row", false);
   quickEntries = await unlockRecordsHere();
   show("quick-row", quickEntries.length > 0);
+  show("gate-quick-row", quickEntries.length > 0);
 }
 
-$("quick-go").addEventListener("click", async () => {
+/**
+ * The shortcut, from the KEY screen or from the gate (D-200).
+ *
+ * ⚠️⚠️ ONE FUNCTION AND NOT TWO LISTENERS THAT LOOK ALIKE. The two buttons are the same
+ * act in two places, and the note it writes on refusal is `#enter-note` from both —
+ * because a refusal must be read, and `withIdentity`'s own failures land on the KEY
+ * screen already. ⭐ So the gate hands over to the KEY screen before asking, which also
+ * puts the person one press from the route that always works if the ceremony refuses.
+ */
+async function useQuickUnlock() {
   if (quickEntries.length === 0) return;
+  if (shownScreen !== "enter") {
+    only("enter");
+    $("phrase-in").value = "";
+  }
   text("enter-note", "");
   const got = await passkeyFlow.evaluate({ entries: quickEntries });
   if (!got.ok) {
@@ -2464,7 +2707,10 @@ $("quick-go").addEventListener("click", async () => {
   await withIdentity(master, async (s) => {
     if (!(await s.roster.load())) await s.roster.load({ network: true, reason: rosterFlow.SETUP });
   });
-});
+}
+
+$("quick-go").addEventListener("click", () => void useQuickUnlock());
+$("gate-quick-go").addEventListener("click", () => void useQuickUnlock());
 
 /** One sentence per refusal, no default (D-163). */
 function quickRefusal(reason) {
@@ -2660,6 +2906,34 @@ function quickEnrolRefusal(reason) {
  * D-154's finding is that a control absent where it could not work reads as absent,
  * while one that refuses reads as broken.
  */
+/**
+ * D-200's control, and PROTOCOL §7.5.3's rule 1 is the whole of its condition.
+ *
+ * ⚠️⚠️ IT IS SHOWN ONLY WHERE THE OTHER ANSWER EXISTS. A cover must have a way to be
+ * lifted, so the control that removes one secret may appear only while the other one is
+ * there — and offering it greyed out would teach a person to want something the product
+ * will not give them, which is D-154's finding about a control absent where it could not
+ * work reading as absent rather than as broken.
+ */
+function paintPinSetting() {
+  const possible = !isGhost() && Boolean(session?.pinRecord) && Boolean(session?.quickOn);
+  show("remove-pin", possible);
+  show("remove-pin-note", possible);
+  if (!possible) return;
+  text("remove-pin", copy.pin.remove);
+  text("remove-pin-note", copy.pin.removeNote);
+}
+
+function showPinOff() {
+  only("pin-off");
+  text("pin-off-title", copy.pin.offTitle);
+  text("pin-off-body", copy.pin.offBody);
+  text("pin-off-keeps", copy.pin.offKeeps);
+  text("pin-off-go", copy.pin.offGo);
+  text("pin-off-keep", copy.pin.offKeep);
+  text("pin-off-note", "");
+}
+
 function paintQuickSetting() {
   const possible = !isGhost() && passkeyFlow.available();
   show("quick-set", possible);
@@ -2694,8 +2968,40 @@ $("quick-off-go").addEventListener("click", async () => {
   if (!session) return;
   await session.vault.unlock.forget(session.recordScope);
   session.quickOn = false;
+  /**
+   * ⭐⭐ AND IF THAT WAS THE ONLY ANSWER LEFT, `openHome` ASKS FOR A PIN — BY ITS OWN
+   * SINGLE LINE, WITH NOTHING HERE TO REMEMBER. PROTOCOL §7.5.3: no "deliberately no PIN"
+   * state is stored, so the demand is simply conditioned on neither secret existing. All
+   * this branch adds is the sentence joining the press to the screen it lands on.
+   */
+  if (!isGhost() && !session.pinRecord) {
+    await showPinSet(openHome, copy.pin.neededAgain);
+    return;
+  }
   await openHome();
   text("quick-note", copy.quick.stopped);
+});
+
+$("remove-pin").addEventListener("click", () => showPinOff());
+$("pin-off-keep").addEventListener("click", () => void openHome());
+
+/**
+ * ⚠️⚠️ IT RE-CHECKS THE CONDITION IT WAS OFFERED UNDER, AND THAT IS NOT BELT AND BRACES.
+ * `#pin-off` is a screen, so time passes between the control being painted and this being
+ * pressed — and `RERENDER` can repaint it after a language change. If §7.5's record went
+ * away in that window, removing the PIN would leave §4.3's second tier with no answer at
+ * all, which is the one state PROTOCOL §7.5.3 rule 1 forbids.
+ */
+$("pin-off-go").addEventListener("click", async () => {
+  if (!session || isGhost()) return;
+  if (!session.quickOn) {
+    refused("pin-off-note", copy.pin.offKeeps);
+    return;
+  }
+  await session.vault.durable.delete(pinRecordName(session.recordScope));
+  session.pinRecord = null;
+  await openHome();
+  text("pin-note", copy.pin.removed);
 });
 
 // -------------------------------------------------- §7.3.1a the panic action
@@ -3198,7 +3504,15 @@ async function openHome() {
     // ordinary path because the ordinary path never reaches this branch twice.
     session.pinRecord = await readPinRecord();
   }
-  if (session && !isGhost() && !session.pinRecord) {
+  /**
+   * ⭐⭐⭐⭐ PROTOCOL §7.5.3 / D-200 — THE TIER IS STILL MANDATORY AND IT NOW HAS TWO
+   * RIGHT ANSWERS. §4.3's second tier asks *can this person prove they are the owner*,
+   * and a §7.5 record answers it as well as a PIN does. So the demand is conditioned on
+   * NEITHER existing, which is the whole of what makes "remove my PIN" a deletion rather
+   * than a new stored state — and what makes turning §7.5 off in a browser with no PIN
+   * land back here, by this same line, with nothing to keep in step.
+   */
+  if (session && !isGhost() && !session.pinRecord && !session.quickOn) {
     await showPinSet(openHome);
     return;
   }
@@ -3228,6 +3542,9 @@ async function openHome() {
   // feature off comes straight back to this function, and the label it left behind
   // would otherwise still offer to stop something that has stopped.
   paintQuickSetting();
+  // D-200, and here for `paintQuickSetting`'s reason: turning §7.5 off comes straight back
+  // to this function, and it is what decides whether the PIN may be removed at all.
+  paintPinSetting();
   // D-139: `#create` is the floating button, so its name is an attribute.
   // ⚠️⚠️ D-191: AND NOW ALSO ITS TEXT. The note here used to end "a circle cannot hold a
   // sentence", which was true and was the wrong thing to conclude — the circle was the
@@ -4907,7 +5224,9 @@ $("menu-create").addEventListener("click", () => {
 $("cover-now").addEventListener("click", () => {
   closeMenu();
   if (!COVERABLE.has(shownScreen)) return;
-  if (!session?.pinRecord) return;
+  // ⛔ THE SAME QUESTION THE BAR ASKED, ASKED AGAIN. The menu is a window in which the
+  // state it was painted from can change, and a cover nothing can lift is a lockout.
+  if (!coverCanBeLifted()) return;
   if (!lockWatch?.cover()) return;
   coverNow(lockFlow.MANUAL);
 });
@@ -5463,6 +5782,7 @@ $("uncover").addEventListener("click", () => void liftCover());
 // act: the person asked for the KEY. ⛔ NOT `WRONG_PIN` — nothing was mistyped, and that
 // sentence tells somebody their device was in another pair of hands.
 $("covered-key").addEventListener("click", () => void lockNow(lockFlow.MANUAL));
+$("covered-quick").addEventListener("click", () => void liftCoverWithQuick());
 
 // §4.3's second tier, chosen. `savePin` returns to whatever asked for it.
 $("pin-set-go").addEventListener("click", () => void savePin());
@@ -6131,6 +6451,10 @@ function paintCopy() {
   // visibility from what is in the store; a label painted only when visible would be
   // stale in the other language the first time the store said yes.
   text("quick-go", copy.quick.use);
+  // D-200's two further homes for the same act, painted here for the same reason and
+  // from the same constant — D-191: one act, one name, on every screen it appears.
+  text("gate-quick-go", copy.quick.use);
+  text("covered-quick", copy.quick.use);
   text("progress-title", copy.pairing.title);
   text("verify-title", copy.verification.title);
 
@@ -6143,6 +6467,10 @@ function paintCopy() {
   text("lock-note", copy.lock.controlNote);
   text("change-pin", copy.pin.change);
   text("pin-note", copy.pin.changeNote);
+  // ⚠️ D-200's control is painted by `paintPinSetting` and NOT here, for the reason
+  // written about §7.5's below: whether it may be shown at all depends on the session,
+  // and a label painted here would be a second writer of the same element.
+  paintPinSetting();
   // ⚠️ §7.5's control is painted by `paintQuickSetting` rather than here, because its
   // label is one of two sentences and which one depends on the session. What this file
   // must not do is paint a default here and correct it there — a control that says the

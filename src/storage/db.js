@@ -214,9 +214,28 @@ function upgrade(db) {
  * such operation settles — a level, not an event, so the caller can put it on a screen
  * and take it off again without keeping its own state.
  */
+/** What `existingOnly` rejects with, so a caller can tell it from a real failure. */
+export const NO_DATABASE = "no_database";
+
 export async function openDatabase({
   name = DB_NAME,
   version = DB_VERSION,
+  /**
+   * ⭐⭐ ASK, DO NOT CREATE (D-200). `indexedDB.open` creates the database as a side
+   * effect of asking whether it exists, and D-200 put a read on the GATE — the screen
+   * every visitor lands on, including somebody who is about to choose Ghost mode.
+   * §7.6's prohibition is about conversation state, so an empty database breaks no rule
+   * in this protocol; it is still a mark left in a browser by a product whose whole
+   * argument is that it leaves as few as possible.
+   *
+   * ⚠️ THE ABORT IS THE MECHANISM AND IT IS SPECIFIED, not a trick: a versionchange
+   * transaction that created the database rolls the creation back when it aborts, so
+   * nothing is left behind and no `deleteDatabase` is needed (which could block on
+   * another tab). `oldVersion === 0` is what "this did not exist a moment ago" looks
+   * like, and it is the only reliable form — `indexedDB.databases()` has never shipped
+   * in Firefox, which is one of the two browsers Hannu tests on Android.
+   */
+  existingOnly = false,
   onBlocked = () => {},
   onVersionChange = () => {},
   onSlow = () => {},
@@ -224,9 +243,30 @@ export async function openDatabase({
 } = {}) {
   if (!idbAvailable()) throw new Error("indexeddb: not available in this context");
   const req = globalThis.indexedDB.open(name, version);
-  req.onupgradeneeded = () => upgrade(req.result);
+  let absent = false;
+  req.onupgradeneeded = (event) => {
+    if (existingOnly && event.oldVersion === 0) {
+      absent = true;
+      req.transaction.abort();
+      return;
+    }
+    upgrade(req.result);
+  };
   req.onblocked = () => onBlocked();
-  const db = await promise(req);
+  let db;
+  try {
+    db = await promise(req);
+  } catch (err) {
+    // ⚠️ THE ABORT ARRIVES HERE AS A FAILED OPEN, and the caller must be able to tell
+    // "there is no database" from "the store is broken" — one is the ordinary state of
+    // a browser that has never been used and the other is worth reporting.
+    if (absent) {
+      const none = new Error("indexeddb: no database, and none was created");
+      none.reason = NO_DATABASE;
+      throw none;
+    }
+    throw err;
+  }
   db.onversionchange = () => {
     // Closing is not optional: the other tab's upgrade cannot start until every
     // connection is gone. What the caller does about a session whose store just

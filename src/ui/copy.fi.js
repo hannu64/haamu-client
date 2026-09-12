@@ -206,6 +206,7 @@ export const FI = {
   "lock.coveredWhatKept.0": "AVAIN on vahvempi suoja, ja haamu kysyy sitä 24 tunnin käyttämättömyyden jälkeen.",
   "lock.wrongPin": "Väärä PIN 5 kertaa. Kirjoita AVAIMESI jatkaaksesi.",
   "lock.useKey": "En muista PIN-numeroani — kysy AVAINTANI sen sijaan",
+  "lock.useKeyNoPin": "Kysy AVAINTANI sen sijaan",
   "lock.show": "Näytä keskustelu",
   "lock.showList": "Näytä keskusteluni",
 
@@ -233,7 +234,18 @@ export const FI = {
   "pin.changeNote": "Mitään ei poisteta. Uusi PIN otetaan käyttöön seuraavan kerran, kun näyttö peitetään.",
   "pin.coverNow": "Peitä näyttö nyt",
   "pin.boxes": "PIN-numerosi",
+  "pin.remove": "Poista PIN-numeroni",
+  "pin.removeNote": "Peite säilyy. Laitteesi oma varmistus poistaa sen PIN-luvun sijaan.",
+  "pin.offTitle": "Poista PIN-numeroni",
+  "pin.offBody": "haamu peittää näytön edelleen, kun olet ollut poissa. Laitteesi oma varmistus näyttää keskustelusi uudelleen PIN-luvun sijaan.",
+  "pin.offKeeps": "AVAIMESI avaa edelleen kaiken, kaikkialla. Jos laitteesi joskus lakkaa varmistamasta, peite kysyy AVAINTASI.",
+  "pin.offGo": "Poista se",
+  "pin.offKeep": "Säilytä PIN-numeroni",
+  "pin.removed": "PIN-numerosi on poistettu. Laitteesi oma varmistus poistaa peitteen nyt.",
+  "pin.neededAgain": "Tällä selaimella ei ole enää muuta tapaa päästä sisään, joten haamu tarvitsee jälleen PIN-luvun.",
   "pin.coverAsk": "Anna PIN-lukusi ja näe keskustelusi.",
+  "pin.coverAskQuick": "Laitteesi varmistaa, että se olet sinä, ja keskustelusi palaavat.",
+  "pin.coverAskBoth": "Anna laitteesi varmistaa, että se olet sinä, tai anna PIN-lukusi.",
   "pin.wrong": "Väärä PIN.",
   "pin.slow": "Odota hetki ja yritä uudelleen.",
 
@@ -287,10 +299,12 @@ export const FI = {
   "quick.noApi": "Tämä selain ei osaa tätä. AVAIMESI avaa edelleen kaiken.",
   // ⚠️ D-199. Tämän hän kohtasi Ubuntun Firefoxissa. Kaksi syytä, joita ei voi erottaa
   // toisistaan, ja kolmas lause kertoo missä tämä toimii.
+  // ⛔ D-200: hänen oma lauseensa. Kolme selittävää lausetta poistettiin tarkoituksella —
+  // ks. `copy.js`. ⚠️ *pääsyavain* sisältää sanan *avain*, joten AVAIN ei esiinny tässä.
+  "quick.failedCover": "Laitteesi ei varmistanut tällä kertaa, että se olet sinä.",
   "quick.declined":
-    "Mitään ei otettu käyttöön. Joko keskeytit kysymyksen, tai tämä selain ei pysty varmistamaan, " +
-    "että se olet sinä. Varmistus tulee puhelimelta tai tietokoneelta itseltään, tai selaimelta, " +
-    "joka on yhteydessä Apple- tai Google-tiliisi.",
+    "Mitään ei otettu käyttöön. Tämä toimii vain selaimessa, jossa Google-, Apple- tai " +
+    "Microsoft-tilisi on käytössä.",
   "quick.noPrf":
     "Tämä selain loi pääsyavaimen eikä sitten osannut käyttää sitä. haamu ei tallentanut mitään. " +
     "Pääsyavain on Applen tai Googlen asetuksissa, jos haluat poistaa sen.",

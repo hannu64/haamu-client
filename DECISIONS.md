@@ -5546,6 +5546,80 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-200. ⭐⭐⭐⭐ §4.3's second tier is a QUESTION with two right answers, and §7.5 was built behind the gate nobody meets
+
+**2026-09-12, Hannu's second test of §7.5, hours after D-199.** He locked his Android, came
+back, and haamu asked for the PIN. Same on Ubuntu Chrome. He looked for a way to remove the
+PIN, could not find one, and wrote: *"it seems PIN overrides the PassKey."*
+
+**It does, and the reason was in two constants that had never been read next to each other.**
+`flow/lock.js`: `COVER_BLUR_MS` is **5 minutes** and `BLUR_MS` is **24 hours**. §7.5's shortcut
+lives on the screen the LOCK raises. So the cover fires roughly **288 times for every one**
+time the lock does, and the feature built to save a decade-old phone 1.17 seconds of Argon2id
+was placed behind the gate a person meets about once a day at most.
+
+➡️ ⭐⭐⭐⭐ **A FEATURE PLACED ON THE RARER OF TWO GATES IS A FEATURE NOBODY HAS.** No test
+could see it and none was wrong: `probe-quick-unlock.mjs` walks to the shortcut deliberately,
+because a probe walks the path it was written for. **The ratio was never a claim anybody made;
+it was the arithmetic of two numbers in one file, and arithmetic is not a path.**
+
+⚠️ **And the second half was the same fault at the front door.** A full reload does not land on
+the KEY screen — `showGate()` is the boot — so a returning person meets the *"What haamu is"*
+pitch and two buttons, one of which says **"I already have a KEY"**, and only behind that is the
+shortcut, as a small link under a green button whose own lead reads *"Type your KEY."* **Three
+screens and a page of prose stand in front of the thing that exists to remove typing.**
+
+### The rule this settles
+
+⭐⭐ **§4.3's second tier is a QUESTION — *can this person prove they are the owner* — and not a
+particular secret.** It has two right answers, and the cover is raised only where at least one
+of them can be given:
+
+| in this browser | what the cover asks for |
+|---|---|
+| a cover PIN only | the PIN (unchanged) |
+| a PIN and a §7.5 record | either — both lift it |
+| a §7.5 record only | the device's own check |
+| neither | **no cover is raised at all** — §4.3's LOCK is used instead |
+
+The last row is not new: `coverDue` already fell through to `lockNow` for a session with no PIN,
+because *"a cover with no PIN behind it would be a lockout with no way out."* **That sentence was
+already the invariant; it simply had one answer in it instead of two.**
+
+### Why a passkey may lift a cover, stated before any code
+
+1. **§4.3's own threat for this tier is somebody who has picked up the device.** Six digits can
+   be watched over a shoulder and then retyped; the device's own check cannot be replayed by a
+   bystander who has the phone. ➡️ Against the threat this tier names, the passkey is **at least
+   as strong as the PIN**, and the pairing that is waiting for a friend keeps running underneath
+   either.
+2. ⛔⛔ **NOTHING IS UNWRAPPED ON THIS PATH.** The cover drops no keys — the derived set is in
+   memory — so lifting it needs proof of the **person**, not a key. The ceremony is scoped by
+   `allowCredentials` to this identity's own credential, requires `uv`, and its answer is checked
+   against `session.recordScope`; `prfOut` is zeroed the moment it returns and `K_master` is never
+   reconstructed. ⭐ **This is D-070 read in the opposite direction:** D-070 licensed one brief
+   copy because it added no reach the derived set did not already have — and that argument buys
+   nothing on a screen with no use for the value, so the copy is not taken.
+3. **A stale or unusable record degrades to a refusal beside a control that still works.** The
+   KEY route is on the cover in Kept mode always, and it is the way out when the platform has
+   forgotten the credential.
+
+### Removing the PIN needs no new stored state, and that is the point
+
+**`quickOn` IS the marker.** `openHome` demanded a PIN whenever there was no PIN record; it now
+demands one whenever there is **neither** a PIN record nor an unlock record. Removing the PIN is
+therefore just deleting the PIN record, and turning §7.5 off with no PIN lands on the PIN screen
+by the same single rule.
+
+⭐⭐ **A separate "deliberately no PIN" flag was designed and then deleted before it was written.**
+It would have been a second copy of a fact already on disk, able to disagree with it — the exact
+shape §7.5.1 rejected when it declined to store a "PRF has worked here" boolean beside the record
+whose existence already says so. ➡️ **The invariant is enforced by construction rather than
+asserted by a flag.**
+
+⚠️ **The removal is offered only where a record exists**, which is what keeps the table's last
+row from being reachable by a control instead of by an accident.
+
 ### D-199. ⭐⭐⭐⭐ A disclosure that names no actor puts the one fact the reader needs into the grammar
 
 **2026-09-12, hours after §7.5 shipped.** Hannu tested it and sent two things back. Both are

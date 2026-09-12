@@ -2220,6 +2220,13 @@ export const lock = {
   // back. ⭐ It is on the cover screen rather than behind an "are you sure", because the
   // person reading it has already discovered that they cannot remember something.
   useKey: "I do not remember my PIN — ask for my KEY instead",
+  /**
+   * ⚠️ D-200 — THE SAME BUTTON, ON A COVER WITH NO PIN BEHIND IT. §7.5's record can be
+   * the only thing lifting a cover now, and a button offering an alternative to a PIN
+   * that does not exist names something the reader has never seen. D-163's rule: two
+   * states, two sentences, no condition inside one of them.
+   */
+  useKeyNoPin: "Ask for my KEY instead",
 };
 
 // --------------------------------------------- §4.3's second tier — the cover PIN
@@ -2342,8 +2349,57 @@ export const pin = {
   boxes: "Your PIN",
   digit: (i, n) => `Digit ${i} of ${n}`,
 
+  // ------------------------------------------------ D-200: removing it, where §7.5 is on
+
+  remove: "Remove my PIN",
+  /**
+   * ⚠️ IT DOES NOT OPEN "Nothing is deleted", AND THAT IS NOT A STYLE CHOICE. The note
+   * over `#change-pin` opens with those words, and the picture that found the first
+   * arrangement of this group showed two notes beginning identically with nothing saying
+   * which belonged to which button. A note is only a note about something if a reader can
+   * tell which something.
+   */
+  removeNote: "The cover stays. Your device's own check lifts it instead of a PIN.",
+
+  offTitle: "Remove my PIN",
+  /**
+   * ⚠️⚠️ IT SAYS WHAT TAKES OVER AND NOT WHAT GOES AWAY, because the thing a person is
+   * about to lose is the only part they can already picture. ⭐ No number here: `lead`
+   * above states the timing once, and D-153's rule is that a quantity comes from a
+   * constant — a second copy of it in a second sentence is a second thing to keep in step.
+   */
+  offBody: "haamu still covers the screen when you have been away. Your device's own check shows your conversations again, instead of a PIN.",
+  /**
+   * ⚠️⚠️ THE WAY OUT IS NAMED HERE BECAUSE §7.5.3 RULE 5 KEEPS IT ON THE SCREEN. A
+   * platform can forget a credential — §7.5.1 measured five of them accumulating on one
+   * iPhone — and somebody who removed their PIN without knowing what happens then has
+   * been sold the feature rather than told about it.
+   */
+  offKeeps: "Your KEY still opens everything, everywhere. If your device ever stops checking, the cover asks for your KEY.",
+  offGo: "Remove it",
+  offKeep: "Keep my PIN",
+  removed: "Your PIN is gone. Your device's own check lifts the cover now.",
+
+  /**
+   * Why this screen is back, after turning §7.5 off in a browser with no PIN.
+   *
+   * ⚠️⚠️ PROTOCOL §7.5.3 MAKES THIS REACHABLE BY AN ACT RATHER THAN ONLY BY ARRIVING, and
+   * an act needs its consequence said out loud. A person who pressed "Stop" and landed on
+   * "Choose a PIN" with no sentence between them would read a working rule as a fault.
+   */
+  neededAgain: "This browser now has no other way back in, so haamu needs a PIN again.",
+
   // ---------------------------------------------------------------- at the cover
+  /**
+   * ⚠️⚠️ THREE SENTENCES AND NOT ONE WITH A CONDITION IN IT (D-163, and this is the
+   * third time in this file). §4.3's second tier now has two right answers, so the cover
+   * stands in three states — a PIN, §7.5's check, or both — and each is a different
+   * instruction. A ternary over two of them is an exhaustive match right up to the moment
+   * it silently stops being one.
+   */
   coverAsk: "Give your PIN to show your conversations.",
+  coverAskQuick: "Your device checks that it is you, and your conversations come back.",
+  coverAskBoth: "Let your device check that it is you, or give your PIN.",
   wrong: "That is not your PIN.",
 
   /**
@@ -2527,6 +2583,17 @@ export const quick = {
    */
   failedNow: "Opening without typing did not work this time. Type your KEY.",
 
+  /**
+   * The same event at the cover, where there is no field to type into (D-200).
+   *
+   * ⚠️⚠️ IT MAY NOT SAY "TYPE YOUR KEY", WHICH IS D-197's RULE ABOUT A REFUSAL THAT
+   * OUTLIVES WHAT IT DESCRIBES, READ ONE STEP EARLIER: the sentence above is true on the
+   * screen it was written for and is an instruction this screen cannot obey. The ways
+   * still open are the controls the person is looking at, and naming them here would be
+   * a second copy of every label on the screen.
+   */
+  failedCover: "Your device did not confirm that it is you this time.",
+
   // ── the refusals, each its own sentence
 
   noApi: "This browser cannot do that. Your KEY still opens everything.",
@@ -2543,15 +2610,29 @@ export const quick = {
    * shape as §7.2's 404, where a mistyped KEY and a genuinely new one are one answer and
    * the copy names both rather than guessing.
    *
-   * ⚠️ THE THIRD SENTENCE IS WHERE IT WORKS, AND IT NAMES THE DEVICE'S OWN CHECK FIRST.
-   * His suggestion was *"works only on browser where you have your Google / Apple account
-   * active"*, which is right about the desktop he met and wrong about a Mac or a Windows
-   * machine with its own check and no such account. Both cases are named.
+   * ⛔⛔ AND THEN THE CORRECT SENTENCE WAS REPLACED BY HIS, DELIBERATELY, ON HIS SECOND
+   * TEST. The version above named both indistinguishable causes and then both places the
+   * check can come from — three clauses, all true. He read it and said: *"too complicated
+   * and is for engineers... we only want to explain to the user what the user needs to do
+   * and not why. We assume the user did not closed the request or if that was done then
+   * the user must know the user caused the interruption."*
+   *
+   * ➡️ ⭐⭐⭐⭐ **A CAUSE THE READER ALREADY KNOWS THEY CAUSED IS NOT INFORMATION.** Half of
+   * what that sentence carefully disambiguated was the reader's own action a second
+   * earlier. Naming it spent the sentence's whole budget explaining something they were
+   * there for, and pushed the ONE thing they could act on into a third clause.
+   *
+   * ⚠️ HIS WORDING IS ALSO NOW CORRECT WHERE MINE OBJECTED. My objection to his first
+   * attempt was that *"where your Google or Apple account is active"* is wrong about a Mac
+   * or a Windows machine with its own check; **adding Microsoft closes exactly that gap**,
+   * because Windows Hello is a Microsoft account and a Mac's Touch ID is an Apple one. The
+   * remaining edge — a browser with a third-party passkey manager and none of the three —
+   * he weighed himself: *"eventhough in some edge cases it is not fully correct... at
+   * least users understand that sentence."* **D-187: clarity is the only criterion.**
    */
   declined:
-    "Nothing was set up. Either you closed the request, or this browser has no way to check that " +
-    "it is you. That check comes from the phone or computer itself, or from a browser that is " +
-    "connected to your Apple or Google account.",
+    "Nothing was set up. This works only in a browser that has your Google, Apple or Microsoft " +
+    "account in use.",
 
   /**
    * ⚠️⚠️ THIS ONE HAS TO NAME THE LEFTOVER, AND IT IS THE HARDEST SENTENCE HERE. On a

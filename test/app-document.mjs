@@ -388,15 +388,27 @@ section("§4.3 — the lock is reachable, and locking still deletes nothing (D-1
     !/const COVERABLE = new Set\(\[[^\]]*"(covered|pin-set)"/.test(appCode),
     "COVERABLE ∩ GATED = ∅"
   );
+  /**
+   * ⛔⛔⛔ THESE TWO PINNED `session?.pinRecord` AND BOTH WENT RED THE DAY §4.3 GREW A
+   * SECOND ANSWER — which is the guard doing its job and the wording doing its worst.
+   * The rule was never "a PIN exists". It is **"a cover that is raised can be lifted"**,
+   * and the three places that ask it now ask one function, so they cannot disagree.
+   */
   check(
-    "⚠️ the entry is offered only where a PIN exists and the watcher is armed",
-    /show\("menu-cover", COVERABLE\.has\(id\) && Boolean\(session\?\.pinRecord\) && Boolean\(lockWatch\) && !lockWatch\.stopped\)/.test(appCode),
+    "⚠️ the entry is offered only where a cover could be lifted, and the watcher is armed",
+    /show\("menu-cover", COVERABLE\.has\(id\) && coverCanBeLifted\(\) && Boolean\(lockWatch\) && !lockWatch\.stopped\)/.test(appCode),
     "menu-cover has all three conditions"
   );
   check(
     "⛔⛔ and the control itself refuses on the same conditions, not only the bar",
-    /\$\("cover-now"\)\.addEventListener\([^]*?if \(!COVERABLE\.has\(shownScreen\)\) return;[^]*?if \(!session\?\.pinRecord\) return;/.test(appCode),
-    "cover-now returns early off a coverable screen and with no PIN"
+    /\$\("cover-now"\)\.addEventListener\([^]*?if \(!COVERABLE\.has\(shownScreen\)\) return;[^]*?if \(!coverCanBeLifted\(\)\) return;/.test(appCode),
+    "cover-now returns early off a coverable screen and with nothing to lift a cover"
+  );
+  check(
+    "⛔⛔⛔ and all three ask ONE function, so they cannot drift apart again",
+    (appCode.match(/coverCanBeLifted\(\)/g) ?? []).length === 4 &&
+      /function coverCanBeLifted\(\) \{\s*return Boolean\(session\?\.pinRecord\) \|\| Boolean\(session\?\.quickOn\);/.test(appCode),
+    "one definition and three askers — a condition repeated is one rule until the day it is two"
   );
   check(
     "⭐⭐ the watcher's flag is set BEFORE the screen is painted, and false stops it",
@@ -1855,6 +1867,205 @@ section("§7.5 — the rules that live in the app rather than in the wrapper");
         'async function paintQuickEntry() { quickEntries = await unlockRecordsHere(); show("quick-row", true); }'
       ),
     "an ending that only calls endSession, and a paint that hides after the await"
+  );
+}
+
+// ═══════════════════ §7.5.3 / D-200 — §4.3's second tier has two right answers
+
+/**
+ * ⭐⭐⭐⭐ THE FAULT THESE GUARD AGAINST WAS ARITHMETIC BETWEEN TWO CONSTANTS AND NOT A
+ * PATH THROUGH THE APP. `COVER_BLUR_MS` is 5 minutes and `BLUR_MS` is 24 hours, so the
+ * cover is raised roughly 288 times for every lock — and §7.5's shortcut was built only
+ * on the lock's screen. Every suite was green and every probe walked the path it was
+ * written for. **A feature placed on the rarer of two gates is a feature nobody has.**
+ */
+{
+  const app = code("../app/app.js");
+  const html = read("../app/index.html");
+
+  section("§7.5.3 / D-200 — either secret lifts the cover, and neither may be missing");
+
+  /**
+   * ⛔⛔ PROTOCOL §7.5.3 RULE 1, AND IT IS THE ONE THAT MAKES EVERY OTHER RULE HERE SAFE.
+   * A cover with no way to lift it is a lockout, which is why `coverDue` already fell
+   * through to `lockNow` for a session with no PIN. The rule did not change; the number
+   * of right answers did.
+   */
+  check(
+    "⛔⛔ a cover is raised only where at least one secret can lift it",
+    /function coverCanBeLifted\(\) \{\s*return Boolean\(session\?\.pinRecord\) \|\| Boolean\(session\?\.quickOn\);\s*\}/.test(app) &&
+      /function coverDue\(reason\)[\s\S]{0,1400}?if \(coverCanBeLifted\(\)\) \{[\s\S]{0,120}?coverNow\(reason\)/.test(app),
+    "and with neither, §4.3's LOCK is used instead — the existing fall-through"
+  );
+
+  // ⚠️ THE MANDATORY TIER IS STILL MANDATORY. What changed is that a §7.5 record answers
+  // it too, so the demand is conditioned on NEITHER — which is what makes "remove my PIN"
+  // a deletion rather than a new stored state.
+  check(
+    "⛔ the PIN is demanded only where there is no other answer either",
+    /!session\.pinRecord && !session\.quickOn\) \{\s*await showPinSet\(openHome\);/.test(app),
+    "§4.3's second tier asks a question, and it has two right answers"
+  );
+
+  /**
+   * ⛔⛔⛔ RULE 4 — THE COVER PROVES THE PERSON AND NEVER OPENS THE WRAP. The derived set
+   * is in memory while a cover is up, so there is nothing a key would buy; D-070's
+   * licence for one brief copy of `K_master` is an argument about reach, and it buys
+   * nothing at all on a screen with no use for the value.
+   */
+  const lift = app.slice(app.indexOf("async function liftCoverWithQuick"));
+  const liftBody = lift.slice(0, lift.indexOf("\nasync function coverRefusal") + 1) || lift.slice(0, 2000);
+  check(
+    "⛔⛔⛔ lifting a cover never unwraps K_master",
+    !/openMaster/.test(liftBody),
+    "the cover drops no keys, so proof of the person is the whole requirement"
+  );
+  check(
+    "⛔ and the PRF output is zeroed as soon as the ceremony returns",
+    /got\.prfOut\.fill\(0\);/.test(liftBody),
+    "§7.5: PRF output is never held beyond the step that needs it"
+  );
+
+  // ⛔ RULE 2: a credential enrolled for a DIFFERENT identity in this browser must not
+  // lift this identity's cover. `quickEntryHere` scopes the request and this re-checks
+  // the answer, because the day the list is built elsewhere is the day the first stops
+  // being a guarantee.
+  check(
+    "⛔ the answering credential is checked against the covered session",
+    /got\.scope !== session\.recordScope/.test(liftBody) &&
+      /async function quickEntryHere\(\)[\s\S]{0,700}?session\.vault\.unlock\.read\(session\.recordScope\)/.test(app),
+    "scoped to the session, not to the browser"
+  );
+
+  // ⛔ RULE 6: two secrets, two counters. A platform that declines a prompt has not made
+  // a guess, and counting it would let a flaky authenticator drop the derived keys.
+  check(
+    "⛔ a refused ceremony does not count toward the PIN's five",
+    !/pinWrong/.test(liftBody),
+    "a decline is not a guess"
+  );
+
+  // ⚠️ RULE 5: the passphrase route stays on the cover in Kept mode, because a platform
+  // can forget a credential — and then it is the only way out.
+  check(
+    "⚠️ the KEY route stays on the cover, and names what it is an alternative to",
+    /show\("covered-key", !ghost\)/.test(app) &&
+      /text\("covered-key", hasPin \? copy\.lock\.useKey : copy\.lock\.useKeyNoPin\)/.test(app),
+    "a button offering an alternative to a PIN that does not exist names nothing"
+  );
+
+  /**
+   * ⚠️⚠️ THREE STATES, THREE SENTENCES (D-163, and this is the third time in this app).
+   * A ternary over two of them is an exhaustive match right up to the moment it silently
+   * stops being one — which is exactly how `coverSaid` acquired its third reason.
+   */
+  check(
+    "⚠️⚠️ the cover asks a different question in each of its three states",
+    /copy\.pin\.coverAskBoth/.test(app) && /copy\.pin\.coverAskQuick/.test(app) && /copy\.pin\.coverAsk\b/.test(app),
+    "a PIN, §7.5's check, or both — and each is a different instruction"
+  );
+
+  // ⚠️ The same rule the KEY screen's shortcut follows, in the one place it would be
+  // easiest to forget: a control painted from an await must be hidden before it.
+  check(
+    "⛔ the cover's shortcut is hidden before the store is read, not after",
+    /async function paintCoverQuick\(\)[\s\S]{0,400}?show\("covered-quick-row", false\);[\s\S]{0,300}?await quickEntryHere\(\)/.test(app),
+    "a record deleted in another tab would otherwise leave the control standing"
+  );
+
+  /**
+   * ⛔⛔ NOTHING MAY ASSIGN `className` TO AN ELEMENT `show()` ALSO TOUCHES, and the probe
+   * sweep is what found it: `show()` adds and removes the `hidden` class, so an
+   * assignment two lines later threw the visibility away and the cover with no PIN went
+   * back to offering a button that would submit one.
+   */
+  check(
+    "⛔⛔ the cover's weight is toggled, not assigned — `className =` would wipe `hidden`",
+    /\$\("uncover"\)\.classList\.toggle\("secondary", hasQuick\);/.test(app) &&
+      !/\$\("uncover"\)\.className\s*=/.test(app),
+    "assigning className destroys every class, including the one show() is using"
+  );
+
+  /**
+   * ⛔⛔ THE REMOVAL IS OFFERED ONLY WHERE THE OTHER ANSWER EXISTS, and it is re-checked
+   * when the button is pressed — `#pin-off` is a screen, so time passes, and `RERENDER`
+   * can repaint it after a language change.
+   */
+  check(
+    "⛔⛔ removing the PIN is offered only while a §7.5 record exists",
+    /function paintPinSetting\(\)[\s\S]{0,400}?Boolean\(session\?\.pinRecord\) && Boolean\(session\?\.quickOn\)/.test(app),
+    "PROTOCOL §7.5.3 rule 1, enforced where the control is painted"
+  );
+  check(
+    "⛔⛔ and the condition is re-checked at the press, not trusted from the paint",
+    /\$\("pin-off-go"\)[\s\S]{0,600}?if \(!session\.quickOn\) \{[\s\S]{0,200}?return;[\s\S]{0,400}?durable\.delete\(pinRecordName/.test(app),
+    "a screen is a window in which the state it was painted from can change"
+  );
+
+  /**
+   * ⛔⛔ THE MANUAL COVER ASKS THE SAME QUESTION AS `coverDue`, AND A BROWSER PROBE IS
+   * WHAT FOUND IT. The control that raises a cover on demand was conditioned on a PIN —
+   * so removing the PIN removed the button, and the feature built to replace the PIN
+   * took the manual cover away with it. **The condition was never "is there a PIN"; it
+   * was "is there a way back", and those were one sentence while there was one answer.**
+   */
+  check(
+    "⛔⛔ the cover-on-demand is offered wherever a cover can be lifted, not only where a PIN is",
+    /function coverDue\(reason\)[\s\S]{0,1400}?if \(coverCanBeLifted\(\)\)/.test(app) &&
+      /show\("menu-cover", COVERABLE\.has\(id\) && coverCanBeLifted\(\)/.test(app),
+    "the watcher and the menu ask the same function, or one offers what the other will not raise"
+  );
+
+  /**
+   * ⭐⭐ NO "DELIBERATELY NO PIN" STATE IS STORED, AND THAT IS THE POINT. It would be a
+   * second copy of a fact already on disk, able to disagree with it — the same shape
+   * §7.5.1 rejected when it declined to store a "PRF has worked here" boolean beside the
+   * record whose existence already says so. Turning §7.5 off with no PIN therefore lands
+   * on the PIN screen by `openHome`'s single line.
+   */
+  check(
+    "⭐⭐ no separate 'no PIN' flag is stored anywhere",
+    !/pinNone|noPinChosen|pinRemoved\s*=/.test(app),
+    "the demand is conditioned on neither secret existing; that IS the state"
+  );
+  check(
+    "⭐ so turning §7.5 off with no PIN asks for one, and says why",
+    /\$\("quick-off-go"\)[\s\S]{0,900}?!isGhost\(\) && !session\.pinRecord\) \{\s*await showPinSet\(openHome, copy\.pin\.neededAgain\)/.test(app),
+    "an act needs its consequence said out loud, or a working rule reads as a fault"
+  );
+
+  /**
+   * ⚠️⚠️ THE OTHER HALF OF D-200: THE RELOAD LANDS ON THE GATE. `showGate()` is the last
+   * line of the module, so a returning person met the pitch and a button reading "I
+   * already have a KEY" before anything offered to skip the typing.
+   */
+  check(
+    "⚠️⚠️ the gate offers the shortcut too, from the same read as the KEY screen",
+    /function showGate\(\)[\s\S]{0,1500}?void paintQuickEntry\(\);/.test(app) &&
+      /show\("gate-quick-row", quickEntries\.length > 0\)/.test(app),
+    "one function, so the two rows cannot disagree about what there is to offer"
+  );
+  check(
+    "⚠️ and both buttons are one act with one name, from one constant",
+    /\$\("quick-go"\)\.addEventListener\("click", \(\) => void useQuickUnlock\(\)\)/.test(app) &&
+      /\$\("gate-quick-go"\)\.addEventListener\("click", \(\) => void useQuickUnlock\(\)\)/.test(app),
+    "D-191: two labels for the same button would be two things to learn"
+  );
+
+  // ⚠️ The three new controls exist in the document the app expects them in. Every
+  // `$()` above would throw at load if one were renamed, but a check that says which
+  // beats a stack trace at boot.
+  for (const id of ["covered-quick", "covered-quick-row", "gate-quick-row", "gate-quick-go", "remove-pin", "pin-off", "pin-set-why"])
+    check(`   #${id} is in the document`, new RegExp(`id="${id}"`).test(html));
+
+  // ⚠️⚠️ THE CANARY, for the same reason as the one above: a pattern that stops matching
+  // passes silently forever.
+  check(
+    "⚠️⚠️ and these patterns still refuse the shapes they exist to refuse",
+    !/if \(coverCanBeLifted\(\)\)/.test("function coverDue(reason) { if (session?.pinRecord) coverNow(reason); }") &&
+      !/got\.prfOut\.fill\(0\);/.test("const master = await passkeyFlow.openMaster(got.prfOut, entry.blob);") &&
+      /openMaster/.test("const master = await passkeyFlow.openMaster(got.prfOut, entry.blob, entry.scope);"),
+    "the one-answer cover, and a lift that unwraps"
   );
 }
 
