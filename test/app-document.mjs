@@ -432,6 +432,46 @@ section("§4.3 — the lock is reachable, and locking still deletes nothing (D-1
     "#uncover's label is chosen from coveredFrom"
   );
 
+  /* ============ a refusal may not outlive its subject (Hannu, 2026-09-12) ============
+   *
+   * He mistyped the confirmation, was told the PINs did not match, corrected both rows,
+   * and the message stayed. It was true when it was written and false about the screen
+   * he was looking at, and nothing re-examined it until the next press of Save.
+   *
+   * ⭐ THE RULE, WRITTEN AS A RULE: a message that describes the contents of an input
+   * is retracted when those contents change. It is NOT "clear the mismatch warning" —
+   * `savePin` refuses on two counts and the other one leaves both rows standing, so a
+   * guard naming the mismatch would pass while the length refusal went stale.
+   *
+   * ⚠️ RETRACTION IS NOT VALIDATION. The comparison still happens only on the press;
+   * typing must never be able to report success, because a PIN that is correct so far
+   * is not a PIN that is correct.
+   */
+  check(
+    "⭐ the boxes can carry an edit hook, fired on every event that changes their contents",
+    /function paintPinBoxes\(id, count, onEdit = null\)/.test(appCode) &&
+      (appCode.match(/onEdit\?\.\(\)/g) ?? []).length === 2,
+    "paintPinBoxes takes onEdit and calls it from both input and paste"
+  );
+  check(
+    "⛔ and the PIN screen uses it to retract its refusal, on BOTH rows",
+    /paintPinBoxes\("pin-set-boxes", pinFlow\.PIN_MAX, forgetRefusal\)/.test(appCode) &&
+      /paintPinBoxes\("pin-set-confirm", pinFlow\.PIN_MAX, forgetRefusal\)/.test(appCode) &&
+      /const forgetRefusal = \(\) => text\("pin-set-note", ""\)/.test(appCode),
+    "both pin-set rows retract #pin-set-note"
+  );
+  check(
+    "⛔⛔ but the cover's row does NOT — its note carries the attempts left, and it is never contradicted",
+    /paintPinBoxes\("covered-boxes", [^)]*\);/.test(appCode) &&
+      !/paintPinBoxes\("covered-boxes",[^)]*,[^)]*,/.test(appCode),
+    "covered-boxes is painted without an edit hook"
+  );
+  check(
+    "⛔⛔⛔ and typing still cannot decide the answer — the comparison stays on the press",
+    /async function savePin\(\)[^]*?if \(chosen !== again\) \{/.test(appCode),
+    "savePin still compares the two rows itself"
+  );
+
   check(
     "⭐ it is wired to the lock, and it says the person asked",
     /\$\("lock-now"\)\.addEventListener\([^]*?lockNow\(lockFlow\.MANUAL\)/.test(appCode),

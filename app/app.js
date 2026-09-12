@@ -2043,8 +2043,21 @@ async function writePinRecord(rec) {
  * ⚠️ THE PASTE IS ITS OWN HANDLER AND HAS TO BE. `maxLength = 1` truncates a pasted
  * string to its first character before any `input` event sees it, so a paste-to-
  * distribute written on top of `input` silently keeps one digit.
+ *
+ * ⭐⭐ `onEdit` EXISTS BECAUSE A REFUSAL THAT OUTLIVES WHAT IT DESCRIBES BECOMES A LIE.
+ * Hannu mistyped a confirmation, read *"the PINs do not match"*, corrected both rows, and
+ * the message stayed — true when written, false about the screen in front of him, and only
+ * re-examined on the next press of Save. **The check still happens on the press; what this
+ * does is retract the last answer the moment its subject changes.** Both content events
+ * are hooked, because his report names both: *"deletes some characters ... or types
+ * something new."*
+ *
+ * ⚠️ IT IS DELIBERATELY NOT PASSED FOR THE COVER'S ROW. `liftCover` clears its own boxes
+ * after every wrong entry, so that note never contradicts what is on screen, and it carries
+ * the count of attempts left — which is exactly what somebody retyping needs to keep
+ * reading. Retracting it on the first keystroke would delete the one number that matters.
  */
-function paintPinBoxes(id, count) {
+function paintPinBoxes(id, count, onEdit = null) {
   const row = $(id);
   row.replaceChildren();
   row.setAttribute("aria-label", copy.pin.boxes);
@@ -2057,6 +2070,7 @@ function paintPinBoxes(id, count) {
     box.maxLength = 1;
     box.setAttribute("aria-label", copy.pin.digit(i + 1, count));
     box.addEventListener("input", () => {
+      onEdit?.();
       const kept = pinFlow.digitsOnly(box.value).slice(-1);
       box.value = kept;
       if (kept) focusPinBox(row, i + 1);
@@ -2071,6 +2085,7 @@ function paintPinBoxes(id, count) {
     box.addEventListener("paste", (event) => {
       const digits = pinFlow.digitsOnly(event.clipboardData?.getData("text") ?? "");
       if (!digits) return;
+      onEdit?.();
       event.preventDefault();
       const boxes = [...row.children];
       for (let j = 0; j < digits.length && i + j < boxes.length; j++) boxes[i + j].value = digits[j];
@@ -2116,8 +2131,12 @@ async function showPinSet(after = null) {
   text("pin-set-cancel", copy.nav.cancel);
   text("pin-set-what", copy.pin.what);
   text("pin-set-warn", copy.pin.warn);
-  paintPinBoxes("pin-set-boxes", pinFlow.PIN_MAX);
-  paintPinBoxes("pin-set-confirm", pinFlow.PIN_MAX);
+  // ⚠️ BOTH ROWS, not just the confirmation. `savePin` refuses on two counts, and the
+  // length refusal leaves BOTH rows standing — so an edit to either one can be the edit
+  // that makes the message wrong.
+  const forgetRefusal = () => text("pin-set-note", "");
+  paintPinBoxes("pin-set-boxes", pinFlow.PIN_MAX, forgetRefusal);
+  paintPinBoxes("pin-set-confirm", pinFlow.PIN_MAX, forgetRefusal);
   show("pin-set-cancel", Boolean(session?.pinRecord));
   only("pin-set");
 }

@@ -5546,6 +5546,59 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-197. ⭐⭐⭐ A refusal describes the contents of an input, so it may not outlive them — but the cover's refusal is not one of those
+
+**2026-09-12, from Hannu's test of D-196's screens.** *"The PIN and the wordings also in
+Finnish are very good. But one small problem ... I made a typo and got the red warning the
+pin's do not match, and that was true they did not match. But when I removed the pins and
+retyped them correctly the warning did not go away ... it was confusing to have it even when
+I corrected the pins."*
+
+**He is describing a message that was true when it was written and false about the screen he
+was looking at.** Nothing re-examined it until the next press of *Save my PIN*, and by then he
+had spent time believing the product still disagreed with him. The comparison itself was
+correct throughout. What was wrong was its shelf life.
+
+⭐⭐ **THE RULE, AND IT IS NOT "CLEAR THE MISMATCH WARNING".** `savePin` refuses on two
+counts. The mismatch empties the confirmation row and leaves the first one standing; the
+length refusal leaves **both** rows standing and is about the first row, not the second. A fix
+aimed at the sentence he happened to read would have hooked the confirmation row and left the
+length refusal to go stale in exactly the same way. ➡️ **A message that describes the contents
+of an input is retracted when those contents change** — whichever input, whichever message.
+`paintPinBoxes` therefore takes an edit hook fired from both events that change a row's
+contents, and `showPinSet` passes the same retraction to **both** rows.
+
+⛔⛔ **RETRACTION IS NOT VALIDATION, AND THE DISTINCTION IS THE WHOLE DESIGN.** The obvious
+reading of *"the warning should go away when I fix it"* is live validation — check on every
+keystroke. That would be wrong here, because a PIN that is correct **so far** is not a PIN
+that is correct, and a screen that went quiet at the right moment would be making a claim it
+cannot support two digits in. So the hook **withdraws the last answer and gives no new one.**
+The comparison stays where it was, on the press. Hannu asked for exactly this and not for
+more: *"the check again when SAVE PIN is pressed."*
+
+⛔⛔⛔ **AND THE COVER'S NOTE IS DELIBERATELY EXEMPT, WHICH IS THE HALF THAT COULD BE
+"FIXED" BY MISTAKE LATER.** `#covered-note` says *"That is not your PIN. 4 more tries before
+haamu asks for your KEY."* It is never stale, because `liftCover` clears its own boxes after
+every wrong entry — so it is never contradicted by what is on screen, which was the entire
+complaint. And it carries **the count of attempts left**, which is precisely what somebody
+retyping needs to keep reading. ➡️ **Retracting it on the first keystroke would delete the one
+number that matters, in the name of consistency with a screen that has a different problem.**
+The exemption is asserted in both suites so a later sweep cannot tidy it away.
+
+⭐ **What found it was use, and what nearly hid it was that every check stayed green.** No
+suite could have caught this: each one samples state at an instant, and the defect was in how
+long a correct sentence survived. The same shape as D-196 a week earlier — a true sentence in
+the wrong place — and this one is a true sentence at the wrong time.
+
+⚠️ **A probe of mine was wrong before the product was.** The first version deleted a digit by
+clicking the box and pressing Backspace, and reported the app stale. It was not: a click lands
+the caret by hit-testing, the centre of a box holding one centred character resolves to offset
+zero, so Backspace had nothing behind it and no `input` event ever fired. Measured, the row
+read `4|8|2|9|1` before and after. **The app's own `focusPinBox` selects what it moves to**, so
+the probe now arrows across, which is both the real navigation path and the one with a defined
+caret. ➡️ The standing rule again: **a red probe is a claim about the product only if the
+probe is green when the product is right.**
+
 ### D-196. ⭐⭐⭐⭐ An honest sentence is addressed to somebody, and the cover screen was addressing the wrong person
 
 **2026-09-07, from Hannu's thorough test of D-195.** Three changes came out of it, and the
