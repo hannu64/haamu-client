@@ -720,6 +720,16 @@ let openEntry = null; // the conversation on screen
 // §4.3's second tier. All four are per-document and none of them is written anywhere:
 // the cover is a screen, and everything it counts dies with the page that raised it.
 let coveredFrom = null; // the screen to go back to when the right PIN arrives
+
+/**
+ * Whether §4.3 has already been put to this document about a Ghost conversation it did
+ * not itself open (2026-09-13).
+ *
+ * ⚠️ ONE DOCUMENT, ONE ASK. `continueGhost` is reached more than once — at entry, after
+ * the PIN screen, and again from `becameLeader` when the tab this one was copied from
+ * goes away — and a cover raised at each of those would be three PINs for one reload.
+ */
+let ghostReopenAsked = false;
 let pinWrong = 0; // wrong entries since the cover went up
 let coverEntry = null; // §7.5's decoded record for the covered session (D-200), or null
 let pinSlowUntil = 0; // Ghost mode only — the instant another try is allowed
@@ -1330,6 +1340,27 @@ async function continueGhost() {
 
   const entry = await ghost.channel();
   if (entry) {
+    /**
+     * ⭐⭐⭐⭐ §4.3's COVER IS IN THE HEAP AND §7.6's SESSION IS NOT, WHICH MADE A RELOAD
+     * A FREE WAY PAST THE PIN (2026-09-13, Hannu's Opera report — *"was covered the
+     * entire night but was still open today and I did not need to type any PIN"*).
+     *
+     * `ARCHITECTURE.md` §4.3 states that the thresholds "govern only a page that is
+     * still alive" and treats that as costless, because a reload costs the eight words.
+     * **It does in Kept mode. Ghost mode has no eight words**, so reload → press Ghost →
+     * the conversation is back, and the PIN chosen for exactly this case is never asked.
+     * ➡️ **A GUARANTEE THAT LEANS ON A SECOND MECHANISM IS ONLY AS TRUE AS THAT
+     * MECHANISM'S PRESENCE IN EVERY MODE** — the same shape as D-200 one tier down.
+     *
+     * ⚠️ THE COVER GOES UP BEFORE THE CONVERSATION IS BUILT, NOT OVER IT. `coverLifted`
+     * reaches `backToStart()`, which opens it — so nothing of it is rendered until the
+     * PIN is right. That is why `from` exists on `coverNow`.
+     */
+    if (!ghostReopenAsked && ghost.resumed && session.pinRecord) {
+      ghostReopenAsked = true;
+      coverNow(lockFlow.REOPENED, { from: "chat" });
+      return;
+    }
     if (pendingJoin) {
       // One conversation per Ghost session (§7.6 describes one root and one role),
       // so a link arriving in a tab that already has one has nowhere to go. Saying
@@ -2030,14 +2061,21 @@ function lockSaid(reason) {
  * to be exact. The control the user actually wants when the device is out of their
  * hands sits next to it, and it is the ending.
  */
-function coverNow(reason) {
+function coverNow(reason, { from = null } = {}) {
   pinWrong = 0;
   pinSlowUntil = 0;
   // ⚠️ WHERE TO GO BACK TO, CAPTURED BEFORE THE COVER REPLACES IT. A cover tears nothing
   // down, so the screen underneath is still built and `only()` alone restores it — but
   // only if this remembers which one it was. Guarded against covering a cover, which
   // would otherwise make the way back the way here.
-  if (shownScreen !== "covered") coveredFrom = shownScreen;
+  //
+  // ⚠️⚠️ `from` IS FOR THE ONE CALLER WHERE THE SCREEN UNDERNEATH IS NOT BUILT YET, and
+  // it is a cover raised BEFORE its conversation rather than over it (2026-09-13). A
+  // restored Ghost session must not render the conversation and then hide it — one frame
+  // of it on screen is the whole thing a cover exists to prevent — so the cover goes up
+  // first and `coverLifted` builds what is behind it. ⭐ That works because `openEntry`
+  // is still null there, so the lift takes `backToStart()` and not `only("chat")`.
+  if (shownScreen !== "covered") coveredFrom = from ?? shownScreen;
   const ghost = isGhost();
   text("covered-why", coverSaid(reason));
   /**
@@ -2080,13 +2118,23 @@ function coverNow(reason) {
   /**
    * ⚠️⚠️ TWO PRIMARY BUTTONS ARE NOT TWO CHOICES, THEY ARE A SCREEN WITH NO ANSWER ON IT,
    * and a picture is what showed it: "Show my conversations" and "Open without typing"
-   * stacked in the same green, one above the other.
+   * stacked in the same green, one above the other. One of them has to give way.
    *
-   * ⭐ Which one gives way is decided by D-200's own complaint. The person in front of a
-   * cover with both secrets has SET UP the device check; making them read past a green
-   * PIN button to find it would be the same fault one screen along — *"it seems PIN
-   * overrides the PassKey"*. So the PIN keeps its boxes, its place at the top and its
-   * button, and gives up the accent.
+   * ⛔⛔ AND THE FIRST ANSWER WAS THE WRONG ONE, MEASURED ON A REAL PERSON THE NEXT DAY.
+   * D-200 demoted the PIN's own button, reasoning that somebody who had SET UP the device
+   * check should not have to read past a green PIN button to find it. What that produced
+   * was a screen with six PIN boxes at the top and **no accented way to submit them** —
+   * so Hannu typed his PIN, pressed the only green button on the screen, and got the
+   * passkey ceremony: *"I gave it and then it asked me for my PassKey... is it so that
+   * when time goes and PIN is asked then always PassKey is asked after that to verify?"*
+   *
+   * ➡️ ⭐⭐⭐⭐ **THE ACCENT BELONGS TO THE CONTROL THE FIELD ABOVE IT FEEDS.** An input and
+   * its submit are one act, and an accent placed anywhere else turns typing into a step
+   * that appears to be ignored. The shortcut is an ALTERNATIVE to that act, not a
+   * continuation of it, and an alternative reads correctly as the quieter button — it is
+   * still a full-width button, which is all D-200 ever asked for (it was a `linkish` link
+   * nobody found). ⚠️ With no PIN there are no boxes and nothing to feed, so the shortcut
+   * is the act and keeps the accent.
    */
   /**
    * ⛔⛔ `classList.toggle` AND NOT `className =`, AND THE SWEEP CAUGHT THE FIRST VERSION.
@@ -2097,9 +2145,10 @@ function coverNow(reason) {
    * VISIBILITY SYSTEM IS USING.** Nothing in this file may set `className` on an element
    * that `show()` also touches.
    */
-  $("uncover").classList.toggle("secondary", hasQuick);
+  $("uncover").classList.remove("secondary");
+  $("covered-quick").classList.toggle("secondary", hasPin);
   if (hasPin) paintPinBoxes("covered-boxes", session.pinRecord.len ?? pinFlow.PIN_MIN);
-  text("covered-quick", copy.quick.use);
+  text("covered-quick", coverQuickLabel());
   void paintCoverQuick();
   only("covered");
 }
@@ -2163,6 +2212,10 @@ function coverSaid(reason) {
       // on demand is the third value, and it cost one line here instead of a wrong
       // sentence telling somebody who pressed a button that they had been idle.
       [lockFlow.MANUAL]: copy.lock.coveredManual,
+      // ⚠️ AND THE FOURTH ARRIVED THE SAME WAY THE THIRD DID. D-163's note above was
+      // written when `MANUAL` was the new one; a restored Ghost session is the next
+      // value, and it cost one line here again.
+      [lockFlow.REOPENED]: copy.lock.coveredReopened,
     }[reason] ?? ""
   );
 }
@@ -2496,6 +2549,25 @@ async function liftCover() {
  * D-200: removing the PIN removed the button that raises a cover, so the feature built
  * to replace the PIN took the manual cover away with it.
  */
+/**
+ * What the cover's §7.5 button is called, which is not what the gate's is called.
+ *
+ * ⚠️⚠️ TWO SITES PAINT THIS LABEL AND THEY ASK ONE FUNCTION, which is D-200's own lesson
+ * applied before it can bite twice: `coverNow` paints it when the cover goes up and
+ * `paintCopy` repaints it when the language changes, and a condition written out at both
+ * would be one rule until the day somebody edited one of them.
+ *
+ * ⚠️ IT IS A TENSION WITH D-191 ("one act, one name") AND THE TENSION IS DELIBERATE. The
+ * act is the same everywhere — let this device check that it is you. What DIFFERS is what
+ * the screen would otherwise have demanded: the gate and the KEY screen want the eight
+ * words, and a cover with a PIN behind it wants 6 to 8 digits. Hannu's rule on 2026-09-13
+ * was that the label must name the secret it saves, and a label naming the KEY on a screen
+ * that never asks for one names the wrong secret in order to keep one string.
+ */
+function coverQuickLabel() {
+  return session?.pinRecord ? copy.quick.usePin : copy.quick.use;
+}
+
 function coverCanBeLifted() {
   return Boolean(session?.pinRecord) || Boolean(session?.quickOn);
 }
@@ -6451,10 +6523,10 @@ function paintCopy() {
   // visibility from what is in the store; a label painted only when visible would be
   // stale in the other language the first time the store said yes.
   text("quick-go", copy.quick.use);
-  // D-200's two further homes for the same act, painted here for the same reason and
-  // from the same constant — D-191: one act, one name, on every screen it appears.
+  // D-200's two further homes for the same act, painted here for the same reason. ⚠️ The
+  // cover's is the one label that is NOT the same constant — see `coverQuickLabel`.
   text("gate-quick-go", copy.quick.use);
-  text("covered-quick", copy.quick.use);
+  text("covered-quick", coverQuickLabel());
   text("progress-title", copy.pairing.title);
   text("verify-title", copy.verification.title);
 

@@ -121,6 +121,19 @@ export async function openGhost({ sessionStorage = globalThis.sessionStorage } =
   const store = ghostStore(sessionStorage);
 
   let id = await store.get(ID_KEY);
+  /**
+   * Whether this document ADOPTED a session or minted one.
+   *
+   * ⚠️⚠️ IT IS THE ONLY THING THAT CAN TELL A RELOAD FROM A FIRST VISIT, and §4.3's
+   * second tier needs it: a cover lives in the heap and dies with the document, while
+   * everything this function reads survives it. Without this, "press Ghost" after a
+   * reload walks straight past a PIN the person chose (2026-09-13).
+   *
+   * ⚠️ A DUPLICATED TAB READS `true` HERE AND THAT IS CORRECT. It was handed a COPY of
+   * this area and did not create what it found, which is the same fact about the same
+   * question — this document did not open that conversation.
+   */
+  const resumed = Boolean(id);
   if (!id) {
     id = b64uEncode(randomBytes(16));
     await store.set(ID_KEY, id);
@@ -163,6 +176,7 @@ export async function openGhost({ sessionStorage = globalThis.sessionStorage } =
   return {
     mode: "ghost",
     id,
+    resumed,
     pickleKey,
     store,
 

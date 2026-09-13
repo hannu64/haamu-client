@@ -2140,6 +2140,18 @@ export const lock = {
   // the two tiers name a deliberate cover and a deliberate lock with one word.
   coveredManual: "Covered because you asked.",
 
+  /**
+   * The fourth, and the only one that is not about a clock (2026-09-13).
+   *
+   * ⚠️⚠️ IT NAMES THE CAUSE EVEN THOUGH D-200 SAYS A CAUSE THE READER CAUSED IS NOT
+   * INFORMATION, and the difference is that **this reader may not have caused it.** A
+   * reload is somebody's own act; a browser discarding a sleeping tab overnight and
+   * restoring it in the morning is not, and neither is somebody else picking up the
+   * laptop and pressing reload. The sentence is therefore the one thing this screen knows
+   * that the person may not.
+   */
+  coveredReopened: "Covered because this page was opened again.",
+
   // ⚠⚠ D-148 REMOVED THE LAST SENTENCE, AND THE REASON IS THE BEST KIND — IT IS ABOUT
   // WHO IS HOLDING THE DEVICE. It read *"If the device is not in your hands, end the
   // conversation."* Hannu: *"How can the user read that if the device is not in the
@@ -2446,8 +2458,29 @@ export const pin = {
  * here may put the two in one sentence without saying which is which.
  */
 export const quick = {
-  /** The recurring control, on the screen that asks for the KEY. */
-  use: "Open without typing",
+  /**
+   * The recurring control, on the screen that asks for the KEY — and on the gate, and on
+   * a cover with no PIN behind it, all three of which are asking for the eight words.
+   *
+   * ⚠️⚠️ IT NAMES WHAT IS NOT TYPED, AND IT DID NOT UNTIL 2026-09-13. It read "Open
+   * without typing", which is a promise this feature does not make on a computer: Hannu,
+   * testing on a laptop — *"that may be ok with mobile when you have face or fingerprint
+   * detection, but on computers is funny because you need to type the Google PIN for the
+   * PassKey"*. ➡️ **A LABEL THAT NAMES THE GESTURE INSTEAD OF THE SECRET IS FALSE ON
+   * EVERY DEVICE WHERE THE GESTURE IS ALSO TYPING.** What this actually saves is one
+   * named thing, always, on every platform — so it names that thing instead.
+   */
+  use: "Open without typing my KEY",
+
+  /**
+   * The same control on a cover that has a PIN behind it (D-200), where the secret it
+   * saves is the other one.
+   *
+   * ⚠️ IT IS A SECOND STRING RATHER THAN A SECOND READING OF THE FIRST. The cover asks
+   * for 6 to 8 digits and the KEY screen asks for eight words; one label cannot be true
+   * of both, and the one that was shared said neither.
+   */
+  usePin: "Open without typing my PIN",
 
   // ── the offer, shown once, after a KEY unlock (D-196: where the choice is made)
 
@@ -2551,14 +2584,14 @@ export const quick = {
 
   // ⚠️ TWO SENTENCES RATHER THAN ONE WITH A STATE IN IT (D-163). "Turn it on/off" reads
   // as one control with a flag; these are two different acts with two different notes.
-  settingOn: "Set up opening without typing",
-  settingOff: "Stop opening without typing",
+  settingOn: "Set up opening without typing my KEY",
+  settingOff: "Stop opening without typing my KEY",
   settingNote: "haamu asks for your KEY on this browser every time.",
   settingNoteOn: "This browser opens without your KEY. Your KEY still opens everything, everywhere.",
 
   // ── turning it off
 
-  offTitle: "Stop opening without typing",
+  offTitle: "Stop opening without typing my KEY",
   offBody: "This browser will ask for your KEY again, every time.",
   // ⚠️ THE SAME PERMANENCE, SAID AGAIN — because somebody turning this off to undo the
   // disclosure would otherwise believe they had undone it, and they have not.
@@ -2631,8 +2664,8 @@ export const quick = {
    * least users understand that sentence."* **D-187: clarity is the only criterion.**
    */
   declined:
-    "Nothing was set up. This works only in a browser that has your Google, Apple or Microsoft " +
-    "account in use.",
+    "Nothing was set up. This works only in a browser that has one of your accounts in use, for " +
+    "example Google, Apple, Microsoft or Samsung.",
 
   /**
    * ⚠️⚠️ THIS ONE HAS TO NAME THE LEFTOVER, AND IT IS THE HARDEST SENTENCE HERE. On a

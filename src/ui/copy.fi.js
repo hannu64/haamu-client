@@ -199,6 +199,7 @@ export const FI = {
   "lock.coveredIdle": "Peitetty 30 minuutin käyttämättömyyden jälkeen.",
   "lock.coveredBlurred": "Peitetty, koska tämä oli taustalla yli 5 minuuttia.",
   "lock.coveredManual": "Peitetty, koska pyysit sitä.",
+  "lock.coveredReopened": "Peitetty, koska tämä sivu avattiin uudelleen.",
   // ⚠️⚠️ EDELLINEN LAUSE OLI TOTTA SIIHEN ASTI, KUNNES PEITON ETEEN TULI PIN. Se kuului
   // *"Kuka tahansa tätä laitetta käyttävä voi näyttää sen uudelleen"* — ja siitä tuli
   // väärä väite tuotteesta sinä hetkenä, kun peiton nostamiseen tarvittiin numerot.
@@ -256,7 +257,11 @@ export const FI = {
   // ⚠️⚠️ JA SE SISÄLTÄÄ SANAN *avain*, mikä on tasan D-109:n törmäys suomeksi: AVAIN
   // isoilla on ihmisen kahdeksan sanaa eikä mikään muu. Näissä lauseissa ne eivät saa
   // koskaan esiintyä ilman että kumpi on kumpi käy ilmi.
-  "quick.use": "Avaa ilman kirjoittamista",
+  // ⚠️⚠️ 2026-09-13 — NIMEÄÄ SEN, MITÄ EI KIRJOITETA. "Avaa ilman kirjoittamista" on
+  // tietokoneella epätosi: pääsyavaimen saa auki kirjoittamalla tilin oman PIN-luvun.
+  "quick.use": "Avaa kirjoittamatta AVAINTANI",
+  // Sama painike peitteellä, jonka takana on PIN — siellä säästyy toinen salaisuus.
+  "quick.usePin": "Avaa kirjoittamatta PIN-numeroani",
   "quick.offerTitle": "Nopeampi avaaminen tällä laitteella",
   "quick.offerLead":
     "Tämä selain voi pitää AVAIMESI sormenjäljen, kasvojen tai sen tunnistuksen takana, jota laite " +
@@ -282,11 +287,11 @@ export const FI = {
   "quick.asking": "Laitteesi kysyy sinulta nyt.",
   "quick.offerOn": "Ota käyttöön",
   "quick.offerNot": "Ei nyt",
-  "quick.settingOn": "Ota käyttöön avaaminen ilman kirjoittamista",
-  "quick.settingOff": "Lopeta avaaminen ilman kirjoittamista",
+  "quick.settingOn": "Ota käyttöön avaaminen ilman AVAIMEN kirjoittamista",
+  "quick.settingOff": "Lopeta avaaminen ilman AVAIMEN kirjoittamista",
   "quick.settingNote": "haamu kysyy AVAIMESI tässä selaimessa joka kerta.",
   "quick.settingNoteOn": "Tämä selain avautuu ilman AVAINTASI. AVAIMESI avaa edelleen kaiken, kaikkialla.",
-  "quick.offTitle": "Lopeta avaaminen ilman kirjoittamista",
+  "quick.offTitle": "Lopeta avaaminen ilman AVAIMEN kirjoittamista",
   "quick.offBody": "Tämä selain kysyy AVAIMESI taas joka kerta.",
   "quick.offKeeps":
     "Pääsyavain jää Apple- tai Google-tilillesi. Mikään sovellus ei voi poistaa sitä. Voit poistaa sen " +
@@ -302,9 +307,12 @@ export const FI = {
   // ⛔ D-200: hänen oma lauseensa. Kolme selittävää lausetta poistettiin tarkoituksella —
   // ks. `copy.js`. ⚠️ *pääsyavain* sisältää sanan *avain*, joten AVAIN ei esiinny tässä.
   "quick.failedCover": "Laitteesi ei varmistanut tällä kertaa, että se olet sinä.",
+  // ⭐ 2026-09-13 — HÄNEN OMA SUOMENKIELINEN LAUSEENSA, kolmella oikeinkirjoituskorjauksella
+  // ja ei muulla: "esim" → "esim.", pilkku ennen `jos`-sivulausetta, ja kahdesta `on`-sanasta
+  // toinen pois. ⚠️ Hänen versionsa ei sano "selaimessa"; englanninkielinen sanoo.
   "quick.declined":
-    "Mitään ei otettu käyttöön. Tämä toimii vain selaimessa, jossa Google-, Apple- tai " +
-    "Microsoft-tilisi on käytössä.",
+    "Mitään ei otettu käyttöön. Tämä toimii vain, jos esim. Google-, Apple-, Microsoft- tai " +
+    "Samsung-tilisi on käytössä.",
   "quick.noPrf":
     "Tämä selain loi pääsyavaimen eikä sitten osannut käyttää sitä. haamu ei tallentanut mitään. " +
     "Pääsyavain on Applen tai Googlen asetuksissa, jos haluat poistaa sen.",

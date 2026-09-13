@@ -1882,6 +1882,10 @@ section("§7.5 — the rules that live in the app rather than in the wrapper");
 {
   const app = code("../app/app.js");
   const html = read("../app/index.html");
+  // ⚠️ `code` and not `read`: the sentences below are quoted in the comments that explain
+  // them, and a negative check against the raw file would find its own explanation.
+  const copySrc = code("../src/ui/copy.js");
+  const ghostSrc = code("../src/flow/ghost.js");
 
   section("§7.5.3 / D-200 — either secret lifts the cover, and neither may be missing");
 
@@ -1978,12 +1982,94 @@ section("§7.5 — the rules that live in the app rather than in the wrapper");
    * sweep is what found it: `show()` adds and removes the `hidden` class, so an
    * assignment two lines later threw the visibility away and the cover with no PIN went
    * back to offering a button that would submit one.
+   *
+   * ⚠️⚠️ IT PINNED THE WORDING AND HAD TO BE REWRITTEN AS THE RULE — the exact failure
+   * this suite has been caught by twice. It required the literal `toggle("secondary",
+   * hasQuick)`, so the 2026-09-13 correction below turned a guard about `className` red
+   * for a reason that had nothing to do with `className`.
    */
   check(
-    "⛔⛔ the cover's weight is toggled, not assigned — `className =` would wipe `hidden`",
-    /\$\("uncover"\)\.classList\.toggle\("secondary", hasQuick\);/.test(app) &&
-      !/\$\("uncover"\)\.className\s*=/.test(app),
+    "⛔⛔ the cover's weight is never ASSIGNED — `className =` would wipe `hidden`",
+    !/\$\("(?:uncover|covered-quick)"\)\.className\s*=/.test(app),
     "assigning className destroys every class, including the one show() is using"
+  );
+
+  /**
+   * ⭐⭐⭐⭐ **THE ACCENT BELONGS TO THE CONTROL THE FIELD ABOVE IT FEEDS** (2026-09-13).
+   *
+   * D-200 demoted the PIN's own button so that the shortcut would not have to be read
+   * past — and left six PIN boxes over a screen whose only accented button ignored them.
+   * Hannu typed his PIN, pressed the green button and got the passkey ceremony, then
+   * asked whether the passkey is always demanded after the PIN *"to verify"*. It is not;
+   * the screen had simply put the accent on the other answer.
+   *
+   * ⛔ So: the button that submits the boxes never gives up the accent, and the
+   * alternative gives it up exactly when there are boxes for it to be an alternative to.
+   */
+  check(
+    "⭐⭐ the cover's accent belongs to the button the PIN boxes feed",
+    !/\$\("uncover"\)\.classList\.(?:add|toggle)\("secondary"/.test(app) &&
+      /\$\("covered-quick"\)\.classList\.toggle\("secondary", hasPin\)/.test(app),
+    "an input and its submit are one act; an accent anywhere else makes typing look ignored"
+  );
+
+  /**
+   * ⚠️⚠️ THE SHORTCUT NAMES THE SECRET IT SAVES, AND THAT IS NOT THE SAME SECRET ON
+   * EVERY SCREEN (2026-09-13). Hannu, on a laptop: *"'Open without typing' may be ok with
+   * mobile when you have face or fingerprint detection, but on computers is funny because
+   * you need to type the Google PIN for the PassKey."*
+   *
+   * ⛔ Two paint sites, one function — `coverNow` and `paintCopy` — for the same reason
+   * every other pair in this section asks one function.
+   */
+  check(
+    "⚠️⚠️ the cover's shortcut names the PIN, and the gate's names the KEY",
+    /function coverQuickLabel\(\)\s*\{\s*return session\?\.pinRecord \? copy\.quick\.usePin : copy\.quick\.use;/.test(app) &&
+      (app.match(/coverQuickLabel\(\)/g) ?? []).length === 3 &&
+      !/text\("covered-quick", copy\.quick\./.test(app),
+    "a label naming the KEY on a screen that never asks for one names the wrong secret"
+  );
+  check(
+    "⚠️ and neither label says only 'without typing' any more",
+    /use: "Open without typing my KEY"/.test(copySrc) &&
+      /usePin: "Open without typing my PIN"/.test(copySrc) &&
+      !/"Open without typing",/.test(copySrc) &&
+      !/"(?:Set up|Stop) opening without typing",/.test(copySrc),
+    "on a computer the gesture IS typing — what it saves is a named secret, always"
+  );
+
+  /**
+   * ⭐⭐⭐⭐ §4.3's COVER LIVES IN THE HEAP AND §7.6's SESSION DOES NOT (2026-09-13).
+   *
+   * Hannu's Opera tab: *"was covered the entire night but was still open today and I did
+   * not need to type any PIN."* `ARCHITECTURE.md` §4.3 says the thresholds govern only a
+   * live page and treats that as costless because a reload costs the eight words — true
+   * in Kept mode, false in the mode with no eight words. Reload, press Ghost, and the
+   * conversation is back.
+   *
+   * ⛔ The cover goes up BEFORE the conversation is built, not over it: one rendered
+   * frame of the conversation is the whole thing a cover exists to prevent.
+   */
+  check(
+    "⭐⭐⭐⭐ a Ghost conversation this document did not open is covered before it is shown",
+    /if \(!ghostReopenAsked && ghost\.resumed && session\.pinRecord\) \{[\s\S]{0,120}?coverNow\(lockFlow\.REOPENED, \{ from: "chat" \}\);[\s\S]{0,40}?return;/.test(app),
+    "a reload was a free way past the PIN chosen for exactly the person who reloads"
+  );
+  check(
+    "⛔ and it is asked once per document, not once per call",
+    /let ghostReopenAsked = false;/.test(app) && /ghostReopenAsked = true;/.test(app),
+    "continueGhost is reached at entry, after the PIN screen and from becameLeader"
+  );
+  check(
+    "⛔ `resumed` is answered by the store, not remembered by the interface",
+    /const resumed = Boolean\(id\);/.test(ghostSrc) && /\bresumed,/.test(ghostSrc),
+    "only what survives the document can tell a reload from a first visit"
+  );
+  check(
+    "⚠️ and the fourth cover reason has a sentence, like the other three",
+    /\[lockFlow\.REOPENED\]: copy\.lock\.coveredReopened,/.test(app) &&
+      /coveredReopened: "/.test(copySrc),
+    "D-163: a reason with no sentence is a blank line where an explanation belongs"
   );
 
   /**

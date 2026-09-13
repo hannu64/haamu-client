@@ -155,6 +155,22 @@ export const MANUAL = "manual";
 export const WRONG_PIN = "wrong_pin";
 
 /**
+ * §7.6's session came back from a page that was reloaded, discarded or restored.
+ *
+ * ⚠️⚠️ LIKE `MANUAL` AND `WRONG_PIN`, `dueToLock` NEVER RETURNS IT. The three above are
+ * about a clock and this one is about a document boundary, which no elapsed time can see.
+ *
+ * ⭐⭐ IT EXISTS BECAUSE §4.3's COVER IS IN MEMORY AND GHOST MODE'S SESSION IS NOT
+ * (2026-09-13, Hannu's Opera report). `ARCHITECTURE.md` §4.3 says the thresholds "govern
+ * only a page that is still alive", and reasons that this costs nothing because a reload
+ * costs the eight words — **which is true in Kept mode and false in the mode that has no
+ * eight words.** A Ghost session lives in `sessionStorage`, so reload, press Ghost, and
+ * the conversation is back with no PIN asked. ➡️ *A rule whose safety comes from a
+ * second mechanism is only as true as that mechanism's presence in every mode.*
+ */
+export const REOPENED = "reopened";
+
+/**
  * Pure: should this session be locked, and why?
  *
  * `hiddenSince` is null when the tab is visible. Returns null, or the reason —

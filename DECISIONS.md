@@ -5546,6 +5546,95 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-201. ⭐⭐⭐⭐ §4.3's cover lives in the heap and §7.6's session does not — and the accent was on the wrong button
+
+**2026-09-13, Hannu's third test round on §7.5, the morning after D-200 shipped.** He asked
+one question — *"in which cases does it now ask for my PIN and when PassKey? I do not fully
+understand the relationship of PIN and PassKey for the user"* — and reported three things
+alongside it. Two of them were faults, and neither was the one he thought he had found.
+
+#### 1. ⛔⛔ A reload was a free way past the cover PIN, in the one mode with nothing behind it
+
+*"My Opera browser which had a haamu page with no KEY but in Ghost version and I had given a
+PIN was covered the entire night but was still open today and I did not need to type any
+PIN."*
+
+`ARCHITECTURE.md` §4.3 already stated the mechanism plainly: the thresholds *"govern only a
+page that is still alive"*, and the paragraph after it reasons that this costs nothing —
+**"a reload, a closed tab, or a browser evicting the page still costs the eight words no
+matter what these two numbers say."** That sentence is true. It is also true only in Kept
+mode. §7.6 has no eight words: the session id, the pickle key, the channel and the PIN record
+all live in `sessionStorage`, which survives a reload by design and survives a browser restart
+whenever session restore applies. So **reload → press Ghost → the conversation is back, and
+the PIN chosen for exactly the person who does that is never asked.**
+
+➡️ ⭐⭐⭐⭐ **A GUARANTEE THAT LEANS ON A SECOND MECHANISM IS ONLY AS TRUE AS THAT MECHANISM'S
+PRESENCE IN EVERY MODE.** The cover's weakness was disclosed, in the right section, in a
+sentence that named the right hazard — and was then discharged by a fallback that one of the
+two modes does not have. Nothing here was undocumented. What was missing was the question
+*"and in the mode where that fallback is absent?"*, which is the same question D-200 answered
+one tier up and §7.6 has now been asked twice.
+
+⭐ **The fix needs no new stored state and no new threshold.** `openGhost` already knows
+whether it minted this session or adopted one — it *"mints only what is missing"* — so it says
+so, and a document that adopted a Ghost session holding a conversation raises the cover before
+building it. ⚠️ **Before**, never over: one rendered frame of the conversation is the whole
+thing a cover exists to prevent, so the cover goes up first and the lift is what opens the
+conversation. A duplicated tab reads `resumed` as true and that is correct — it was handed a
+copy and did not open what it found.
+
+#### 2. ⛔⛔ The accent was on the button that ignores what was typed
+
+*"When screen was covered It asked me for my PIN, and I gave it and then it asked me for my
+PassKey. That seem to be correct behaviour... Or is it so that when time goes and PIN is asked
+then always PassKey is asked after that to verify?"*
+
+**No such sequence exists, and a browser walk confirmed it: the right PIN goes straight to the
+list and makes no WebAuthn call at all.** What he met was a picture. D-200 had demoted the
+PIN's own submit button to secondary — deliberately, reasoning that somebody who had *set up*
+the device check should not have to read past a green PIN button to find it — which left a
+screen with six PIN boxes at the top and **the only accented button on it running the passkey
+ceremony**. He typed his PIN and pressed the obvious thing.
+
+➡️ ⭐⭐⭐⭐ **THE ACCENT BELONGS TO THE CONTROL THE FIELD ABOVE IT FEEDS.** An input and its
+submit are one act; an accent placed anywhere else turns typing into a step that appears to be
+ignored, and the reader's repair is to invent a rule that explains it — here, a two-factor
+ceremony this product does not have. ⚠️ **D-200's own reasoning was not wrong, it was applied
+to the wrong control**: the shortcut is an ALTERNATIVE to the act, not a continuation of it,
+and an alternative reads correctly as the quieter button. It is still a full-width button,
+which is all D-200 ever asked for — the thing nobody found was a `linkish` link. With no PIN
+there are no boxes and nothing to feed, so the shortcut is the act and keeps the accent.
+
+⚠️ **And the guard that should have held this line pinned the old wording instead of the
+rule**, for the third time in this file: it required the literal `toggle("secondary",
+hasQuick)`, so a correction about an accent turned a check about `className` red. Both guards
+are now the rule.
+
+#### 3. ⭐⭐ "Open without typing" is false on a computer
+
+*"That sentence may be ok with mobile when you have face or fingerprint detection, but on
+computers is funny because you need to type the Google PIN for the PassKey. So that should be
+'Open without typing KEY'."*
+
+➡️ **A LABEL THAT NAMES THE GESTURE INSTEAD OF THE SECRET IS FALSE ON EVERY DEVICE WHERE THE
+GESTURE IS ALSO TYPING.** What this feature saves is never the typing; it is one named secret,
+on every platform. ⚠️ **And the secret is not the same one on every screen**, which the single
+shared constant had hidden: the gate and the KEY screen are asking for the eight words, and a
+cover with a PIN behind it is asking for 6 to 8 digits. That is a deliberate tension with
+D-191 (*one act, one name*) — the ACT is identical everywhere, and naming the KEY on a screen
+that never asks for one would keep one string by naming the wrong secret.
+
+#### 4. His sentence, and Samsung
+
+D-200 shipped his refusal wording naming *"your Google, Apple or Microsoft account"*. He had
+written *"Google, Apple, Microsoft **etc**"* and the "etc" was dropped — and in the same
+message he reported Firefox on Android saving his passkey into a **Samsung** account, the one
+platform the sentence omitted. Asked, he answered himself: *"each major Android phone
+manufacturer has its own possibility how to save passkeys, so if we list 'Google, Apple,
+Microsoft, Samsung etc' it is as near as we can get to the truth."* ⭐ **D-187 again: clarity
+is the only criterion, and a list that is honest about being a list beats a complete one
+nobody reads.** His Finnish took three orthographic corrections and nothing else.
+
 ### D-200. ⭐⭐⭐⭐ §4.3's second tier is a QUESTION with two right answers, and §7.5 was built behind the gate nobody meets
 
 **2026-09-12, Hannu's second test of §7.5, hours after D-199.** He locked his Android, came
