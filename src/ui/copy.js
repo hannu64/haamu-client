@@ -739,6 +739,31 @@ export const phrase = {
     "they are all good.",
 
   /**
+   * ⭐⭐⭐⭐ D-202 — `capReached` ASSUMES THE CANDIDATES ARE STILL ON THE SCREEN, AND
+   * AFTER A RELOAD THEY ARE NOT. It opens *"Pick one of these"* to somebody looking at
+   * an empty box, which is the one sentence that cannot be said there.
+   *
+   * ⚠️⚠️ THE ASYMMETRY IS FORCED AND IT IS WORTH KNOWING WHY. §7.4 requires the COUNT to
+   * survive a reload of the setup flow, or the cap is decorative — but the six candidates
+   * MUST NOT survive it, because persisting them would write a KEY to this disk in
+   * clear, which is the one thing §7.2 never does. So the count comes back and the
+   * choices cannot, and this is the state that leaves.
+   *
+   * ⭐ THE WAY OUT IS THE ONE HANNU FOUND BY HIMSELF IN OPERA: clear the origin. It is
+   * named here rather than left to be discovered, because the alternative is a person
+   * looking at a screen with nothing on it and no reason given.
+   */
+  capGone:
+    `This browser has offered all ${MAX_CANDIDATE_SETS} sets of ${CANDIDATES_PER_SET} ` +
+    "and cannot show them again.",
+
+  // ⚠️ §7.3.2 rule 4 AND §7.8 step 5: this button takes the whole origin, so it asks
+  // first, in `ending.thoroughConfirm`'s words — the same loss, said the same way. It
+  // is the ONLY control in the client that offers that clearing with no identity open,
+  // which is exactly the situation it exists for.
+  capGoneControl: `Delete everything ${product.name} has stored here and start again`,
+
+  /**
    * ⚠️⚠️ THE RETYPE STEP IS NOW A SEPARATE SCREEN, AND THE REASON IS D-084 — A
    * SECURITY DEFECT THE FIRST USER FOUND FROM A BUTTON LABEL.
    *

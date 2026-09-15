@@ -470,6 +470,8 @@ export const FI = {
   "phrase.more": "Näytä 6 lisää",
   "phrase.longer": "Haluan pidemmän AVAIMEN",
   "phrase.capReached": "Valitse jokin näistä 10 sarjasta, joissa on 6 vaihtoehtoa — ne ovat kaikki hyviä.",
+  "phrase.capGone": "Tämä selain on tarjonnut kaikki 10 sarjaa, joissa on 6 vaihtoehtoa, eikä voi näyttää niitä uudelleen.",
+  "phrase.capGoneControl": "Poista kaikki, mitä haamu on tallentanut tänne, ja aloita alusta",
   "phrase.written": "Olen kirjoittanut sen ylös",
   "phrase.confirm": "Kirjoita se nyt tähän takaisin, jotta voidaan olla varmoja että se on [turvallisessa paikassa](retype).",
   "phrase.placeholder": "Kirjoita AVAIN",

@@ -370,11 +370,29 @@
         <h2 id="setup-title"></h2>
         <p id="setup-choose" class="lead"></p>
         <div class="candidates" id="candidates"></div>
-        <div class="row">
+        <!--
+          ⭐⭐⭐⭐ D-202 — THE STATE THIS BLOCK EXISTS FOR IS A SCREEN WITH NOTHING ON IT.
+          §7.4 requires the regeneration count to survive a reload of the setup flow;
+          the six candidates must NOT survive it, because storing them would write a
+          KEY to this disk in clear. So a reload after the tenth set comes back to a
+          cap with nothing under it, and until 2026-09-15 that screen offered three
+          controls that all did nothing and said nothing at all about why.
+
+          ⚠️ IT REPLACES THE OTHER TWO ROWS RATHER THAN JOINING THEM. A person here has
+          no choice to make and no set to ask for, and four dead controls beside one
+          live one is a worse screen than one live one.
+        -->
+        <div class="hidden" id="cap-gone-row">
+          <p id="cap-gone" class="lead"></p>
+          <div class="choices">
+            <button id="cap-gone-go" class="secondary"></button>
+          </div>
+        </div>
+        <div class="row" id="setup-actions">
           <button id="chosen"></button>
           <button id="regen" class="secondary"></button>
         </div>
-        <p class="note mt">
+        <p class="note mt" id="setup-foot">
           <button id="longer" class="linkish"></button>
           <span id="sets"></span>
         </p>
@@ -493,9 +511,20 @@
           the one device that has been set up. A shortcut above the reliable route
           would teach the wrong thing to anybody whose record has gone.
         -->
-        <p class="note mt-s hidden" id="quick-row">
-          <button id="quick-go" class="linkish"></button>
-        </p>
+        <!--
+          ⭐⭐ D-202 — IT IS A BUTTON HERE TOO, AND HANNU IS THE EVIDENCE: asked about it
+          the day after it shipped, he could not find it. It is the same act as the
+          front page's `#gate-quick-go` and the cover's `#covered-quick`, and it was the
+          only one of the three still rendered as a line of underlined text.
+
+          ⚠️⚠️ SECONDARY, NEVER `.choice`, AND THAT IS D-201 HOLDING. The accent belongs
+          to the control the field above it feeds — here `#phrase-in` feeds `#unlock`.
+          An accent on this button is exactly the fault Hannu reported from the cover:
+          typing looks ignored, and the reader repairs it by inventing a second step.
+        -->
+        <div class="choices hidden" id="quick-row">
+          <button id="quick-go" class="secondary"></button>
+        </div>
       </section>
 
       <!--

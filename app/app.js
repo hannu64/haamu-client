@@ -783,9 +783,46 @@ let lockWatch = null;
  * ⚠️ `localStorage`, NOT the vault: this count exists before there is an identity
  * to derive a key from, which is the whole moment it has to survive.
  */
-const SETS_KEY = "lpm.candidate-sets";
+const SETS_KEY = "lpm.setup-sets";
+
+/**
+ * ⛔⛔⛔⛔ D-202 — THE NAME CHANGED BECAUSE THE QUANTITY CHANGED, AND THIS LINE IS THE
+ * MIGRATION. `lpm.candidate-sets` counted sets used in the life of this BROWSER. §7.4
+ * caps "60 candidates in the life of ONE SETUP", and nothing ever ended a setup here,
+ * so the two quantities were the same number by accident and diverge from now on.
+ *
+ * ⚠️⚠️ READING THE OLD VALUE UNDER THE NEW MEANING WOULD LEAVE EVERY BRICKED BROWSER
+ * BRICKED. The only thing that clears the new counter is a setup that FINISHES — which
+ * is precisely what a browser at the cap cannot do. Hannu's Opera was at the cap after
+ * ten visits to the KEY-choosing screen, and the sole way out he could find was taking
+ * the whole origin with §7.8 step 5.
+ *
+ * ⚠️ THE REFUND COSTS ONE BIT, ONCE, TO WHOEVER IS MID-SETUP AT THE DEPLOY: 120
+ * candidates seen rather than 60, log₂(120) = 6.91 against 5.91, against §7.2's 82.7.
+ * Every setup after this one is capped at 60 again.
+ *
+ * ⚠️ GUARDED, LIKE `theme-boot.js` AND `lang-boot.js` — those two treat `localStorage`
+ * as a thing that can throw, and this runs at module load where a throw is not a
+ * degraded setup screen but a dead app.
+ */
+try {
+  localStorage.removeItem("lpm.candidate-sets");
+} catch {
+  /* a browser that refuses storage has no counter to retire */
+}
+
 const setsUsed = () => Number(localStorage.getItem(SETS_KEY) ?? 0);
 const useASet = () => localStorage.setItem(SETS_KEY, String(setsUsed() + 1));
+
+/**
+ * §7.4's cap is "in the life of one setup", and this is where one setup ends: the
+ * roster exists, so the phrase that was being chosen is now somebody's KEY.
+ *
+ * ⚠️ IT IS NOT CALLED WHEN THE FLOW IS MERELY LEFT. §7.4 says the count MUST survive a
+ * reload of the setup flow or the cap is decorative — so abandoning the screen, going
+ * back to the gate, and reloading all keep it. Only finishing spends it.
+ */
+const setupIsOver = () => localStorage.removeItem(SETS_KEY);
 
 let words = passphrase.PHRASE_WORDS;
 let candidates = [];
@@ -840,11 +877,37 @@ function renderCandidates() {
   });
   const left = passphrase.MAX_CANDIDATE_SETS - setsUsed();
   $("regen").disabled = left <= 0;
+  // §7.4: "the same cap applies" to the 10-word phrase, so the escape hatch closes
+  // with the rest. It said so nowhere and stayed pressable, doing nothing.
+  $("longer").disabled = left <= 0;
   text("sets", left > 0 ? ` · ${copy.phrase.setsLeft(left)}` : ` · ${copy.phrase.capReached}`);
+
+  /**
+   * ⭐⭐⭐⭐ D-202 — THE TWO CAP STATES ARE NOT ONE STATE, and telling them apart is the
+   * whole repair. At the cap WITH candidates on the screen there is still a choice to
+   * make and `capReached` is true. At the cap with NONE — a reload, because the count
+   * survives it and the candidates cannot — every one of these controls is dead, and
+   * `capReached` opens "Pick one of these" to somebody looking at an empty box.
+   */
+  const stuck = candidates.length === 0;
+  show("cap-gone-row", stuck);
+  show("setup-actions", !stuck);
+  show("setup-foot", !stuck);
+  // ⚠️ AND IT IS DISABLED TOO, not merely hidden. `show()` toggles `hidden`, and a
+  // control that is only invisible is still reachable by keyboard.
+  $("chosen").disabled = stuck;
 }
 
 function newCandidateSet() {
-  if (setsUsed() >= passphrase.MAX_CANDIDATE_SETS) return;
+  /**
+   * ⚠️⚠️ IT STILL PAINTS. Until 2026-09-15 this returned before `renderCandidates()`,
+   * which is the whole of Hannu's Opera report: no KEY offered, "Show 6 more" live and
+   * inert, "Use this one" throwing `TypeError: reading 'split' of undefined` on
+   * `candidates[0]`, and `#sets` never written, so nothing on the screen said why.
+   *
+   * ➡️ **A REFUSAL THAT RETURNS BEFORE THE PAINT IS A REFUSAL NOBODY IS TOLD ABOUT.**
+   */
+  if (setsUsed() >= passphrase.MAX_CANDIDATE_SETS) return renderCandidates();
   useASet();
   candidates = passphrase.generateCandidates(words);
   renderCandidates();
@@ -937,9 +1000,35 @@ $("longer").addEventListener("click", () => {
   newCandidateSet();
 });
 
+/**
+ * ⭐⭐⭐⭐ D-202 — THE ONE CLEARING IN THIS CLIENT THAT RUNS WITH NO IDENTITY OPEN, and
+ * that is why it cannot go through `endHere`. §7.8's six steps end a SESSION: they stop
+ * a delivery loop, overwrite key buffers, and clear stores under `local_key`. There is
+ * no session here and never was one — the person is on the KEY-choosing screen because
+ * they have no KEY. What is left of step 5 is the navigation, which is the only part
+ * that was ever doing the work: `/ended?clear=1` answers with `Clear-Site-Data`.
+ *
+ * ⚠️⚠️ IT ASKS FIRST, IN `ending.thoroughConfirm`'s WORDS, AND THE WARNING IS NOT
+ * CEREMONIAL. `Clear-Site-Data` takes the whole origin, so it takes ANOTHER KEY's
+ * records if this browser holds any, and it resets §7.3.2's rollback check (rule 4).
+ * ⭐ `ending.confirm` is deliberately NOT used with it: that one is about losing YOUR
+ * messages, and this person has none — a warning that names a loss that cannot happen
+ * is how a real warning stops being read.
+ *
+ * ⚠️ `location.replace`, never `assign` and never a link — §7.8 step 5.
+ */
+$("cap-gone-go").addEventListener("click", () => {
+  if (!confirm(copy.ending.thoroughConfirm)) return;
+  location.replace(endings.ENDED_PATH_THOROUGH);
+});
+
 $("chosen").addEventListener("click", () => {
   const picked = [...document.querySelectorAll('input[name="candidate"]')].find((r) => r.checked);
   chosenPhrase = candidates[Number(picked?.value ?? 0)];
+  // ⚠️ THE GUARD AND THE DISABLED ATTRIBUTE ARE BOTH NEEDED AND NEITHER IS THE OTHER'S
+  // spare. `disabled` is the screen telling the truth; this is the handler surviving a
+  // press that reaches it anyway — D-202's `TypeError` was thrown on the line below.
+  if (!chosenPhrase) return;
   confirmPasted = false;
   $("retype").value = "";
   text("retype-note", "");
@@ -983,6 +1072,11 @@ async function finishSetup() {
   typedTheKey = false;
   await withIdentity(phrase, async (s) => {
     await s.roster.create();
+    // §7.4's cap is "in the life of ONE SETUP" (D-202). This is the line that ends one,
+    // and it is INSIDE the callback so that only a roster that was actually created
+    // spends it — `withIdentity` swallows its own failures onto the KEY screen, so a
+    // clear after the await would also fire for a setup that never happened.
+    setupIsOver();
   });
 }
 
@@ -6464,6 +6558,8 @@ function paintCopy() {
   text("chosen", copy.phrase.use);
   text("regen", copy.phrase.more);
   text("longer", copy.phrase.longer);
+  text("cap-gone", copy.phrase.capGone);
+  text("cap-gone-go", copy.phrase.capGoneControl);
   text("write-down", copy.phrase.writeItDown);
   text("written", copy.phrase.written);
   text("write-back", copy.phrase.showChoicesAgain);

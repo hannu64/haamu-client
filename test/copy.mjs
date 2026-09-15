@@ -2594,6 +2594,10 @@ section("what the third round changed");
     ["panic.told", "conversations"],
     ["panic.otherSide", "the other people — genuinely plural, one per conversation"],
     ["phrase.capReached", "candidate phrases"],
+    // D-202: *"all 10 sets of 6 and cannot show them again"* — the sets. Read and ruled,
+    // and it meets the condition the rule actually cares about: the plural noun stands
+    // immediately before the pronoun, so a Finnish reader hearing a plural is right.
+    ["phrase.capGone", "the sets of candidate phrases"],
     ["tabs.endUnconfirmed", "tabs"],
     ["terms.key.body.0", "the words"],
     ["terms.key.body.1", "the words"],

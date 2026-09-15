@@ -5546,6 +5546,91 @@ once sampling the screen before the auto-send resolved (the next two checks alre
 worked), once matching against a string its own log-truncation had cut. Neither was a product
 fault.
 
+### D-202. ⭐⭐⭐⭐ §7.4's regeneration cap outlived the setup it was counting, and refused without repainting
+
+**2026-09-15, Hannu's fourth test round on §7.5.** The cover, the PIN and §7.6's reload all
+came back clean — *"All seems to work now correctly"*, and of the resumed Ghost conversation,
+*"That is very imressive."* Then one report from a different corner of the product:
+
+> *"When I just in Opera asked it to forget my key and set up a new one it wrote this:
+> 'Choose your KEY / Choose the one that is easiest for you to write down. / Use this one /
+> Show 6 more / I want a longer KEY'. But on that page was no key proposed to choose. And
+> show 6 more button did not work. And use this one button did not work because there was
+> not key proposed."*
+
+**Three dead controls, one cause, and it was neither of the two anybody would have guessed.**
+His own reading was *"it now recalls the last session too well (probably only after Ghost
+mode + PIN)"* — right about the shape, wrong about the mechanism. Mine, unexamined, would
+have been the deploy four days earlier. It was neither: the fault shipped on **2026-08-12**
+and had been waiting a month for somebody to use one browser hard enough.
+
+**The mechanism.** §7.4 caps regeneration at *"60 candidates in the life of one setup"*.
+`lpm.candidate-sets` lived in `localStorage` and was incremented by `newCandidateSet()` — which
+runs **on entry to the KEY-choosing screen**, not only on *"Show 6 more"*. Nothing ever cleared
+it. So the cap's real unit was **the life of the browser**, and a person reached it by setting
+up ten times, which is a description of every tester and of anybody who starts over a few times.
+At that point `newCandidateSet()` returned before generating anything, for ever.
+
+⭐⭐⭐⭐ **AND THE SILENCE WAS A SECOND FAULT, NOT A SYMPTOM OF THE FIRST.** The refusal was
+`if (setsUsed() >= MAX) return;` — placed **before** `renderCandidates()`. So the screen kept
+the labels of three controls that no longer did anything; `#regen` was never disabled, because
+the line that disables it is in the function the refusal skipped; `#sets` — the one element
+whose whole job is to say how many sets are left — was never written at all; and `#chosen` threw
+`TypeError: reading 'split' of undefined` on `candidates[0]`. A person meets a screen where
+every label is a promise and nothing keeps one.
+➡️ **A REFUSAL THAT RETURNS BEFORE THE PAINT IS A REFUSAL NOBODY IS TOLD ABOUT.**
+
+**Decided — four repairs, and the first of them is the only one that reaches anybody already
+affected.**
+
+1. ⛔⛔⛔ **The counter is renamed to `lpm.setup-sets` and the old key is removed on load.**
+   ⭐⭐⭐⭐ **THE FIX'S OWN TRIGGER WAS THE ACT THE FAULT PREVENTED.** Clearing the counter when a
+   setup *finishes* is the correct repair and rescues nobody who is already at the cap, because
+   finishing a setup is precisely what those browsers cannot do. The two names also hold two
+   different quantities — sets in the life of a browser, sets in the life of a setup — so reading
+   the old value under the new meaning would be wrong even where it was not fatal.
+   ⚠️ The refund costs **one bit, once**, to whoever is mid-setup at the deploy: 120 candidates
+   seen rather than 60, log₂(120) = 6.91 against 5.91, against §7.2's 82.7. Every later setup is
+   capped at 60 again.
+2. **A setup that finishes ends the cap's life**, beside `roster.create()` and inside the callback
+   — `withIdentity` swallows its own failures onto the KEY screen, so a clear after the await
+   would spend the cap for a setup that never happened. ⚠️ Nothing else clears it: §7.4 requires
+   the count to survive a reload of the setup flow or the cap is decorative, so abandoning the
+   screen, going back to the gate and reloading all keep it.
+3. **The refusal repaints**, and the two cap states are told apart by what is on the screen.
+   At the cap **with** candidates showing there is still a choice and `capReached` is true. At the
+   cap with **none** every control is dead and `capReached` opens *"Pick one of these"* at an
+   empty box. ⚠️ §7.4's escape hatch closes with the cap too — *"the same cap applies"* — and it
+   had stayed pressable and inert, which is the same fault in a third control.
+4. **The empty cap has a way out**, in `ending.thoroughConfirm`'s words: the route Hannu found
+   unaided in Opera. ⚠️ It is the only clearing in the client that runs with **no identity open**,
+   so it cannot go through `endHere` — §7.8's six steps end a *session*, and there is none. What
+   remains is step 5's navigation, which was always the part doing the work.
+   ⭐ `ending.confirm` is deliberately **not** shown with it: that warning is about losing *your*
+   messages and this person has none, and a warning naming a loss that cannot happen is how a
+   real warning stops being read.
+
+⭐⭐⭐⭐ **THE ASYMMETRY BEHIND STATE 3 IS FORCED, AND IS THE REASON THE SCREEN CAN BE EMPTY AT
+ALL.** §7.4 requires the **count** to survive a reload. The **candidates** must not, because
+persisting them would write a KEY to that disk in clear — the one thing §7.2 never does. So the
+count comes back and the choices cannot, and no amount of care removes that state; it can only
+be given a sentence and a route. §7.4 said nothing about it, which is why it is now §7.4's own
+paragraph rather than a construction invented in the client.
+
+**Also decided, and it is D-201 holding on a third screen.** §7.5's shortcut was a full button
+on the front page and on the cover and a line of underlined text on the KEY screen. Asked about
+it two days after it shipped, Hannu could not find it: *"This I cannot recall or find anymore."*
+It is a button there now — and **secondary, never accented**, because D-201's rule is that the
+accent belongs to the control the field above it feeds, and `#phrase-in` feeds `#unlock`. An
+accent on it would be exactly the fault he reported from the cover, rebuilt one screen along.
+
+⚠️ **The instrument that found it was a browser, not a reading.** The code was read first and
+the mechanism deduced correctly from it — and the deduction still could not say whether `#regen`
+was disabled, whether anything was written to `#sets`, or what `#chosen` did. Twelve lines of
+puppeteer dumping the state of every control reproduced all three of his symptoms exactly,
+including the `TypeError` he could not have seen. Same lesson as D-201's colour column, one day
+later and in a different organ: **reproduce the screen, not the sentence.**
+
 ### D-201. ⭐⭐⭐⭐ §4.3's cover lives in the heap and §7.6's session does not — and the accent was on the wrong button
 
 **2026-09-13, Hannu's third test round on §7.5, the morning after D-200 shipped.** He asked

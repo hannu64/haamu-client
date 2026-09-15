@@ -2155,4 +2155,168 @@ section("§7.5 — the rules that live in the app rather than in the wrapper");
   );
 }
 
+// ═══════════════════ §7.4 / D-202 — the regeneration cap outlived the setup it counted
+
+/**
+ * ⭐⭐⭐⭐ THE FAULT WAS A COUNTER WHOSE LIFETIME NOBODY HAD NAMED. §7.4 caps regeneration
+ * at "60 candidates in the life of ONE SETUP"; `lpm.candidate-sets` counted the life of
+ * the BROWSER, because nothing ever ended a setup. Entering the KEY-choosing screen
+ * spends a set, so the tenth visit ever — not the tenth re-roll — armed it, and from
+ * then on that browser could never make a KEY again.
+ *
+ * ⭐⭐⭐⭐ AND WHAT MADE IT UNREPORTABLE WAS THE REFUSAL, NOT THE COUNTER. `newCandidateSet`
+ * returned BEFORE `renderCandidates()`, so the screen kept the labels of three controls
+ * that no longer did anything and never wrote the one sentence that would have said why.
+ * Hannu met it in Opera, correctly read it as something surviving that should not have,
+ * and reasonably guessed Ghost mode — which had nothing to do with it.
+ *
+ * ➡️ **A REFUSAL THAT RETURNS BEFORE THE PAINT IS A REFUSAL NOBODY IS TOLD ABOUT.**
+ */
+{
+  const app = code("../app/app.js");
+  const html = read("../app/index.html");
+  const fi = read("../src/ui/copy.fi.js");
+
+  section("§7.4 / D-202 — the cap belongs to one setup, and says so when it is spent");
+
+  const newSet = app.match(/function newCandidateSet\(\)\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+
+  check(
+    "⭐⭐⭐⭐ the cap still paints — a refusal that returns before the paint is never read",
+    newSet !== "" && /return renderCandidates\(\);/.test(newSet) && !/\breturn;/.test(newSet),
+    "newCandidateSet must reach renderCandidates on BOTH branches"
+  );
+
+  /**
+   * ⛔⛔ §7.4's UNIT IS ONE SETUP, AND THIS IS THE LINE THAT ENDS ONE. It is inside the
+   * `roster.create` callback deliberately: `withIdentity` swallows its own failures onto
+   * the KEY screen, so a clear after the await would also spend the cap for a setup that
+   * never happened.
+   */
+  check(
+    "⛔⛔ a setup that finishes is the only thing that ends the cap's life",
+    /const setupIsOver = \(\) => localStorage\.removeItem\(SETS_KEY\);/.test(app) &&
+      /await s\.roster\.create\(\);\s*setupIsOver\(\);/.test(app),
+    "the clear belongs beside roster.create(), inside the callback"
+  );
+
+  check(
+    "⚠️ and NOT when the flow is merely left — §7.4 says the count survives a reload",
+    (app.match(/\bsetupIsOver\(\);/g) ?? []).length === 1,
+    "exactly one caller — abandoning the screen, going back, and reloading all keep the count"
+  );
+
+  /**
+   * ⛔⛔⛔ THE OLD KEY IS RETIRED, NOT REUSED, AND THAT IS THE WHOLE MIGRATION. It held a
+   * different quantity. Reading it under the new meaning would leave every browser that
+   * is already at the cap bricked for ever, because the only thing that clears the new
+   * counter is a setup that finishes — the one act those browsers cannot perform.
+   */
+  check(
+    "⛔⛔⛔ the browser-lifetime counter is retired and never read again",
+    /const SETS_KEY = "lpm\.setup-sets";/.test(app) &&
+      /localStorage\.removeItem\("lpm\.candidate-sets"\)/.test(app) &&
+      !/getItem\("lpm\.candidate-sets"\)/.test(app),
+    "a new name for a new quantity, and the old value removed"
+  );
+
+  check(
+    "⚠️ and the retirement is guarded, like theme-boot and lang-boot — a throw here is a dead app",
+    /try \{\s*localStorage\.removeItem\("lpm\.candidate-sets"\);\s*\} catch/.test(app),
+    "module-load storage access must not be able to kill the document"
+  );
+
+  /**
+   * ⭐⭐⭐⭐ THE TWO CAP STATES ARE NOT ONE STATE. At the cap WITH candidates on the screen
+   * there is still a choice and `capReached` is true. At the cap with NONE — a reload,
+   * because §7.4 requires the COUNT to survive one and the candidates must not, since
+   * persisting them would write a KEY to the disk in clear — every control is dead and
+   * `capReached` opens *"Pick one of these"* at an empty box.
+   */
+  check(
+    "⭐⭐⭐⭐ the empty cap is told apart from the full one, by what is on the screen",
+    /const stuck = candidates\.length === 0;/.test(app) &&
+      /show\("cap-gone-row", stuck\);/.test(app) &&
+      /show\("setup-actions", !stuck\);/.test(app) &&
+      /show\("setup-foot", !stuck\);/.test(app),
+    "the state is read from the candidates, not remembered in a flag"
+  );
+
+  check(
+    "⚠️⚠️ and the chooser cannot choose what is not there — disabled AND guarded",
+    /\$\("chosen"\)\.disabled = stuck;/.test(app) &&
+      /chosenPhrase = candidates\[Number\(picked\?\.value \?\? 0\)\];\s*if \(!chosenPhrase\) return;/.test(app),
+    "hidden is not disabled: a hidden control is still reachable by keyboard"
+  );
+
+  // §7.4: "the same cap applies" to the 10-word phrase. It stayed pressable and inert.
+  check(
+    "⚠️ the escape hatch closes with the cap it escapes, and looks closed",
+    /\$\("longer"\)\.disabled = left <= 0;/.test(app),
+    "§7.4 — the same cap applies to the longer KEY"
+  );
+
+  /**
+   * ⚠️⚠️ THE ONLY CLEARING IN THIS CLIENT THAT RUNS WITH NO IDENTITY OPEN, which is why it
+   * cannot go through `endHere`: §7.8's six steps end a SESSION, and there is none. What
+   * is left is step 5's navigation, which was always the part doing the work.
+   *
+   * ⭐ `ending.confirm` is deliberately NOT shown with it — that warning is about losing
+   * YOUR messages, and this person has none. A warning naming a loss that cannot happen
+   * is how a real warning stops being read.
+   */
+  const capOut = app.match(/\$\("cap-gone-go"\)\.addEventListener\([\s\S]*?\n\}\);/)?.[0] ?? "";
+  check(
+    "⚠️⚠️ the way out asks first, in the words of the loss it actually causes",
+    /if \(!confirm\(copy\.ending\.thoroughConfirm\)\) return;/.test(capOut) &&
+      !/copy\.ending\.confirm\b/.test(capOut),
+    "§7.3.2 rule 4 — Clear-Site-Data takes another KEY's records and the rollback mark"
+  );
+
+  check(
+    "⛔ and it leaves by §7.8 step 5's route — `replace`, never `assign`, never a link",
+    /location\.replace\(endings\.ENDED_PATH_THOROUGH\);/.test(capOut) &&
+      !/location\.assign|<a /.test(capOut),
+    "§7.8 step 5"
+  );
+
+  /**
+   * ⭐⭐ D-201 HOLDING ON A THIRD SCREEN. §7.5's shortcut was a line of underlined text
+   * here while it was a full button on the front page and on the cover — Hannu could not
+   * find it the day after it shipped. It is a button now, and it is SECONDARY, because
+   * the accent belongs to the control the field above it feeds and `#phrase-in` feeds
+   * `#unlock`. An accent here is exactly the fault he reported from the cover.
+   */
+  check(
+    "⭐⭐ the KEY screen's shortcut is a button, like the same act on the other two screens",
+    /<div class="choices hidden" id="quick-row">/.test(html) &&
+      /<button id="quick-go" class="secondary"><\/button>/.test(html),
+    "one act, one shape"
+  );
+
+  check(
+    "⛔⛔ and it is never the accented one — the KEY field above it feeds Open",
+    !/id="quick-go"[^>]*class="[^"]*\bchoice\b/.test(html) && /<button id="unlock"><\/button>/.test(html),
+    "D-201 — the accent belongs to the control the field above it feeds"
+  );
+
+  for (const id of ["cap-gone-row", "cap-gone", "cap-gone-go", "setup-actions", "setup-foot", "quick-row", "quick-go"])
+    check(`   #${id} is in the document`, new RegExp(`id="${id}"`).test(html));
+
+  check(
+    "⚠️ both new sentences reach a Finnish reader too",
+    /"phrase\.capGone":/.test(fi) && /"phrase\.capGoneControl":/.test(fi),
+    "D-154"
+  );
+
+  // ⚠️⚠️ THE CANARY — a pattern that stops matching passes silently for ever.
+  check(
+    "⚠️⚠️ and these patterns still refuse the shapes they exist to refuse",
+    /\breturn;/.test("function newCandidateSet() { if (spent) return; useASet(); }") &&
+      /getItem\("lpm\.candidate-sets"\)/.test('const n = localStorage.getItem("lpm.candidate-sets");') &&
+      !/const stuck = candidates\.length === 0;/.test("let stuck = false;"),
+    "the bare return, the old key read back, and a remembered flag"
+  );
+}
+
 done();
